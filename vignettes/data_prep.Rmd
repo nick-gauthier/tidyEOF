@@ -1,0 +1,91 @@
+---
+title: "data_prep"
+author: "Nick Gauthier"
+date: "2/26/2020"
+output: html_document
+---
+
+
+```{r setup}
+# analysis
+library(raster) # processing raster data
+library(tidyverse) # data manipulation and visualization
+library(furrr) # parallel processing
+
+# this package
+devtools::load_all()
+```
+
+
+```{r}
+plan(multisession)
+```
+
+## Geographic Data
+
+Define a study area to constrain all computations.
+```{r}
+bbox <- extent(c(-125, -104, 33, 49))
+```
+
+Import the snow observation data from https://nsidc.org/data/nsidc-0719.^[What's up with this warning message? long_name=CRS definition
+spatial_ref=GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]]
+GeoTransform=-125.0208 0.04166662697178698 0 49.9375 0 -0.04166662697178698]. 
+
+```{r message=FALSE,warning=FALSE}
+# import SWE data
+
+preprocess_prism <- function(x, var = 'SWE'){
+  maps <- brick(x, varname = var)
+
+  indices <- getZ(maps) %>% # find the indices for March
+    str_detect('-03-') %>%
+    which()
+
+  raster::subset(maps, indices) %>%
+    crop(bbox) %>%
+    mean() %>%
+    raster::aggregate(fact = 3) # resample to lower res to speed up analysis
+}
+
+prism <- list.files('../data', pattern = 'SWE_Depth', full.names = TRUE) %>%
+  future_map(preprocess_prism, var = 'SWE') %>%
+  brick() %>%
+  setNames(1982:2017)
+```
+
+
+```{r, warning = FALSE}
+# this averages over the full ensemble
+cera <- map(1:10,
+            ~ (brick('../data/CERA-20C_snow.nc', varname = 'rsn', level = .) *
+                 brick('../data/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
+  reduce(`+`) %>%
+  `/`(10) %>%
+  crop(bbox)
+```
+
+## Preprocessing
+
+Turn all the rasters into data frames and join.
+```{r}
+prism_dat <- prism %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = round(parse_number(layer))) %>%
+  rename(SWE = value) %>%
+  select(-layer) %>%
+  snow_only()
+```
+
+```{r}
+cera_dat <- cera %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = round(parse_number(layer))) %>%
+  rename(SWE = value) %>%
+  select(-layer) %>%
+  snow_only()
+```
+
+```{r}
+save(prism, prism_dat, cera, cera_dat, file = '../data.Rdata')
+```

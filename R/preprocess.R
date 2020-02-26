@@ -26,14 +26,14 @@ preprocess <- function(x, var, flip = FALSE, regrid = FALSE, monthly = FALSE) {
 preprocess_prism <- function(x, var = 'SWE'){
   maps <- brick(x, varname = var)
 
-  indices <- getZ(maps) %>% # find the index for April 1st
+  indices <- getZ(maps) %>% # find the indices for March
     str_detect('-03-') %>%
     which()
 
-  subset(maps, indices) %>%
+  raster::subset(maps, indices) %>%
     crop(bbox) %>%
     mean() %>%
-    aggregate(fact = 3, na.rm = TRUE) # resample to lower res to speed up analysis
+    aggregate(fact = 3, fun = "mean") # resample to lower res to speed up analysis
 }
 
 snow_only <- function(dat){
