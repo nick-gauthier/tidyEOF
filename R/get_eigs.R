@@ -10,7 +10,7 @@
 #' @examples
 get_eigs <- function(pc_object, raster){
   pc_object %>%
-    tidy(matrix = 'pcs') %>%
+    broom::tidy(matrix = 'pcs') %>%
     mutate(eigenvalues = std.dev ^ 2,
            error = sqrt(2 / n_effective(raster)),
            low =  eigenvalues * (1 - error) * 100 / sum(eigenvalues),
@@ -41,7 +41,7 @@ plot_scree <- function(eigs, k){
            multiplet = as.factor(cumsum(separated))) %>%
     filter(PC <= 25) %>%
     ggplot(aes(x = PC, y = percent * 100)) +
-    geom_linerange(aes(x = PC, ymin = low, ymax = hi), width = 0.4) +
+    geom_linerange(aes(x = PC, ymin = low, ymax = hi)) +
     geom_point(size = 2, aes(color = multiplet)) +
     geom_text(aes(x = PC, y = cumvar_line, label = paste0(round(cumulative * 100, 0), '%')), size = 2.5, vjust = 0) +
     labs(x = "Principal Component", y = "Normalized Eigenvalue") +

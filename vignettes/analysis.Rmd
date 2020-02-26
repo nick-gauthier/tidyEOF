@@ -28,8 +28,6 @@ library(raster) # processing raster data
 library(nFactors)
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
-library(broom) # tidying model objects
-library(mgcv)
 library(remote)
 
 # plotting
@@ -41,12 +39,10 @@ library(scico) # color palettes
 devtools::load_all()
 ```
 
-## Geographic Data
-
-Define a study area to constrain all computations.
 ```{r}
-bbox <- extent(c(-125, -104, 33, 49))
+load('../data.Rdata')
 ```
+
 
 ```{r, echo = FALSE}
 # download state boundary files for cropping and plotting
@@ -59,130 +55,12 @@ states_wus <- maps::map('state', regions = state_names,
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 ```
 
-```{r}
-load('../dat.Rdata')
-```
-
-
-# Visualization
-
-What's the climatic mean April 1st SWE for the observations and simulations?
-```{r, echo = FALSE, warning = FALSE}
-prism_dat %>%
-  group_by(x, y) %>%
-  summarise(SWE = mean(SWE))%>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  #scale_fill_distiller(palette = 'PuBu', direction = 1) +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-```
-
-```{r}
-cera_dat %>%
-  group_by(x, y) %>%
-  summarise(SWE = mean(SWE))%>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  #scale_fill_distiller(palette = 'PuBu', direction = 1) +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Simulated mean March SWE, 1900-2010', 'PRISM')
-```
-
-
-To what extent is this mistmatch due to bias or scale effects? Test by resampling the observations to the CESM LME grid.
-
-```{r, echo = FALSE}
-mean_swe_cera <- cera_dat %>%
-  filter(year >= 1982) %>%
-  group_by(x, y) %>%
-  summarise(sim = mean(SWE))
-
-prism_resamp <- prism %>%
-  subset(1:29) %>%
-  mean %>%
-  resample(ccsm) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
-  rename(obs = layer)
-
-left_join(prism_resamp, mean_swe_cera, by = c('x', 'y')) %>%
-  gather(type, SWE, 3:4) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~type) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Observed vs Simulated mean March SWE', '1982-2010')
-```
-
-
-Look at how SWE has varied over time and space.
-
-```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
-prism_dat %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
-  transition_states(year)
-```
-
-```{r cera_animation, echo = FALSE, warning=FALSE,cache = TRUE}
-cera_dat %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
-  transition_states(year)
-```
-
-```{r, echo = FALSE}
- prism_dat %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-  #scale_fill_distiller(palette = 'RdBu', limits = c(-1300, 1300)) +
-  scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1300, 1300)) +
-  transition_states(year) +
-  theme_void()
-```
-
-```{r, echo = FALSE}
- cera_dat %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-  #scale_fill_distiller(palette = 'RdBu', limits = c(-1300, 1300)) +
-  scale_fill_scico(palette = 'broc', direction = -1, limits = c(-130, 130)) +
-  transition_states(year) +
-  theme_void()
-```
-
-
-
-So there's a clear bias here. As we see below, the mean of the observations is well higher than it should be. Looks like the simulation underpredicts snow -- likely because of all the small-scale topographic influences that CESM can't resolve.
 
 # PCA
 
 ```{r}
-prism_pca <- prism_dat %>%
-  select(-area) %>%
-  calc_pcs()
-
-cera_pca <- calc_pcs(cera_dat)
+prism_pca <- calc_pcs(prism_dat, scale = FALSE)
+cera_pca <- calc_pcs(cera_dat, scale = FALSE)
 ```
 
 Autocorrelation in the observed time series may bias our assessment of the principal components. Define a function to calculate the effective number of observations given the sample autocorrelation. 
@@ -222,7 +100,6 @@ plot_eof(prism_eofs)
 plot_eof(cera_eofs)
 ```
 
-So they're the same! next do a Canonical Correlation Analysis
 
 # Coupled Pattern Analysis
 
@@ -831,3 +708,116 @@ ggplot(obs_agg, aes(area, SWE)) +
   theme_minimal() +
   labs(x = 'Area (km2)', title = 'Relationship between total SWE and snow extent')
 ```
+
+
+# Visualization
+
+
+
+What's the climatic mean April 1st SWE for the observations and simulations?
+```{r, echo = FALSE}
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(SWE = mean(SWE))%>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Observed mean March SWE, 1982-2017', 'PRISM')
+```
+
+```{r}
+cera_dat %>%
+  group_by(x, y) %>%
+  summarise(SWE = mean(SWE))%>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Reanalysis mean March SWE, 1900-2010', 'PRISM')
+```
+
+
+To what extent is this mistmatch due to bias or scale effects? Test by resampling the observations to the CERA grid.
+
+```{r, echo = FALSE}
+mean_swe_cera <- cera_dat %>%
+  filter(year >= 1982) %>%
+  group_by(x, y) %>%
+  summarise(sim = mean(SWE))
+
+prism_resamp <- prism %>%
+  subset(1:29) %>%
+  mean %>%
+  resample(cera) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  rename(obs = layer)
+
+left_join(prism_resamp, mean_swe_cera, by = c('x', 'y')) %>%
+  gather(type, SWE, 3:4) %>%
+ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  facet_wrap(~type) +
+    scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Observed vs Simulated mean March SWE', '1982-2010')
+```
+
+
+Look at how SWE has varied over time and space.
+
+```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
+prism_dat %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+    scale_fill_scico(palette = 'davos', direction = -1) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
+  transition_states(year)
+```
+
+```{r cera_animation, echo = FALSE, warning=FALSE,cache = TRUE}
+cera_dat %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+    scale_fill_scico(palette = 'davos', direction = -1) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
+  transition_states(year)
+```
+
+```{r, echo = FALSE}
+prism_dat %>%
+  group_by(x, y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'broc',
+                   direction = -1,
+                   limits = c(-1300, 1300)) +
+  transition_states(year) +
+  theme_void()
+
+cera_dat %>%
+  group_by(x, y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'broc',
+                   direction = -1,
+                   limits = c(-130, 130)) +
+  transition_states(year) +
+  theme_void()
+```
+
+
+
+So there's a clear bias here. As we see below, the mean of the observations is well higher than it should be. Looks like the simulation underpredicts snow -- likely because of all the small-scale topographic influences that CESM can't resolve.
+

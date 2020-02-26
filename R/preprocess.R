@@ -10,7 +10,7 @@
 #' @export
 #'
 #' @examples
-preprocess <- function(x, var, flip = FALSE, regrid = FALSE, monthly = FALSE) {
+preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, monthly = FALSE) {
   maps <- brick(x, varname = var)
 
   indices <- getZ(maps) %>% # find the index for April 1st
@@ -23,7 +23,7 @@ preprocess <- function(x, var, flip = FALSE, regrid = FALSE, monthly = FALSE) {
     {if(regrid) aggregate(., fact = 2, na.rm = TRUE) else .} # resample to lower res to speed up analysis
 }
 
-preprocess_prism <- function(x, var = 'SWE'){
+preprocess_prism <- function(x, bbox, var = 'SWE'){
   maps <- brick(x, varname = var)
 
   indices <- getZ(maps) %>% # find the indices for March
@@ -42,5 +42,5 @@ snow_only <- function(dat){
     mutate(test = all(near(SWE, 0) | is.na(SWE))) %>%
     filter(test == FALSE) %>%
     ungroup() %>%
-    select(-test)
+    dplyr::select(-test)
 }

@@ -16,14 +16,14 @@ get_eofs <- function(dat, pca_object, eigenvalues, k){
     left_join(eigenvalues[1:2], by = 'PC') %>%
     mutate(weight = value * std.dev,
            EOF = as.character(PC)) %>%
-    select(-std.dev, -PC)
+    dplyr::select(-std.dev, -PC)
 
   dat %>%
     spread(year, SWE) %>%
     mutate(column = 1:n()) %>%
-    select(x, y, column) %>%
+    dplyr::select(x, y, column) %>%
     full_join(eofs, by = 'column') %>%
-    select(-column)
+    dplyr::select(-column)
 }
 
 plot_eof <- function(eofs){

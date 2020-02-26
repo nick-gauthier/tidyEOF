@@ -10,8 +10,8 @@
 #' @examples
 calc_pcs <- function(dat, scale = TRUE){
   dat %>%
-    spread(year, SWE) %>%
-    select(-x, -y) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
     t() %>%
     prcomp(scale. = scale)
 }
