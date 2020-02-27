@@ -100,13 +100,25 @@ plot_eof(prism_eofs)
 plot_eof(cera_eofs)
 ```
 
-
-# Coupled Pattern Analysis
-
 ```{r}
 pcs_prism <- get_pcs(prism_pca, 7)
 pcs_cera <- get_pcs(cera_pca, 7)
 ```
+
+```{r}
+cera_pat <- left_join(group_nest(cera_eofs, EOF, .key = 'patterns'),
+          group_nest(pcs_cera, PC, .key = 'amplitudes'),
+          by = c('EOF' = 'PC'))
+
+prism_pat <- left_join(group_nest(prism_eofs, EOF, .key = 'patterns'),
+          group_nest(pcs_prism, PC, .key = 'amplitudes'),
+          by = c('EOF' = 'PC'))
+```
+
+
+# Coupled Pattern Analysis
+
+
 
 ```{r, echo = FALSE}
 pcs_prism %>% 
@@ -123,10 +135,11 @@ ggplot(aes(year, amplitude)) +
 ```
 
 ```{r}
+## so this part is key, we are assuming the mean/sd are fixed and just using the values from the observations -- is there a better way?
 prism_scaler <- prism_dat %>%
   spread(year, SWE) %>%
-  select(x, y) %>%
-  mutate(avg = prism_pca$center)#, sdev = prism_pca$scale)
+  dplyr::select(x, y) %>%
+  mutate(avg = prism_pca$center, sdev = prism_pca$scale)
 
 prism_recon <- pcs_prism %>%
   spread(year, amplitude) %>%
@@ -140,46 +153,18 @@ prism_recon <- pcs_prism %>%
   mutate(SWE =  anomaly + avg)
 ```
 
-
-```{r}
-prism_recon %>%
-filter(year <= 1987) %>% 
-  mutate(SWE = if_else(SWE < 0, 0, SWE)) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1300, 1300)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-
-prism_dat %>%
-    group_by(x, y) %>%
-  mutate(SWE_mean = mean(SWE),
-         anomaly = SWE - SWE_mean) %>% 
-filter(year <= 1987) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1300, 1300)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-```
-
-
 ```{r}
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year')) %>%
   mutate(error = SWE.x - SWE.y) %>%
-filter(year <= 1987) %>%
+filter(year <= 2001) %>% 
 ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-450, 450)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1200, 1200)) +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 
 ## GAM
@@ -189,7 +174,7 @@ predictors <- pcs_cera %>%
   filter(year >= 1982) %>% 
     mutate(PC = paste0('PC', PC)) %>% 
   spread(PC, amplitude) %>%
-  select(year, PC1:PC7)
+  dplyr::select(year, PC1:PC7)
 
 gam_mod <- pcs_prism %>%
   filter(year <= 2010) %>%
@@ -210,9 +195,9 @@ gam_mod <- pcs_prism %>%
                               select = TRUE))) %>%
   mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
   mutate(data = map2(mod, data, ~mutate(.y, pred = predict(.x, .y)))) %>%
-  select(PC, data) %>%
+  dplyr::select(PC, data) %>%
   unnest(cols = c(data)) %>%
-  select(PC, amplitude, year, pred) %>%
+  dplyr::select(PC, amplitude, year, pred) %>%
   ungroup()
 ```
 
@@ -225,10 +210,14 @@ gam_mod <- pcs_prism %>%
 
 Looks like pc 6 in the prism data may represent a trend ... r2 of .36 without year term, .89 with it!
 this seems likely, year is selected out of the model for most of the other pcs, but shows a strong negative correlation in pc 6
+```{r}
+prism_eofs %>% filter(EOF == 6) %>% plot_eof()
+```
+
 
 ```{r}
 gam_recon <- gam_mod %>%
-  select(-amplitude) %>%
+  dplyr::select(-amplitude) %>%
   spread(year, pred) %>% 
   mutate(PC = as.character(parse_number(PC))) %>%
   left_join(prism_eofs, ., by = c('EOF' = 'PC')) %>%
@@ -290,14 +279,14 @@ ggplot() +
 t1 <- pcs_prism %>%
   filter(year <= 2010) %>%
   spread(PC, amplitude) %>%
-  select(-year) %>%
+  dplyr::select(-year) %>%
   as.matrix() %>%
   scale()
 
 t2 <- pcs_cera %>%
   filter(year >= 1982) %>% 
     spread(PC, amplitude) %>%
-  select(-year) %>%
+  dplyr::select(-year) %>%
   as.matrix() %>%
   scale()
 
@@ -310,21 +299,21 @@ can_cor$cor
 
 ```{r}
 cera_can <- cera_eofs %>%
-  select(-value) %>%  # use normlaized or unnormalized?
+  dplyr::select(-value) %>%  # use normlaized or unnormalized?
   spread(EOF, weight) %>%
-  select(-x, -y) %>%
+  dplyr::select(-x, -y) %>%
   as.matrix() %>%
   `%*%`(can_cor$ycoef) %>%
     `colnames<-`(paste0('PC', 1:7)) %>%
   as_tibble()
   
 prism_can <- prism_eofs %>%
-  select(-value) %>%
+  dplyr::select(-value) %>%
   spread(EOF, weight) %>%
-  select(-x, -y) %>%
+  dplyr::select(-x, -y) %>%
   as.matrix() %>%
   `%*%`(can_cor$xcoef) %>%
-  `colnames<-`(paste0('PC', 1:4)) %>%
+  `colnames<-`(paste0('PC', 1:7)) %>%
   as_tibble()
 ```
 
@@ -332,40 +321,32 @@ prism_can <- prism_eofs %>%
 cera_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
+  dplyr::select(x, y, column) %>%
   bind_cols(cera_can) %>%
-  gather(pattern, value, PC1:PC7) %>%
+  gather(pattern, value, PC1:PC7) %>% 
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
-  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
   facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
+      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 8) +
   theme_void()+
-  coord_quickmap() +
+  coord_sf() +
   ggtitle('Reanalysis CCA')
 
 prism_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
+  dplyr::select(x, y, column) %>%
   bind_cols(prism_can) %>%
-  gather(pattern, value, PC1:PC4) %>%
+  gather(pattern, value, PC1:PC7) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
-  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
   facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
+      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 80) +
   theme_void()+
-  coord_quickmap() +
+  coord_sf() +
   ggtitle('Observed CCA')
-```
-
-```{r}
-can_cor$cor %>% c() %>% diag()
-
-can_cor$ycoef
-
-CCP::p.asym(can_cor$cor,N = 29, p = 4, q = 7)
 ```
 
 ```{r}
@@ -374,9 +355,9 @@ plot_cancor <- function(x1, x2, y1, y2){
   p1 <- x1 %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
+  dplyr::select(x, y, column) %>%
   bind_cols(x2) %>%
-  gather(pattern, value, PC1:PC6) %>%
+  gather(pattern, value, PC1:PC7) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -390,9 +371,9 @@ plot_cancor <- function(x1, x2, y1, y2){
 p2 <- y1 %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
+  dplyr::select(x, y, column) %>%
   bind_cols(y2) %>%
-  gather(pattern, value, PC1:PC6) %>%
+  gather(pattern, value, PC1:PC7) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -415,26 +396,24 @@ library(telefit)
 
 t1 <- prism_dat %>%
   filter(year <= 2010) %>%
-  select(-area) %>%
   snow_only() %>%
   spread(year, SWE) %>%
-  select(-x, -y) %>%
+  dplyr::select(-x, -y) %>%
   as.matrix()
 
 t2 <- cera_dat %>%
   filter(year >= 1982) %>% 
   snow_only() %>%
   spread(year, SWE) %>%
-  select(-x, -y) %>%
+  dplyr::select(-x, -y) %>%
   as.matrix()
 
 
 t3 <- prism_dat %>%
   filter(year <= 2010) %>%
-  select(-area) %>%
   snow_only() %>%
   spread(year, SWE) %>%
-  select(x, y)
+  dplyr::select(x, y)
 
 tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 4)
 1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
@@ -453,7 +432,7 @@ prism_dat %>%
   filter(year <= 2010) %>%
   snow_only() %>%
   spread(year, SWE) %>%
-  select(x, y) %>%
+  dplyr::select(x, y) %>%
   cbind(tele.preds) %>%
   gather(year, SWE, `1982`:`2010`) %>%
   left_join(prism_scaler) %>%
@@ -625,7 +604,7 @@ left_join(gam_rmse, cca_rmse, by = 'year') %>%
   geom_line(aes(color = method))
 ```
 
-So the gam is in part effective here becuase it resolves recent snow droughts ... I wonder if this is a global warming trend?
+So the gam is in part effective here because it resolves recent snow droughts ... I wonder if this is a global warming trend?
 ```{r}
 tele_dat %>%
   filter(year == 2005 ) %>%

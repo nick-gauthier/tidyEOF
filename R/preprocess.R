@@ -33,7 +33,7 @@ preprocess_prism <- function(x, bbox, var = 'SWE'){
   raster::subset(maps, indices) %>%
     crop(bbox) %>%
     mean() %>%
-    aggregate(fact = 3, fun = "mean") # resample to lower res to speed up analysis
+    aggregate(fact = 2, fun = "mean") # resample to lower res to speed up analysis
 }
 
 snow_only <- function(dat){
