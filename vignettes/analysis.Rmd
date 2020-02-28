@@ -25,7 +25,6 @@ Import the packages required for this analysis.
 ```{r setup}
 # analysis
 library(raster) # processing raster data
-library(nFactors)
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
 library(remote)
@@ -55,25 +54,50 @@ states_wus <- maps::map('state', regions = state_names,
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 ```
 
+# Observed Modes of Snowpack Variability
 
-# PCA
+Run the principal components analysis.
+```{r}
+prism_pcs <- calc_pcs(prism_dat, scale = FALSE)
+```
+
+Get the eigenvalues, and run some truncation tests.
+```{r}
+prism_eigs <- get_eigs(prism_pcs)
+nFactors::nScree(prism_eigs$eigenvalues)
+```
+
+```{r, echo = FALSE}
+plot_scree(prism_eigs, c(6, 14))
+```
+Lets start by truncating at 6. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
+```{r}
+prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 6)
+```
+
+```{r, echo = FALSE}
+plot_amps(prism_patterns)
+```
+
+```{r echo = FALSE}
+plot_eof(prism_patterns)
+```
+
+
+# Simulated Modes
 
 ```{r}
-prism_pca <- calc_pcs(prism_dat, scale = FALSE)
 cera_pca <- calc_pcs(cera_dat, scale = FALSE)
 ```
 
-Autocorrelation in the observed time series may bias our assessment of the principal components. Define a function to calculate the effective number of observations given the sample autocorrelation. 
+
 
 ```{r, echo = FALSE}
-prism_eigs <- get_eigs(prism_pca, prism)
 cera_eigs <- get_eigs(cera_pca, cera)
 ```
 
 ```{r, echo = FALSE}
-prism_eigs$eigenvalues %>%
-  nScree() %>%
-  plotnScree()
+
 
 cera_eigs$eigenvalues %>%
   nScree() %>%
@@ -82,7 +106,6 @@ cera_eigs$eigenvalues %>%
 
 
 ```{r plot_variance_obs, echo = FALSE}
-plot_scree(prism_eigs, 4)
 plot_scree(cera_eigs, 7)
 ```
 
@@ -105,18 +128,6 @@ pcs_prism <- get_pcs(prism_pca, 7)
 pcs_cera <- get_pcs(cera_pca, 7)
 ```
 
-```{r}
-cera_pat <- left_join(group_nest(cera_eofs, EOF, .key = 'patterns'),
-          group_nest(pcs_cera, PC, .key = 'amplitudes'),
-          by = c('EOF' = 'PC'))
-
-prism_pat <- left_join(group_nest(prism_eofs, EOF, .key = 'patterns'),
-          group_nest(pcs_prism, PC, .key = 'amplitudes'),
-          by = c('EOF' = 'PC'))
-```
-
-
-# Coupled Pattern Analysis
 
 
 
@@ -133,6 +144,21 @@ ggplot(aes(year, amplitude)) +
   geom_line() +
   facet_wrap(~PC)
 ```
+
+```{r}
+cera_pat <- left_join(group_nest(cera_eofs, EOF, .key = 'patterns'),
+          group_nest(pcs_cera, PC, .key = 'amplitudes'),
+          by = c('EOF' = 'PC'))
+
+prism_pat <- left_join(group_nest(prism_eofs, EOF, .key = 'patterns'),
+          group_nest(pcs_prism, PC, .key = 'amplitudes'),
+          by = c('EOF' = 'PC'))
+```
+
+
+# Coupled Pattern Analysis
+
+First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
 
 ```{r}
 ## so this part is key, we are assuming the mean/sd are fixed and just using the values from the observations -- is there a better way?
@@ -157,13 +183,13 @@ prism_recon <- pcs_prism %>%
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year')) %>%
   mutate(error = SWE.x - SWE.y) %>%
-filter(year <= 2001) %>% 
+filter(year <= 1991) %>% filter(error < -500)
 ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1200, 1200)) +
+  #scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1000, 1000)) +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 

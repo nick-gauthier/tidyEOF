@@ -8,11 +8,13 @@
 #' @export
 #'
 #' @examples
-get_eigs <- function(pc_object, raster){
+get_eigs <- function(pc_object){
+  #n <- n_effective(length(pc_object$sdev))
+  n <- length(pc_object$sdev)
   pc_object %>%
     broom::tidy(matrix = 'pcs') %>%
     mutate(eigenvalues = std.dev ^ 2,
-           error = sqrt(2 / n_effective(raster)),
+           error = sqrt(2 / n),
            low =  eigenvalues * (1 - error) * 100 / sum(eigenvalues),
            hi = eigenvalues * (1 + error) * 100 / sum(eigenvalues),
            cumvar_line = hi + 0.02 * max(hi))

@@ -9,6 +9,18 @@
 #' @export
 #'
 #' @examples
+#'
+
+get_patterns <- function(pc_object, data, eigs, k) {
+amps <- get_amps(pc_object, k) %>%
+  group_nest(PC, .key = 'amplitudes')
+
+eofs <- get_eofs(data, pc_object, eigs, k) %>%
+  group_nest(EOF, .key = 'patterns')
+
+left_join(amps, eofs, by = c('PC' = 'EOF'))
+}
+
 get_eofs <- function(dat, pca_object, eigenvalues, k){
   eofs <- pca_object %>%
     tidy(matrix = 'variables') %>%
@@ -26,10 +38,13 @@ get_eofs <- function(dat, pca_object, eigenvalues, k){
     dplyr::select(-column)
 }
 
-plot_eof <- function(eofs){
-  eofs %>%
-    mutate(EOF = paste0('EOF', EOF)) %>%
-    ggplot() +
+plot_eof <- function(patterns){
+  eofs <- patterns %>%
+    dplyr::select(-amplitudes) %>%
+    unnest(patterns) %>%
+    mutate(EOF = paste0('EOF', PC))
+
+  ggplot(eofs) +
     geom_raster(aes(x, y, fill = weight)) +
     geom_sf(data = states_wus, fill = NA, color = 'black') +
     facet_wrap(~EOF) +
