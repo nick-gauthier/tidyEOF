@@ -51,7 +51,7 @@ prism_dat <- prism %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = round(parse_number(layer))) %>%
   rename(SWE = value) %>%
-  select(-layer) %>%
+  dplyr::select(-layer) %>%
   snow_only()
 ```
 
@@ -60,7 +60,7 @@ cera_dat <- cera %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = round(parse_number(layer))) %>%
   rename(SWE = value) %>%
-  select(-layer) %>%
+  dplyr::select(-layer) %>%
   snow_only()
 ```
 
