@@ -17,7 +17,7 @@ library(tidyverse) # data manipulation and visualization
 
 Define a study area to constrain all computations.
 ```{r}
-bbox <- extent(c(-125, -104, 33, 49))
+bbox <- extent(c(-125, -102, 31, 49))
 ```
 
 Import the snow observation data from https://nsidc.org/data/nsidc-0719.^[What's up with this warning message? long_name=CRS definition
@@ -45,7 +45,7 @@ cera <- map(1:10,
 
 ## Preprocessing
 
-Turn all the rasters into data frames and join.
+Turn the raster bricks into data frames and join.
 ```{r}
 prism_dat <- prism %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%

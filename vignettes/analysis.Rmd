@@ -16,18 +16,20 @@ link-citations: yes
 
 Downscaling snow water equivalent 
 
-# Setup
+# Introduction
 
-## Packages
+## Preliminaries
 
 Import the packages required for this analysis.
 
 ```{r setup}
+knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
+
 # analysis
 library(raster) # processing raster data
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
-library(remote)
+library(remote) # empirical orthogonal teleconnections
 
 # plotting
 library(sf) # shapefiles and plotting
@@ -42,7 +44,6 @@ devtools::load_all()
 load('../data.Rdata')
 ```
 
-
 ```{r, echo = FALSE}
 # download state boundary files for cropping and plotting
 state_names <- c('arizona', 'new mexico', 'colorado', 
@@ -52,13 +53,57 @@ state_names <- c('arizona', 'new mexico', 'colorado',
 
 states_wus <- maps::map('state', regions = state_names, 
                     fill = TRUE, plot = FALSE) %>% st_as_sf
+
+states_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% dplyr::select(-X1982)
 ```
 
-# Observed Modes of Snowpack Variability
+# Modes of Snowpack Variability
 
-Run the principal components analysis.
+## Observed Modes
+
 ```{r}
-prism_pcs <- calc_pcs(prism_dat, scale = FALSE)
+prism_climatology <- prism_dat %>%
+  semi_join(states_mask) %>%
+  group_by(x, y) %>%
+  summarise(swe_mean = mean(SWE),
+            swe_sd = sd(SWE))
+```
+
+
+```{r, echo = FALSE, fig.asp = .8}
+ggplot(prism_climatology) +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Mean March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
+
+ggplot(prism_climatology) +
+  geom_raster(aes(x, y, fill = swe_sd)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1)+
+  ggtitle('Standard Deviation of March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
+```
+
+
+```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
+prism_dat %>%
+  filter(between(year, 2000, 2017)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
+  transition_states(year)
+```
+
+### PCA
+
+Run a principal components analysis.
+```{r}
+prism_pcs <- calc_pcs(prism_dat, scale = TRUE)
 ```
 
 Get the eigenvalues, and run some truncation tests.
@@ -72,137 +117,115 @@ plot_scree(prism_eigs, c(6, 14))
 ```
 Lets start by truncating at 6. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
 ```{r}
-prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 6)
+prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 9)
 ```
 
 ```{r, echo = FALSE}
 plot_amps(prism_patterns)
 ```
 
-```{r echo = FALSE}
-plot_eof(prism_patterns)
+```{r echo = FALSE, fig.width = 10, fig.height = 11}
+plot_eof(prism_patterns, 'vik')
 ```
-
-
-# Simulated Modes
-
-```{r}
-cera_pca <- calc_pcs(cera_dat, scale = FALSE)
-```
-
-
-
-```{r, echo = FALSE}
-cera_eigs <- get_eigs(cera_pca, cera)
-```
-
-```{r, echo = FALSE}
-
-
-cera_eigs$eigenvalues %>%
-  nScree() %>%
-  plotnScree()
-```
-
-
-```{r plot_variance_obs, echo = FALSE}
-plot_scree(cera_eigs, 7)
-```
-
-
-## EOFs
-
-```{r calc_eofs}
-prism_eofs <- get_eofs(prism_dat, prism_pca, prism_eigs, 7)
-cera_eofs <- get_eofs(cera_dat, cera_pca, cera_eigs, 7)
-```
-
-
-```{r}
-plot_eof(prism_eofs)
-plot_eof(cera_eofs)
-```
-
-```{r}
-pcs_prism <- get_pcs(prism_pca, 7)
-pcs_cera <- get_pcs(cera_pca, 7)
-```
-
-
-
-
-```{r, echo = FALSE}
-pcs_prism %>% 
-  mutate(PC = paste0('PC', PC)) %>% 
-ggplot(aes(year, amplitude)) +
-  geom_line() +
-  facet_wrap(~PC)
-
-pcs_cera %>%
-  mutate(PC = paste0('PC', PC)) %>% 
-ggplot(aes(year, amplitude)) +
-  geom_line() +
-  facet_wrap(~PC)
-```
-
-```{r}
-cera_pat <- left_join(group_nest(cera_eofs, EOF, .key = 'patterns'),
-          group_nest(pcs_cera, PC, .key = 'amplitudes'),
-          by = c('EOF' = 'PC'))
-
-prism_pat <- left_join(group_nest(prism_eofs, EOF, .key = 'patterns'),
-          group_nest(pcs_prism, PC, .key = 'amplitudes'),
-          by = c('EOF' = 'PC'))
-```
-
-
-# Coupled Pattern Analysis
-
-First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
-
-```{r}
-## so this part is key, we are assuming the mean/sd are fixed and just using the values from the observations -- is there a better way?
-prism_scaler <- prism_dat %>%
-  spread(year, SWE) %>%
-  dplyr::select(x, y) %>%
-  mutate(avg = prism_pca$center, sdev = prism_pca$scale)
-
-prism_recon <- pcs_prism %>%
-  spread(year, amplitude) %>%
-  left_join(prism_eofs, ., by = c('EOF' = 'PC')) %>%
-  gather(year, amplitude, `1982`:`2017`) %>% ## change dates for cera
-  mutate(SWE = value * amplitude,
-         year = as.numeric(year)) %>%
+### Spatial information loss
+```{r, fig.asp = .9}
+swe_recon <- prism_patterns %>%
+  unnest(amplitudes) %>%
+  unnest(patterns) %>%
+  mutate(anomaly = value * amplitude) %>%
+  dplyr::select(-c(amplitude, value, weight)) %>%
   group_by(x, y, year) %>%
-  summarise(anomaly = sum(SWE)) %>%
-  left_join(prism_scaler) %>%
-  mutate(SWE =  anomaly + avg)
-```
+  summarize(anomaly = sum(anomaly)) %>%
+    left_join(prism_climatology) %>%
+  mutate(SWE = anomaly * swe_sd + swe_mean) 
 
-```{r}
-prism_recon %>%
+swe_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year')) %>%
-  mutate(error = SWE.x - SWE.y) %>%
-filter(year <= 1991) %>% filter(error < -500)
+  mutate(error = (SWE.x - SWE.y) / swe_sd) %>%
+filter(year <= 1985) %>% 
 ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   facet_wrap(~year) +
-  #scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1000, 1000)) +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-5, 5)) +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 
-## GAM
+
+## Simulated Modes
 
 ```{r}
-predictors <- pcs_cera %>%
+cera_climatology <- cera_dat %>% 
+  group_by(x, y) %>%
+  summarise(swe_mean = mean(SWE),
+            swe_sd = sd(SWE))
+```
+
+
+```{r, echo = FALSE, fig.asp = .8}
+ggplot(cera_climatology) +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Mean March SWE, 1901-2010', 'CERA-20C Reanalysis')
+
+ggplot(cera_climatology) +
+  geom_raster(aes(x, y, fill = swe_sd)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1)+
+  ggtitle('Standard Deviation of March SWE, 1901-2010', 'CERA-20C Reanalysis')
+```
+
+Run the principal components analysis.
+```{r}
+cera_pcs <- calc_pcs(cera_dat, scale = TRUE)
+```
+
+Get the eigenvalues, and run some truncation tests.
+```{r}
+cera_eigs <- get_eigs(cera_pcs)
+nFactors::nScree(cera_eigs$eigenvalues)
+```
+
+```{r, echo = FALSE}
+plot_scree(prism_eigs, 7)
+```
+```{r}
+cera_patterns <- get_patterns(cera_pcs, cera_dat, cera_eigs, k = 9, mask = FALSE)
+```
+
+```{r, echo = FALSE}
+plot_amps(cera_patterns)
+```
+
+```{r echo = FALSE}
+plot_eof(cera_patterns, 'vik')
+```
+
+# Coupled Pattern Analysis
+
+First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
+
+## GAM
+```{r}
+library(modelr)
+```
+
+
+```{r}
+predictors <- cera_patterns %>%
+  dplyr::select(-patterns) %>%
+  unnest(amplitudes) %>%
   filter(year >= 1982) %>% 
     mutate(PC = paste0('PC', PC)) %>% 
-  spread(PC, amplitude) %>%
-  dplyr::select(year, PC1:PC7)
+  spread(PC, amplitude)
 
-gam_mod <- pcs_prism %>%
+gam_mod <- prism_patterns %>%
+    dplyr::select(-patterns) %>%
+  unnest(amplitudes) %>%
   filter(year <= 2010) %>%
     mutate(PC = paste0('PC', PC)) %>% 
   left_join(predictors, by = 'year') %>%
@@ -215,30 +238,65 @@ gam_mod <- pcs_prism %>%
                                 s(PC4, k = 4) + 
                                 s(PC5, k = 4) + 
                                 s(PC6, k = 4) + 
-                                s(PC7, k = 4), 
+                                s(PC7, k = 4) +
+                                s(PC8, k = 4) + 
+                                s(PC9, k = 4), 
                               data = ., 
                               method = 'REML', 
                               select = TRUE))) %>%
   mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
-  mutate(data = map2(mod, data, ~mutate(.y, pred = predict(.x, .y)))) %>%
+  mutate(data = map2(data, mod, add_predictions),
+         data = map2(data, mod, add_residuals)) 
+
+gam_preds <- gam_mod %>%
   dplyr::select(PC, data) %>%
   unnest(cols = c(data)) %>%
-  dplyr::select(PC, amplitude, year, pred) %>%
+  dplyr::select(PC, amplitude, year, pred, resid) %>%
   ungroup()
 ```
 
+How do the models perform?
 ```{r}
-  ggplot(gam_mod, aes(year)) +
+gam_mod %>%
+  dplyr::select(PC, r2) %>%
+  arrange(-r2)
+```
+
+
+Are the residuals autocorrelated? Some are
+```{r}
+gam_preds %>%
+  group_by(PC) %>%
+  summarise(autocor = cor(resid, lag(resid), use = 'pairwise.complete.obs')) %>%
+  arrange(-abs(autocor))
+```
+
+```{r}
+ggplot(gam_preds, aes(year)) +
   geom_line(aes(y = amplitude)) +
   geom_line(aes(y = pred), color = 'red') +
   facet_wrap(~PC)
 ```
 
+```{r}
+ggplot(gam_preds, aes(resid)) +
+  #geom_histogram() + 
+  geom_density(fill = NA) +
+  geom_vline(xintercept = 0, color = 'red', linetype = 2) +
+  facet_wrap(~PC) +
+  theme_bw()
+```
+
+
+
+```{r}
+walk(gam_mod$mod, plot)
+```
+
+
 Looks like pc 6 in the prism data may represent a trend ... r2 of .36 without year term, .89 with it!
 this seems likely, year is selected out of the model for most of the other pcs, but shows a strong negative correlation in pc 6
-```{r}
-prism_eofs %>% filter(EOF == 6) %>% plot_eof()
-```
+
 
 
 ```{r}
@@ -719,19 +777,6 @@ ggplot(obs_agg, aes(area, SWE)) +
 
 
 
-What's the climatic mean April 1st SWE for the observations and simulations?
-```{r, echo = FALSE}
-prism_dat %>%
-  group_by(x, y) %>%
-  summarise(SWE = mean(SWE))%>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Observed mean March SWE, 1982-2017', 'PRISM')
-```
-
 ```{r}
 cera_dat %>%
   group_by(x, y) %>%
@@ -745,7 +790,7 @@ cera_dat %>%
 ```
 
 
-To what extent is this mistmatch due to bias or scale effects? Test by resampling the observations to the CERA grid.
+To what extent is this mismatch due to bias or scale effects? Test by resampling the observations to the CERA grid.
 
 ```{r, echo = FALSE}
 mean_swe_cera <- cera_dat %>%
@@ -773,17 +818,6 @@ ggplot() +
 
 
 Look at how SWE has varied over time and space.
-
-```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
-prism_dat %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
-  transition_states(year)
-```
 
 ```{r cera_animation, echo = FALSE, warning=FALSE,cache = TRUE}
 cera_dat %>%

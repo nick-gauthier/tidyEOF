@@ -11,11 +11,12 @@
 #' @examples
 #'
 
-get_patterns <- function(pc_object, data, eigs, k) {
+get_patterns <- function(pc_object, data, eigs, k, mask = TRUE) {
 amps <- get_amps(pc_object, k) %>%
   group_nest(PC, .key = 'amplitudes')
 
 eofs <- get_eofs(data, pc_object, eigs, k) %>%
+  {if(mask) semi_join(., states_mask) else .} %>%
   group_nest(EOF, .key = 'patterns')
 
 left_join(amps, eofs, by = c('PC' = 'EOF'))
@@ -38,7 +39,7 @@ get_eofs <- function(dat, pca_object, eigenvalues, k){
     dplyr::select(-column)
 }
 
-plot_eof <- function(patterns){
+plot_eof <- function(patterns, palette){
   eofs <- patterns %>%
     dplyr::select(-amplitudes) %>%
     unnest(patterns) %>%
@@ -48,7 +49,7 @@ plot_eof <- function(patterns){
     geom_raster(aes(x, y, fill = weight)) +
     geom_sf(data = states_wus, fill = NA, color = 'black') +
     facet_wrap(~EOF) +
-    scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * max(abs(eofs$weight))) +
+    scale_fill_scico(palette = palette, direction = 1, limits = c(-1, 1) * max(abs(eofs$weight))) +
     theme_void()+
     ggtitle('Observed March SWE EOFS')
 }
