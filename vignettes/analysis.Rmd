@@ -55,6 +55,8 @@ states_wus <- maps::map('state', regions = state_names,
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 
 states_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% dplyr::select(-X1982)
+
+world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ```
 
 # Modes of Snowpack Variability
@@ -127,7 +129,9 @@ plot_amps(prism_patterns)
 ```{r echo = FALSE, fig.width = 10, fig.height = 11}
 plot_eof(prism_patterns, 'vik')
 ```
+
 ### Spatial information loss
+
 ```{r, fig.asp = .9}
 swe_recon <- prism_patterns %>%
   unnest(amplitudes) %>%
@@ -154,6 +158,8 @@ ggplot() +
 
 ## Teleconnections
 
+### Sea Surface Temperatures
+
 To cite use of dataset: Boyin Huang, Peter W. Thorne, Viva F. Banzon, Tim Boyer, Gennady Chepurin, Jay H. Lawrimore, Matthew J. Menne, Thomas M. Smith, Russell S. Vose, and Huai-Min Zhang (2017): NOAA Extended Reconstructed Sea Surface Temperature (ERSST), Version 5. [indicate subset used]. NOAA National Centers for Environmental Information. doi:10.7289/V5T72FNM [access date].
 Please note: If you acquire NOAA_ERSST_V5 data products from PSD, we ask that you acknowledge us in your use of the data. This may be done by including text such as NOAA_ERSST_V5 data provided by the NOAA/OAR/ESRL PSD, Boulder, Colorado, USA, from their Web site at https://www.esrl.noaa.gov/psd/ in any documents or publications using these data. We would also appreciate receiving a copy of the relevant publications. This will help PSD to justify keeping the NOAA_ERSST_V5 data set freely available online in the future. Thank you!
 
@@ -167,13 +173,13 @@ id <- which(time >= as.Date('1982-01-01') & time <= as.Date('2017-03-01') & str_
 
 sst_jfm <- subset(sst_brick, id) %>%
   stackApply(rep(1:36, each = 3), 'mean') %>% 
-  `-`(sst_mean[[1]]) %>% 
+  `-`(sst_mean) %>% 
   crop(extent(c(-1, 359, -75, 75))) %>%
   disaggregate(fact = 2, method = 'bilinear')
 ```
 
 ```{r, warning = FALSE}
-reof_cor <- brick(
+sst_cor <- brick(
   calc(sst_jfm, fun=function(x) cor(c(x), prism_patterns[[1,2]]$amplitude)),
   calc(sst_jfm, fun=function(x) cor(c(x),prism_patterns[[2,2]]$amplitude)),
   calc(sst_jfm, fun=function(x) cor(c(x),prism_patterns[[3,2]]$amplitude)),
@@ -185,15 +191,14 @@ reof_cor <- brick(
 
 
 ```{r, fig.asp = 1, echo = FALSE}
-world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
-reof_cor %>% 
+sst_cor %>% 
   as.data.frame(xy = T, na.rm = T) %>%
   gather(eof, value, PC1:PC6) %>%
     filter(value > .1 | value < -.1) %>%
   ggplot(aes(x, y)) +
   geom_raster(aes(fill = value)) +
   facet_wrap(~eof, nrow = 3) +
-  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', direction = -1, limits = c(-1,1)) +
+  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', direction = 1, limits = c(-1,1)) +
   coord_quickmap(ylim = c(-75,75), expand = FALSE) +
   geom_polygon(data = world, aes(x = long, y = lat, group = group)) +
   labs(title = 'Snow teleconnections', 
@@ -205,6 +210,44 @@ reof_cor %>%
 #ggsave('snow_telecon_cor.png')
 ```
 
+### Geopotential
+
+```{r}
+geop_jfm <- brick('../data/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
+   stackApply(rep(1:36, each = 3), 'mean') %>%
+    `-`(., mean(.))
+```
+
+```{r, warning = FALSE}
+geop_cor <- brick(
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[1,2]]$amplitude)),
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[2,2]]$amplitude)),
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[3,2]]$amplitude)),
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[4,2]]$amplitude)),
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[5,2]]$amplitude)),
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[6,2]]$amplitude))) %>%
+  `names<-`(paste0('PC', 1:6))
+```
+
+```{r, fig.asp = 1, echo = FALSE}
+geop_cor %>% 
+  as.data.frame(xy = T, na.rm = T) %>%
+  gather(eof, value, PC1:PC6) %>%
+    filter(value > .1 | value < -.1) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = value)) +
+  facet_wrap(~eof, nrow = 3) +
+  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', direction = 1, limits = c(-1,1)) +
+  coord_quickmap(ylim = c(-75,75), expand = FALSE) +
+  geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .2) +
+  labs(title = 'Snow teleconnections', 
+       subtitle = 'PC_cov correlation to JFM 500mb geopotential height',
+       x = 'Longitude', y = 'Latitude') +
+  theme_bw() +
+  theme(legend.position = "bottom")
+  
+#ggsave('geop_telecon_cov.png')
+```
 
 ## Simulated Modes
 
