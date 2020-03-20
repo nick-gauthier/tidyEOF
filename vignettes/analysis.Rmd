@@ -267,6 +267,29 @@ First look at just the error from the dimensionality reduction  with the PCs. Th
 library(modelr)
 ```
 
+Are there any trends?
+
+```{r}
+
+trends_mod <- prism_patterns %>%
+    dplyr::select(-patterns) %>%
+  unnest(amplitudes) %>%
+  mutate(PC = paste0('PC', PC)) %>% 
+  group_by(PC) %>%
+  nest() %>%
+  mutate(mod = map(data, ~gam(amplitude ~ 
+                                s(year, k = 4), 
+                              data = ., 
+                              method = 'REML', 
+                              select = TRUE))) %>%
+  mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
+  mutate(data = map2(data, mod, add_predictions),
+         data = map2(data, mod, add_residuals)) 
+
+walk(gam_mod$mod, plot)
+```
+
+
 
 ```{r}
 predictors <- cera_patterns %>%
@@ -285,21 +308,23 @@ gam_mod <- prism_patterns %>%
   group_by(PC) %>%
   nest() %>%
   mutate(mod = map(data, ~gam(amplitude ~ 
+                                s(year, k = 4) +
                                 s(PC1, k = 4) + 
-                                s(PC2, k =5) + 
+                                s(PC2, k = 4) + 
                                 s(PC3, k = 4) + 
                                 s(PC4, k = 4) + 
                                 s(PC5, k = 4) + 
-                                s(PC6, k = 4) + 
-                                s(PC7, k = 4) +
-                                s(PC8, k = 4) + 
-                                s(PC9, k = 4), 
+                                s(PC6, k = 4),# + 
+                              #  s(PC7, k = 4) +
+                              #  s(PC8, k = 4) + 
+                             #   s(PC9, k = 4), 
                               data = ., 
                               method = 'REML', 
                               select = TRUE))) %>%
   mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
   mutate(data = map2(data, mod, add_predictions),
          data = map2(data, mod, add_residuals)) 
+gam_mod
 
 gam_preds <- gam_mod %>%
   dplyr::select(PC, data) %>%
