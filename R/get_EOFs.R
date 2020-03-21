@@ -39,7 +39,7 @@ get_eofs <- function(dat, pca_object, eigenvalues, k){
     dplyr::select(-column)
 }
 
-plot_eof <- function(patterns, palette, normalized = TRUE){
+plot_eof <- function(patterns, palette, normalized = FALSE){
   eofs <- patterns %>%
     dplyr::select(-amplitudes) %>%
     unnest(patterns) %>%

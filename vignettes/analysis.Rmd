@@ -105,7 +105,7 @@ prism_dat %>%
 
 Run a principal components analysis.
 ```{r}
-prism_pcs <- calc_pcs(prism_dat, scale = TRUE)
+prism_pcs <- calc_pcs(prism_dat, scale = FALSE)
 ```
 
 Get the eigenvalues, and run some truncation tests.
@@ -114,19 +114,21 @@ prism_eigs <- get_eigs(prism_pcs)
 nFactors::nScree(prism_eigs$eigenvalues)
 ```
 
-```{r, echo = FALSE}
+```{r, fig.asp = 0.75, echo = FALSE}
 plot_scree(prism_eigs, c(6, 14))
 ```
 Lets start by truncating at 6. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
 ```{r}
-prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 9)
+prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 4)
 ```
 
 ```{r, echo = FALSE}
 plot_amps(prism_patterns)
 ```
 
-```{r echo = FALSE, fig.width = 10, fig.height = 11}
+Plot the normalized eofs. 
+
+```{r echo = FALSE, fig.asp = 1}
 plot_eof(prism_patterns, 'vik')
 ```
 
@@ -277,7 +279,7 @@ ggplot(cera_climatology) +
 
 Run the principal components analysis.
 ```{r}
-cera_pcs <- calc_pcs(cera_dat, scale = TRUE)
+cera_pcs <- calc_pcs(cera_dat, scale = FALSE)
 ```
 
 Get the eigenvalues, and run some truncation tests.
@@ -287,10 +289,10 @@ nFactors::nScree(cera_eigs$eigenvalues)
 ```
 
 ```{r, echo = FALSE}
-plot_scree(prism_eigs, 7)
+plot_scree(prism_eigs, 4)
 ```
 ```{r}
-cera_patterns <- get_patterns(cera_pcs, cera_dat, cera_eigs, k = 9, mask = FALSE)
+cera_patterns <- get_patterns(cera_pcs, cera_dat, cera_eigs, k = 6, mask = FALSE)
 ```
 
 ```{r, echo = FALSE}

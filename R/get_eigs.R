@@ -20,28 +20,39 @@ get_eigs <- function(pc_object){
            cumvar_line = hi + 0.02 * max(hi))
 }
 
-n_effective <- function(x){
-  n <- nlayers(x)
-  x %>%
-    area_weight %>%
-    as.data.frame(na.rm = TRUE) %>%
-    filter_all(any_vars(floor(.) != 0)) %>%
-    t %>%
-    as_tibble %>%
-    gather(cell, value) %>%
-    nest(data = c(value)) %>%
-    mutate(rho = map_dbl(data, ~cor(.$value, lag(.$value), use = 'comp'))) %>%
-    remove_missing() %>%
-    mutate(effective_n = n * (1 - rho^2) / (1 + rho^2)) %>% # from Bretherton et al 1999
-    summarise(mean(effective_n)) %>%
-    pull
-}
+# n_effective <- function(x){
+#   n <- nlayers(x)
+#   x %>%
+#     area_weight %>%
+#     as.data.frame(na.rm = TRUE) %>%
+#     filter_all(any_vars(floor(.) != 0)) %>%
+#     t %>%
+#     as_tibble %>%
+#     gather(cell, value) %>%
+#     nest(data = c(value)) %>%
+#     mutate(rho = map_dbl(data, ~cor(.$value, lag(.$value), use = 'comp'))) %>%
+#     remove_missing() %>%
+#     mutate(effective_n = n * (1 - rho^2) / (1 + rho^2)) %>% # from Bretherton et al 1999
+#     summarise(mean(effective_n)) %>%
+#     pull
+# }
+
+#area_weight <- function(x){
+#  names_x <- names(x)
+#  x %>%
+#    init('y') %>% # get a map of latitudes
+#    `*`(pi/180) %>% # convert to radians
+#    cos %>% # cosine
+#    sqrt %>%
+#    `*`(x) %>%
+#    `names<-`(names_x)
+#}
 
 plot_scree <- function(eigs, k){
   eigs %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
            multiplet = as.factor(cumsum(separated))) %>%
-    filter(PC <= 25) %>%
+    filter(PC <= 20) %>%
     ggplot(aes(x = PC, y = percent * 100)) +
     geom_linerange(aes(x = PC, ymin = low, ymax = hi)) +
     geom_point(size = 2, aes(color = multiplet)) +
