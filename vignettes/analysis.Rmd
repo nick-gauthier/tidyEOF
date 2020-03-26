@@ -201,10 +201,10 @@ fdr <- function(x, k) {
 }
 
 sst_sig <- brick(
-  calc(sst_jfm, fun=function(x) cortest(x, k = 1)),
-    calc(sst_jfm, fun=function(x) cortest(x, k = 2)),
-    calc(sst_jfm, fun=function(x) cortest(x, k = 3)),
-    calc(sst_jfm, fun=function(x) cortest(x, k = 4))) %>%
+  calc(sst_jfm, fun=function(x) fdr(x, k = 1)),
+    calc(sst_jfm, fun=function(x) fdr(x, k = 2)),
+    calc(sst_jfm, fun=function(x) fdr(x, k = 3)),
+    calc(sst_jfm, fun=function(x) fdr(x, k = 4))) %>%
   `names<-`(paste0('PC', 1:4))
 
 sst_sig[sst_sig > 0.05] <- NA
@@ -253,10 +253,10 @@ geop_cor <- brick(
 
 
 geop_sig <- brick(
-  calc(geop_jfm, fun=function(x) cortest(x, k = 1)),
-  calc(geop_jfm, fun=function(x) cortest(x, k = 2)),
-  calc(geop_jfm, fun=function(x) cortest(x, k = 3)),
-  calc(geop_jfm, fun=function(x) cortest(x, k = 4))) %>%
+  calc(geop_jfm, fun=function(x) fdr(x, k = 1)),
+  calc(geop_jfm, fun=function(x) fdr(x, k = 2)),
+  calc(geop_jfm, fun=function(x) fdr(x, k = 3)),
+  calc(geop_jfm, fun=function(x) fdr(x, k = 4))) %>%
   `names<-`(paste0('PC', 1:4))
 
 geop_sig[geop_sig > 0.05] <- NA
