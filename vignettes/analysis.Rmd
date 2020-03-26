@@ -207,7 +207,10 @@ sst_sig <- brick(
     calc(sst_jfm, fun=function(x) cortest(x, k = 4))) %>%
   `names<-`(paste0('PC', 1:4))
 
-rasterToPoints(sst_sig, fun = function(x) x <= 0.05)
+sst_sig[sst_sig > 0.05] <- NA
+sst_sig_pts <- raster::as.data.frame(sst_sig, xy = TRUE, long = TRUE) %>%
+  rename(eof = layer) %>%
+  filter(!is.na(value))
 ```
 
 
@@ -215,18 +218,18 @@ rasterToPoints(sst_sig, fun = function(x) x <= 0.05)
 sst_cor %>% 
   as.data.frame(xy = T, na.rm = T) %>%
   gather(eof, value, PC1:PC4) %>%
-    filter(value > .1 | value < -.1) %>%
+  #  filter(value > .1 | value < -.1) %>%
   ggplot(aes(x, y)) +
   geom_raster(aes(fill = value)) +
+  geom_point(data = sst_sig_pts, shape = '.', alpha = .075) +
   facet_wrap(~eof, nrow = 3) +
-  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', direction = 1, limits = c(-1,1)) +
+  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', limits = c(-1,1)) +
   coord_quickmap(ylim = c(-75,75), expand = FALSE) +
   geom_polygon(data = world, aes(x = long, y = lat, group = group)) +
   labs(title = 'Snow teleconnections', 
        subtitle = 'PC correlation to JFM sea surface temperature',
        x = 'Longitude', y = 'Latitude') +
-  theme_bw() +
-  theme(legend.position = "bottom")
+  theme_bw()
   
 #ggsave('snow_telecon_cor.png')
 ```
@@ -236,7 +239,8 @@ sst_cor %>%
 ```{r}
 geop_jfm <- brick('../data/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
    stackApply(rep(1:36, each = 3), 'mean') %>%
-    `-`(., mean(.))
+    `-`(., mean(.)) %>%
+  aggregate(fact = 4, method = 'bilinear')
 ```
 
 ```{r, warning = FALSE}
@@ -244,28 +248,39 @@ geop_cor <- brick(
   calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[1,2]]$amplitude)),
   calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[2,2]]$amplitude)),
   calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[3,2]]$amplitude)),
-  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[4,2]]$amplitude)),
-  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[5,2]]$amplitude)),
-  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[6,2]]$amplitude))) %>%
-  `names<-`(paste0('PC', 1:6))
+  calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[4,2]]$amplitude))) %>%
+  `names<-`(paste0('PC', 1:4))
+
+
+geop_sig <- brick(
+  calc(geop_jfm, fun=function(x) cortest(x, k = 1)),
+  calc(geop_jfm, fun=function(x) cortest(x, k = 2)),
+  calc(geop_jfm, fun=function(x) cortest(x, k = 3)),
+  calc(geop_jfm, fun=function(x) cortest(x, k = 4))) %>%
+  `names<-`(paste0('PC', 1:4))
+
+geop_sig[geop_sig > 0.05] <- NA
+geop_sig_pts <- raster::as.data.frame(geop_sig, xy = TRUE, long = TRUE) %>%
+  rename(eof = layer) %>%
+  filter(!is.na(value))
 ```
 
-```{r, fig.asp = 1, echo = FALSE}
+```{r, echo = FALSE}
 geop_cor %>% 
   as.data.frame(xy = T, na.rm = T) %>%
-  gather(eof, value, PC1:PC6) %>%
-    filter(value > .1 | value < -.1) %>%
+  gather(eof, value, PC1:PC4) %>%
+  #  filter(value > .1 | value < -.1) %>%
   ggplot(aes(x, y)) +
   geom_raster(aes(fill = value)) +
+    geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .25) +
+  geom_point(data = geop_sig_pts, shape = '.', alpha = .075) +
   facet_wrap(~eof, nrow = 3) +
-  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', direction = 1, limits = c(-1,1)) +
+  scale_fill_distiller(name = 'Correlation', palette = 'RdBu', limits = c(-1,1)) +
   coord_quickmap(ylim = c(-75,75), expand = FALSE) +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .2) +
   labs(title = 'Snow teleconnections', 
-       subtitle = 'PC_cov correlation to JFM 500mb geopotential height',
+       subtitle = 'PC correlation to JFM 500mb geopotential height',
        x = 'Longitude', y = 'Latitude') +
-  theme_bw() +
-  theme(legend.position = "bottom")
+  theme_bw()
   
 #ggsave('geop_telecon_cov.png')
 ```
