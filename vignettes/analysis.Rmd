@@ -23,7 +23,7 @@ Downscaling snow water equivalent
 Import the packages required for this analysis.
 
 ```{r setup}
-knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
+#knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
 
 # analysis
 library(raster) # processing raster data
@@ -105,7 +105,7 @@ prism_dat %>%
 
 Run a principal components analysis.
 ```{r}
-prism_pcs <- calc_pcs(prism_dat, scale = FALSE)
+prism_pcs <- calc_pcs(prism_dat)
 ```
 
 Get the eigenvalues, and run some truncation tests.
@@ -123,7 +123,7 @@ prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = 4)
 ```
 
 ```{r, echo = FALSE}
-plot_amps(prism_patterns)
+plot_amps(prism_patterns) + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
 ```
 
 Plot the normalized eofs. 
@@ -143,18 +143,43 @@ swe_recon <- prism_patterns %>%
   group_by(x, y, year) %>%
   summarize(anomaly = sum(anomaly)) %>%
     left_join(prism_climatology) %>%
-  mutate(SWE = anomaly * swe_sd + swe_mean) 
+  mutate(SWE = anomaly + swe_mean)# * swe_sd + swe_mean) 
 
 swe_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year')) %>%
-  mutate(error = (SWE.x - SWE.y) / swe_sd) %>%
+  filter(year <= 1985) %>%
+ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+    facet_wrap(~year) +
+  scale_fill_scico(palette = 'davos', direction = -1)
+```
+
+```{r}
+swe_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  gather(type, SWE, SWE_recon:SWE_obs) %>%
+  mutate(anomaly = SWE - swe_mean) %>%
+  filter(year <= 1985) %>% 
+ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  facet_grid(type~year) +
+  scale_fill_scico(palette = 'vik', direction = -1) +
+  ggtitle('Differences in observed and reconstructed SWE')
+
+swe_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  filter(year <= 1985) %>%
+  mutate(error = (SWE_recon - SWE_obs) / swe_sd) %>%
 filter(year <= 1985) %>% 
 ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-5, 5)) +
+  scale_fill_scico(palette = 'vik', direction = -1, name = 'Standard deviations', limits = c(-10, 10)) +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 
@@ -190,7 +215,7 @@ sst_cor <- brick(
 ```
 
 
-```{r}
+```{r, warning = FALSE}
 fdr <- function(x, k) {
   if (any(is.na(c(x)))) {
     NA
@@ -231,7 +256,7 @@ sst_cor %>%
        x = 'Longitude', y = 'Latitude') +
   theme_bw()
   
-#ggsave('snow_telecon_cor.png')
+#ggsave('sst_telecon_cov.png')
 ```
 
 ### Geopotential
@@ -243,7 +268,7 @@ geop_jfm <- brick('../data/adaptor.mars.internal-1584737536.594777-6445-11-8d0fc
   aggregate(fact = 4, method = 'bilinear')
 ```
 
-```{r, warning = FALSE}
+```{r, warning = FALSE, message = FALSE}
 geop_cor <- brick(
   calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[1,2]]$amplitude)),
   calc(geop_jfm, fun=function(x) cor(c(x), prism_patterns[[2,2]]$amplitude)),
@@ -285,6 +310,289 @@ geop_cor %>%
 #ggsave('geop_telecon_cov.png')
 ```
 
+
+## Interpretation
+
+```{r, echo = FALSE}
+
+a <- prism_patterns%>%
+    dplyr::select(-amplitudes) %>%
+    unnest(patterns) %>%
+    mutate(EOF = paste0('EOF', PC)) %>%
+  left_join(prism_climatology) %>%
+  ggplot() +
+      geom_raster(aes(x, y, fill = weight/swe_sd)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~EOF, ncol = 1) +
+      scale_fill_scico(name = 'weight/sdev', palette = 'vik', direction = 1, limits = c(-1, 1) ) +
+      theme_void()+
+  theme(legend.position = 'bottom')
+
+
+b<- sst_cor %>% 
+  as.data.frame(xy = T, na.rm = T) %>%
+  gather(eof, value, PC1:PC4) %>%
+  #  filter(value > .1 | value < -.1) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = value)) +
+  geom_point(data = sst_sig_pts, shape = '.', alpha = .075) +
+  facet_wrap(~eof, ncol = 1) +
+  scale_fill_distiller(name = 'Corr.', palette = 'RdBu', limits = c(-1,1)) +
+  coord_quickmap(ylim = c(-75,75), expand = FALSE) +
+  geom_polygon(data = world, aes(x = long, y = lat, group = group)) +
+  labs(x = 'Longitude', y = 'Latitude') +
+  theme_bw() +
+  theme(legend.position = 'bottom')
+
+
+c<-geop_cor %>% 
+  as.data.frame(xy = T, na.rm = T) %>%
+  gather(eof, value, PC1:PC4) %>%
+  #  filter(value > .1 | value < -.1) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = value)) +
+    geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .25) +
+  geom_point(data = geop_sig_pts, shape = '.', alpha = .075) +
+  facet_wrap(~eof, ncol = 1) +
+  scale_fill_distiller(name = 'Corr.', palette = 'RdBu', limits = c(-1,1)) +
+  coord_quickmap(ylim = c(-75,75), expand = FALSE) +
+  labs(x = 'Longitude', y = 'Latitude') +
+  theme_bw()+
+  theme(legend.position = 'bottom')
+
+#library(patchwork)  
+(a|b|c) + plot_layout(widths = c(1, 1,1)) + plot_annotation(tag_levels = 'A')
+ggsave('snow_teleconnections.png', height =8.5, width = 11)
+#ggsave('snow_telecon_cov.png')
+```
+
+
+```{r}
+library(rsoi)
+pdo <- download_pdo() %>%
+  filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1982 & Year <= 2017) %>%
+  group_by(Year) %>%
+  summarise(PDO = mean(PDO))
+
+nao <- download_nao() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1982 & Year <= 2017) %>%
+  group_by(Year) %>%
+  summarise(NAO = mean(NAO))
+
+ao <- download_ao() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1982 & Year <= 2017) %>%
+  group_by(Year) %>%
+  summarise(AO = mean(AO))
+
+enso <- download_enso() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1982 & Year <= 2017) %>%
+  group_by(Year) %>%
+  summarise(ONI = mean(ONI), SOI = mean(SOI), NPGO = mean(NPGO))
+
+indices <- left_join(enso, pdo) %>%
+  left_join(nao) %>%
+  left_join(ao)
+```
+
+```{r}
+indices %>%
+  gather(index, value, ONI:NAO) %>%
+  ggplot(aes(Year, value)) +
+  geom_line() +
+  facet_wrap(~index)
+plot_amps(prism_patterns)
+
+
+cor(prism_patterns[[1,2]]$amplitude, indices$ONI)
+cor(prism_patterns[[1,2]]$amplitude, indices$SOI)
+cor(prism_patterns[[1,2]]$amplitude, indices$NPGO)
+cor(prism_patterns[[1,2]]$amplitude, indices$PDO)
+cor(prism_patterns[[1,2]]$amplitude, indices$NAO)
+cor(prism_patterns[[1,2]]$amplitude, indices$AO)
+5
+cor(prism_patterns[[2,2]]$amplitude, indices$ONI)
+cor(prism_patterns[[2,2]]$amplitude, indices$SOI)
+cor(prism_patterns[[2,2]]$amplitude, indices$NPGO)
+cor(prism_patterns[[2,2]]$amplitude, indices$PDO)
+cor(prism_patterns[[2,2]]$amplitude, indices$NAO)
+cor(prism_patterns[[2,2]]$amplitude, indices$AO)
+```
+
+
+```{r}
+
+phase <- download_enso() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1982 & Year <= 2017) %>%
+  group_by(Year) %>%
+    dplyr::select(phase) %>%
+  count(phase) %>%
+  filter(n == max(n)) %>%
+  ungroup %>%
+  rename(year = Year)
+
+bind_rows(prism_patterns$amplitudes, .id = 'pc') %>%
+  left_join(phase) %>%
+  ggplot(aes(amplitude)) +
+  geom_density(aes(fill = phase), alpha = .7)+
+  facet_wrap(~pc)
+  ggplot(aes(pc1,pc2, color = phase)) +
+ # geom_path() +
+  geom_point() + coord_equal()
+```
+
+## Livneh
+
+```{r}
+bbox <- extent(c(-125, -102, 31, 49))
+
+livneh_raw <- brick('~/Downloads/LIVNEH/swe.mon.mean.nc')
+livneh_indices <- getZ(livneh_raw) %>%
+    str_detect(., '-03-') %>%
+    which()
+
+livneh_dat <- subset(livneh_raw, livneh_indices) %>%
+  rotate() %>%
+  crop(bbox)%>%
+  aggregate(fact = 2, na.rm = TRUE) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = round(parse_number(layer))) %>%
+  rename(SWE = value) %>%
+  dplyr::select(-layer) %>%
+  snow_only()
+```
+
+
+```{r}
+livneh_climatology <- livneh_dat %>% 
+  group_by(x, y) %>%
+  summarise(swe_mean = mean(SWE),
+            swe_sd = sd(SWE))
+```
+
+
+```{r, echo = FALSE, fig.asp = .8}
+ggplot(livneh_climatology) +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  ggtitle('Mean March SWE, 1901-2010', 'CERA-20C Reanalysis')
+
+ggplot(livneh_climatology) +
+  geom_raster(aes(x, y, fill = swe_sd)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1)+
+  ggtitle('Standard Deviation of March SWE, 1901-2010', 'Livneh')
+```
+
+Run the principal components analysis.
+```{r}
+livneh_pcs <- calc_pcs(livneh_dat)
+```
+
+Get the eigenvalues, and run some truncation tests.
+```{r}
+livneh_eigs <- get_eigs(livneh_pcs)
+nFactors::nScree(livneh_eigs$eigenvalues)
+```
+
+```{r, echo = FALSE}
+plot_scree(livneh_eigs, 8)
+```
+```{r}
+livneh_patterns <- get_patterns(livneh_pcs, livneh_dat, livneh_eigs, k = 8, mask = FALSE)
+```
+
+```{r, echo = FALSE}
+plot_amps(livneh_patterns) + geom_vline(xintercept = c(1983, 1998,1992, 1931, 1987))
+```
+
+```{r fig.asp = 1.2, echo = FALSE}
+#plot_eof(livneh_patterns, 'vik')
+
+livneh_patterns%>%
+    dplyr::select(-amplitudes) %>%
+    unnest(patterns) %>%
+    mutate(EOF = paste0('EOF', PC)) %>%
+  left_join(livneh_climatology) %>%
+  ggplot() +
+      geom_raster(aes(x, y, fill = weight/swe_sd)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~EOF) +
+      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) ) +
+      theme_void()+
+      ggtitle('Observed March SWE EOFS')
+```
+
+```{r}
+pdo <- download_pdo() %>%
+  filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1915 & Year <= 2011) %>%
+  group_by(Year) %>%
+  summarise(PDO = mean(PDO))
+
+nao <- download_nao() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1915 & Year <= 2011) %>%
+  group_by(Year) %>%
+  summarise(NAO = mean(NAO))
+
+ao <- download_ao() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1915 & Year <= 2011) %>%
+  group_by(Year) %>%
+  summarise(AO = mean(AO))
+
+enso <- download_enso() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1915 & Year <= 2011) %>%
+  group_by(Year) %>%
+  summarise(ONI = mean(ONI), SOI = mean(SOI), NPGO = mean(NPGO))
+
+indices <- left_join(enso, pdo) %>%
+  left_join(nao) %>%
+  left_join(ao) %>%
+  rename(year = Year)
+
+phase <- download_enso() %>%
+   filter(Month %in% c('Jan', 'Feb', 'Mar') & Year >= 1915 & Year <= 2011) %>%
+  group_by(Year) %>%
+    dplyr::select(phase) %>%
+  count(phase) %>%
+  filter(n == max(n)) %>%
+  ungroup %>%
+  rename(year = Year)
+```
+```{r}
+
+bind_rows(livneh_patterns$amplitudes, .id = 'pc') %>%
+  left_join(phase) %>%
+  filter(year >=1952) %>%
+  ggplot(aes(amplitude)) +
+  geom_density(aes(fill = phase), alpha = .7)+
+  facet_wrap(~pc)
+
+bind_rows(livneh_patterns$amplitudes, .id = 'pc') %>%
+  left_join(indices) %>%
+  filter(year >=1952) %>%
+  gather(index, value, ONI:AO) %>%
+  group_by(pc, index) %>%
+  summarise(correlation = cor(amplitude, value)) %>%
+  ggplot(aes(pc, index)) +
+  geom_tile(aes(fill = correlation)) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-1, 1)) +
+  coord_equal()
+
+bind_rows(livneh_patterns$amplitudes, .id = 'pc') %>%
+  left_join(indices) %>%
+  filter(year >=1952) %>%
+  gather(index, value, ONI:AO) %>%
+  group_by(pc, index) %>%
+  summarise(correlation = cor(amplitude, value)) %>%
+  ggplot(aes(pc, index)) +
+  geom_tile(aes(fill = abs(correlation))) +
+  scale_fill_viridis_c()+
+  coord_equal()
+```
+
+
 ## Simulated Modes
 
 ```{r}
@@ -323,7 +631,7 @@ nFactors::nScree(cera_eigs$eigenvalues)
 ```
 
 ```{r, echo = FALSE}
-plot_scree(prism_eigs, 4)
+plot_scree(cera_eigs, 4)
 ```
 ```{r}
 cera_patterns <- get_patterns(cera_pcs, cera_dat, cera_eigs, k = 6, mask = FALSE)
