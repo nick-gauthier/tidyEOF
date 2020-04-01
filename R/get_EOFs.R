@@ -11,33 +11,55 @@
 #' @examples
 #'
 
-get_patterns <- function(pc_object, data, eigs, k, mask = TRUE) {
-amps <- get_amps(pc_object, k) %>%
-  group_nest(PC, .key = 'amplitudes')
 
-eofs <- get_eofs(data, pc_object, eigs, k) %>%
-  {if(mask) semi_join(., states_mask, by = c("x", "y")) else .} %>%
-  group_nest(EOF, .key = 'patterns')
+get_patterns <- function(dat, k, mask = TRUE){
+  pca_object <- calc_pcs(dat)
+  eigs <- get_eigs(dat)
 
-left_join(amps, eofs, by = c('PC' = 'EOF'))
-}
-
-get_eofs <- function(dat, pca_object, eigenvalues, k){
   eofs <- pca_object %>%
-    tidy(matrix = 'variables') %>%
+    broom::tidy(matrix = 'variables') %>%
     filter(PC <= k) %>%
-    left_join(eigenvalues[1:2], by = 'PC') %>%
+    left_join(eigs[1:2], by = 'PC') %>%
     mutate(weight = value * std.dev,
-           EOF = as.character(PC)) %>%
+           EOF = as.character(PC),
+           column = as.character(column)) %>%
     dplyr::select(-c(std.dev, PC))
 
-  dat %>%
+  varim <- eofs %>% # varimax rotation
+    dplyr::select(-value) %>%
+    pivot_wider(names_from = EOF, values_from = weight) %>%
+    column_to_rownames(var = 'column') %>%
+    as.matrix %>%
+    varimax
+  rot_mat <- varim$rotmat # rotater
+
+  reofs <- unclass(varim$loadings) %>%
+    as_tibble(rownames = 'column') %>%
+    pivot_longer(-column, names_to = 'EOF', values_to = 'weight')# %>%
+   # right_join(eofs, by = c('column', 'EOF'))
+
+  eofs <- dat %>%
     spread(year, SWE) %>%
-    mutate(column = 1:n()) %>%
+    mutate(column = as.character(1:n())) %>%
     dplyr::select(x, y, column) %>%
-    full_join(eofs, by = 'column') %>%
-    dplyr::select(-column)
+    full_join(reofs, by = 'column') %>%
+    dplyr::select(-column) %>%
+    {if(mask) semi_join(., states_mask, by = c("x", "y")) else .} %>%
+    group_nest(EOF, .key = 'patterns')
+
+  amps <- pc_object$x %>%
+    .[,1:k] %>%
+    scale() %>% # scale each amplitude series by its sd
+    `%*%`(rot_mat) %>%
+    as_tibble(rownames = 'year', .name_repair = ~1:k) %>%
+    gather(PC, amplitude, -year) %>%
+    mutate(year = as.numeric(year)) %>%
+    group_nest(PC, .key = 'amplitudes')
+
+  left_join(amps, eofs, by = c('PC' = 'EOF'))
+
 }
+
 
 plot_eof <- function(patterns, palette, normalized = FALSE){
   eofs <- patterns %>%

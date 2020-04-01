@@ -8,12 +8,12 @@
 #'
 #' @examples
 get_amps <- function(pc_object, k){
-  tidy(pc_object, 'samples') %>%
-    mutate(year = as.numeric(as.character(row))) %>%
+  broom::tidy(pc_object, 'samples') %>%
+    dplyr::mutate(year = as.numeric(as.character(row))) %>%
     dplyr::select(-row) %>%
-    filter(PC <= k) %>%
-    mutate(PC = as.character(PC)) %>%
-    rename(amplitude = value)
+    dplyr::filter(PC <= k) %>%
+    dplyr::mutate(PC = as.character(PC)) %>%
+    dplyr::rename(amplitude = value)
 }
 
 plot_amps <- function(patterns) {

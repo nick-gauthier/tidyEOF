@@ -8,10 +8,11 @@
 #' @export
 #'
 #' @examples
-get_eigs <- function(pc_object){
+get_eigs <- function(dat){
   #n <- n_effective(length(pc_object$sdev))
   n <- length(pc_object$sdev)
-  pc_object %>%
+  dat %>%
+    calc_pcs() %>%
     broom::tidy(matrix = 'pcs') %>%
     mutate(eigenvalues = std.dev ^ 2,
            error = sqrt(2 / n),
