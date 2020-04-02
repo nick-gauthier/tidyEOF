@@ -609,26 +609,22 @@ ggplot(cera_climatology) +
   ggtitle('Standard Deviation of March SWE, 1901-2010', 'CERA-20C Reanalysis')
 ```
 
-Run the principal components analysis.
+Run the principal components analysis. Get the eigenvalues, and run some truncation tests.
 ```{r}
-cera_pcs <- calc_pcs(cera_dat, scale = FALSE)
-```
-
-Get the eigenvalues, and run some truncation tests.
-```{r}
-cera_eigs <- get_eigs(cera_pcs)
+cera_eigs <- get_eigs(cera_dat)
 nFactors::nScree(cera_eigs$eigenvalues)
 ```
 
 ```{r, echo = FALSE}
 plot_scree(cera_eigs, 4)
 ```
+
 ```{r}
-cera_patterns <- get_patterns(cera_pcs, cera_dat, cera_eigs, k = 6, mask = FALSE)
+cera_patterns <- get_patterns(cera_dat, k = 6, mask = FALSE)
 ```
 
 ```{r, echo = FALSE}
-plot_amps(cera_patterns)
+plot_amps(cera_patterns) +geom_vline(xintercept = 1977)
 ```
 
 ```{r echo = FALSE}

@@ -10,9 +10,9 @@
 #' @examples
 get_eigs <- function(dat){
   #n <- n_effective(length(pc_object$sdev))
-  n <- length(pc_object$sdev)
-  dat %>%
-    calc_pcs() %>%
+  pca_object <- calc_pcs(dat)
+  n <- length(pca_object$sdev)
+  pc_object %>%
     broom::tidy(matrix = 'pcs') %>%
     mutate(eigenvalues = std.dev ^ 2,
            error = sqrt(2 / n),

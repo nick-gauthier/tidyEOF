@@ -47,7 +47,7 @@ get_patterns <- function(dat, k, mask = TRUE){
     {if(mask) semi_join(., states_mask, by = c("x", "y")) else .} %>%
     group_nest(EOF, .key = 'patterns')
 
-  amps <- pc_object$x %>%
+  amps <- pca_object$x %>%
     .[,1:k] %>%
     scale() %>% # scale each amplitude series by its sd
     `%*%`(rot_mat) %>%
@@ -57,7 +57,6 @@ get_patterns <- function(dat, k, mask = TRUE){
     group_nest(PC, .key = 'amplitudes')
 
   left_join(amps, eofs, by = c('PC' = 'EOF'))
-
 }
 
 
@@ -67,15 +66,6 @@ plot_eof <- function(patterns, palette, normalized = FALSE){
     unnest(patterns) %>%
     mutate(EOF = paste0('EOF', PC))
 
-  if(normalized){
-    ggplot(eofs) +
-      geom_raster(aes(x, y, fill = value)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      facet_wrap(~EOF) +
-      scale_fill_scico(palette = palette, direction = 1, limits = c(-1, 1) * max(abs(eofs$value))) +
-      theme_void()+
-      ggtitle('Observed March SWE EOFS')
-  } else {
     ggplot(eofs) +
       geom_raster(aes(x, y, fill = weight)) +
       geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -83,5 +73,4 @@ plot_eof <- function(patterns, palette, normalized = FALSE){
       scale_fill_scico(palette = palette, direction = 1, limits = c(-1, 1) * max(abs(eofs$weight))) +
       theme_void()+
       ggtitle('Observed March SWE EOFS')
-  }
 }
