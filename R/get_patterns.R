@@ -1,8 +1,6 @@
-#' Get EOFs from the PC object
+#' Get EOFs and PCs from observations
 #'
 #' @param dat
-#' @param pca_object
-#' @param eigenvalues
 #' @param k
 #'
 #' @return
@@ -12,8 +10,16 @@
 #'
 
 
-get_patterns <- function(dat, k, mask = TRUE){
-  pca_object <- calc_pcs(dat)
+get_patterns <- function(dat, k, mask = NULL, scale = FALSE){
+
+  if(!is.null(mask)) dat <- semi_join(dat, mask, by = c("x", "y"))
+
+  climatology <- dat %>%
+    group_by(x, y) %>%
+    summarise(swe_mean = mean(SWE),
+              swe_sd = sd(SWE))
+
+  pca_object <- calc_pcs(dat, scale = scale)
   eigs <- get_eigs(dat)
 
   eofs <- pca_object %>%
@@ -44,7 +50,6 @@ get_patterns <- function(dat, k, mask = TRUE){
     dplyr::select(x, y, column) %>%
     full_join(reofs, by = 'column') %>%
     dplyr::select(-column) %>%
-    {if(mask) semi_join(., states_mask, by = c("x", "y")) else .} %>%
     group_nest(EOF, .key = 'patterns')
 
   amps <- pca_object$x %>%
