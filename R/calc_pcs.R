@@ -21,3 +21,17 @@ calc_pcs <- function(dat, scale = FALSE){
     prcomp()
 }
 
+get_eigenvalues <- function(dat){
+  #n <- n_effective(length(pc_object$sdev))
+  pca_object <- calc_pcs(dat)
+  n <- length(pca_object$sdev)
+
+  pca_object %>%
+    broom::tidy(matrix = 'pcs') %>%
+    mutate(eigenvalues = std.dev ^ 2,
+           error = sqrt(2 / n),
+           low =  eigenvalues * (1 - error) * 100 / sum(eigenvalues),
+           hi = eigenvalues * (1 + error) * 100 / sum(eigenvalues),
+           cumvar_line = hi + 0.02 * max(hi))
+}
+

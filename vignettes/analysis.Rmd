@@ -23,7 +23,7 @@ Downscaling snow water equivalent
 Import the packages required for this analysis.
 
 ```{r setup}
-#knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
+knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
 
 # analysis
 library(raster) # processing raster data
@@ -35,6 +35,7 @@ library(remote) # empirical orthogonal teleconnections
 library(sf) # shapefiles and plotting
 library(gganimate) # animated gifs
 library(scico) # color palettes
+library(patchwork)
 
 # this package
 devtools::load_all()
@@ -54,7 +55,7 @@ state_names <- c('arizona', 'new mexico', 'colorado',
 states_wus <- maps::map('state', regions = state_names, 
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 
-states_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% dplyr::select(-X1982)
+prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% dplyr::select(-X1982)
 
 world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ```
@@ -64,34 +65,18 @@ world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ## Observed Modes
 
 ```{r}
-prism_climatology <- prism_dat %>%
-  semi_join(states_mask) %>%
-  group_by(x, y) %>%
-  summarise(swe_mean = mean(SWE),
-            swe_sd = sd(SWE))
+nmodes <- 5
+prism_patterns <- get_patterns(prism_dat, nmodes, prism_mask)
 ```
 
-
-```{r, echo = FALSE, fig.asp = .8}
-ggplot(prism_climatology) +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Mean March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
-
-ggplot(prism_climatology) +
-  geom_raster(aes(x, y, fill = swe_sd)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1)+
-  ggtitle('Standard Deviation of March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
+```{r, echo = FALSE}
+plot_climatology(prism_patterns)
 ```
 
 
 ```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
 prism_dat %>%
-  filter(between(year, 2000, 2017)) %>%
+  filter(between(year, 2000, 2005)) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = SWE)) +
   scale_fill_scico(palette = 'davos', direction = -1) +
@@ -103,34 +88,29 @@ prism_dat %>%
 
 ### PCA
 
-Run a principal components analysis.
-```{r}
-prism_pcs <- calc_pcs(prism_dat)
-```
-
-Get the eigenvalues, and run some truncation tests.
-```{r}
-prism_eigs <- get_eigs(prism_pcs)
-nFactors::nScree(prism_eigs$eigenvalues)
-```
+Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
 
 ```{r, fig.asp = 0.75, echo = FALSE}
-plot_scree(prism_eigs, c(6, 14))
+plot_scree(prism_patterns, nmodes)
 ```
-Lets start by truncating at 6. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
-```{r}
-nmodes <- 4
-prism_patterns <- get_patterns(prism_pcs, prism_dat, prism_eigs, k = nmodes)
-```
-
+Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
 ```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
+plot_amps(prism_patterns)# + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
 ```
 
-Plot the normalized eofs. 
 
+
+Plot the eofs. 
 ```{r echo = FALSE, fig.asp = 1}
-plot_eof(prism_patterns, 'vik')
+plot_eofs(prism_patterns, 'vik') 
+```
+
+
+
+
+
+```{r}
+plot_eofs(prism_patterns, 'vik') 
 ```
 
 ### Internal variability
