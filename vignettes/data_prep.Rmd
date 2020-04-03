@@ -24,10 +24,25 @@ Import the snow observation data from https://nsidc.org/data/nsidc-0719.^[What's
 spatial_ref=GEOGCS["NAD83",DATUM["North_American_Datum_1983",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],AUTHORITY["EPSG","6269"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.01745329251994328,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4269"]]
 GeoTransform=-125.0208 0.04166662697178698 0 49.9375 0 -0.04166662697178698]. 
 
+```{r}
+preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, daily = FALSE) {
+  maps <- brick(x, varname = var)
+
+  indices <- getZ(maps) %>% # find the index for April 1st
+    str_detect('-03-')%>%
+    which()
+
+  raster::subset(maps, indices) %>%
+    {if(flip) rotate(.) else .} %>%
+    crop(bbox) %>%
+    {if(daily) mean(.) else .} %>%
+    {if(regrid) aggregate(., fact = 2) else .} # resample to lower res to speed up analysis
+}
+```
+
 ```{r message=FALSE,warning=FALSE}
-# import SWE data
 prism <- list.files('../data', pattern = 'SWE_Depth', full.names = TRUE) %>%
-  map(preprocess_prism, var = 'SWE', bbox = bbox) %>%
+  map(preprocess, var = 'SWE', bbox = bbox, regrid = TRUE, daily = TRUE) %>%
   brick() %>%
   setNames(1982:2017)
 ```
@@ -43,7 +58,22 @@ cera <- map(1:10,
   crop(bbox)
 ```
 
+
+```{r}
+livneh <- preprocess('~/Downloads/LIVNEH/swe.mon.mean.nc', var = 'swe', bbox = bbox, flip = TRUE, regrid = TRUE)
+```
+
 ## Preprocessing
+```{r}
+snow_only <- function(dat){
+  dat %>%
+    group_by(x, y) %>%
+    mutate(test = all(near(SWE, 0) | is.na(SWE))) %>%
+    filter(test == FALSE) %>%
+    ungroup() %>%
+    dplyr::select(-test)
+}
+```
 
 Turn the raster bricks into data frames and join.
 ```{r}
@@ -65,5 +95,14 @@ cera_dat <- cera %>%
 ```
 
 ```{r}
-save(prism, prism_dat, cera, cera_dat, file = '../data.Rdata')
+livneh_dat <- livneh %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = round(parse_number(layer))) %>%
+  rename(SWE = value) %>%
+  dplyr::select(-layer) %>%
+  snow_only()
+```
+
+```{r}
+save(prism, prism_dat, cera, cera_dat, livneh, livneh_dat, file = '../data.Rdata')
 ```
