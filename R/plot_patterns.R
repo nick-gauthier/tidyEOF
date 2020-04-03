@@ -8,7 +8,7 @@
 #' @export
 #'
 #' @examples
-plot_eofs <- function(patterns, palette){
+plot_eofs <- function(patterns, palette = 'vik'){
   max_weight <- max(abs(patterns$eofs$weight))
   ggplot(patterns$eofs) +
     geom_raster(aes(x, y, fill = weight)) +
@@ -28,8 +28,8 @@ plot_amps <- function(patterns) {
     theme_bw()
 }
 
-plot_scree <- function(patterns, k, kmax = 20){
-  patterns$eigenvalues %>%
+plot_scree <- function(eigenvalues, k, kmax = 20){
+  eigenvalues %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
            multiplet = as.factor(cumsum(separated))) %>%
     filter(PC <= kmax) %>%
@@ -42,22 +42,4 @@ plot_scree <- function(patterns, k, kmax = 20){
     theme_bw() +
     guides(color = F) +
     scale_x_continuous(breaks = seq(0, 25, 5))
-}
-
-plot_climatology <- function(patterns) {
-  a <- ggplot(patterns$climatology) +
-    geom_raster(aes(x, y, fill = swe_mean)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-    theme_void() +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-    ggtitle('Mean March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
-
-  b <- ggplot(patterns$climatology) +
-    geom_raster(aes(x, y, fill = swe_sd)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-    theme_void() +
-    scale_fill_scico(palette = 'davos', direction = -1)+
-    ggtitle('Standard Deviation of March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
-
-  a + b
 }

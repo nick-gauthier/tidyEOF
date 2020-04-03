@@ -8,7 +8,7 @@
 #' @export
 #'
 #' @examples
-calc_pcs <- function(dat, scale = FALSE){
+get_pcs <- function(dat, scale = FALSE){
   dat %>%
     dplyr::group_by(x,y) %>%
     dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
@@ -21,9 +21,7 @@ calc_pcs <- function(dat, scale = FALSE){
     prcomp()
 }
 
-get_eigenvalues <- function(dat){
-  #n <- n_effective(length(pc_object$sdev))
-  pca_object <- calc_pcs(dat)
+get_eigenvalues <- function(pca_object){
   n <- length(pca_object$sdev)
 
   pca_object %>%
