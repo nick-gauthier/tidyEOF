@@ -8,15 +8,25 @@
 #' @export
 #'
 #' @examples
-plot_eofs <- function(patterns, palette = 'vik'){
-  max_weight <- max(abs(patterns$eofs$weight))
-  ggplot(patterns$eofs) +
-    geom_raster(aes(x, y, fill = weight)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-    facet_wrap(~paste0('EOF', EOF)) +
-    scale_fill_scico(palette = palette, direction = 1, limits = c(-1, 1) * max_weight) +
-    theme_void()+
-    ggtitle('Observed March SWE EOFS')
+plot_eofs <- function(patterns, palette = 'vik', scaled = TRUE){
+  if(scaled){
+    ggplot(patterns$eofs_scaled) +
+      geom_raster(aes(x, y, fill = correlation)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~paste0('EOF', PC)) +
+      scale_fill_scico(palette = palette, direction = -1, limits = c(-1, 1)) +
+      theme_void()+
+      ggtitle('Observed March SWE EOFS')
+  } else {
+    max_weight <- max(abs(patterns$eofs$weight))
+    ggplot(patterns$eofs) +
+      geom_raster(aes(x, y, fill = weight)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~paste0('EOF', EOF)) +
+      scale_fill_scico(palette = palette, direction = -1, limits = c(-1, 1) * max_weight) +
+      theme_void()+
+      ggtitle('Observed March SWE EOFS')
+  }
 }
 
 plot_amps <- function(patterns) {

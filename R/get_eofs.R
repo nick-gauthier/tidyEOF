@@ -16,7 +16,7 @@ get_eofs <- function(dat, pca_object, k, eigenvalues, rotate) {
     broom::tidy(matrix = 'variables') %>%
     filter(PC <= k) %>%
     left_join(eigenvalues[1:2], by = 'PC') %>%
-    mutate(weight = value * std.dev,
+    mutate(weight = value * std.dev, # scale by sqrt(eigenvalues) for more robust rotation (hannachi et al 2007)
            EOF = as.character(PC),
            column = as.character(column)) %>%
     dplyr::select(-c(std.dev, PC))
@@ -43,8 +43,7 @@ get_eofs <- function(dat, pca_object, k, eigenvalues, rotate) {
     mutate(column = as.character(1:n())) %>%
     dplyr::select(x, y, column) %>%
     full_join(eofs, by = 'column') %>%
-    dplyr::select(-column) #%>%
-  #group_nest(EOF, .key = 'patterns')
+    dplyr::select(-column)
 
   list(eofs = eofs,
        rotation_matrix = rotation_matrix)
