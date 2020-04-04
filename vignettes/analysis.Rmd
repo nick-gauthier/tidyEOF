@@ -64,14 +64,26 @@ world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 
 ## Observed Modes
 
-```{r}
-nmodes <- 5
-prism_patterns <- get_patterns(prism_dat, nmodes, prism_mask)
+First plot the March SWE climatology.
+
+```{r, echo = FALSE, fig.asp = 1.2}
+  a <- ggplot(get_climatology(prism_dat)) +
+    geom_raster(aes(x, y, fill = swe_mean)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+    theme_void() +
+    scale_fill_scico(palette = 'davos', direction = -1) +
+    ggtitle('Mean March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
+
+  b <- ggplot(get_climatology(prism_dat)) +
+    geom_raster(aes(x, y, fill = swe_sd)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+    theme_void() +
+    scale_fill_scico(palette = 'davos', direction = -1)+
+    ggtitle('SD of March SWE, 1982-2017', 'PRISM/SNOTEL Observations')
+
+  a / b
 ```
 
-```{r, echo = FALSE}
-plot_climatology(prism_patterns)
-```
 
 
 ```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
@@ -91,11 +103,46 @@ prism_dat %>%
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
 
 ```{r, fig.asp = 0.75, echo = FALSE}
-plot_scree(prism_patterns, nmodes)
+prism_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(4)
 ```
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
+
+```{r}
+nmodes <- 4
+prism_patterns <- get_patterns(prism_dat, nmodes, prism_mask)
+```
+
 ```{r, echo = FALSE}
 plot_amps(prism_patterns)# + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
+```
+
+```{r}
+# For each PC amplitude time series, plot out the wettest and driest years from the observations.
+# From this we can tell that pc1 and 2 need to reverse signs to be physically consistent
+extreme_years <- prism_patterns$amplitudes %>%
+  group_by(PC) %>%
+  filter(amplitude == max(amplitude) | amplitude == min(amplitude)) %>%
+  pull(year)
+
+(prism - mean(prism)) %>%
+  .[[extreme_years - 1981]] %>%
+  setNames(extreme_years) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  gather(year, swe, 3:10) %>%
+  mutate(year = factor(year, levels = paste0('X', extreme_years))) %>%
+  ggplot(aes(x, y, fill = swe)) +
+  geom_raster() +
+  facet_wrap(~year) +
+  coord_quickmap() +
+  scale_fill_distiller(palette = 'BrBG', direction = 1, limits = c(-1500, 1500)) +
+  theme_void()
+
+# find a way not to have to hard code this
+prism_patterns$amplitudes <- prism_patterns$amplitudes %>%
+  mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude))
 ```
 
 
@@ -106,11 +153,31 @@ plot_eofs(prism_patterns, 'vik')
 ```
 
 
-
-
+```{r}
+full_join(prism_patterns$amplitudes, prism_dat, by = 'year') %>%
+  group_by(x, y, PC) %>%
+  summarise(correlation = cor(amplitude, SWE)) %>%
+    semi_join(prism_mask) %>%
+   ggplot() +
+    geom_raster(aes(x, y, fill = correlation)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+    facet_wrap(~paste0('EOF', PC)) +
+    scale_fill_scico(palette = 'broc', limits = c(-1, 1)) +
+  theme_void()+
+    ggtitle('Observed March SWE EOFS')
+```
 
 ```{r}
-plot_eofs(prism_patterns, 'vik') 
+prism_patterns$eofs %>%
+    mutate(EOF = paste0('EOF', EOF)) %>%
+  left_join(prism_patterns$climatology) %>%
+  ggplot() +
+      geom_raster(aes(x, y, fill = weight/swe_sd)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~EOF, ncol = 2) +
+      scale_fill_distiller(name = 'weight/sdev', palette = 'BrBG', direction = 1, limits = c(-1, 1) ) +
+      theme_void()+
+  theme(legend.position = 'bottom')
 ```
 
 ### Internal variability
