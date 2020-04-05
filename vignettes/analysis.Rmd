@@ -39,13 +39,9 @@ library(patchwork)
 
 # this package
 devtools::load_all()
-```
 
-```{r}
 load('../data.Rdata')
-```
 
-```{r, echo = FALSE}
 # download state boundary files for cropping and plotting
 state_names <- c('arizona', 'new mexico', 'colorado', 
                  'california', 'utah', 'nevada', 
@@ -139,61 +135,22 @@ extreme_years <- prism_patterns$amplitudes %>%
   coord_quickmap() +
   scale_fill_distiller(palette = 'BrBG', direction = 1, limits = c(-1500, 1500)) +
   theme_void()
-
-# find a way not to have to hard code this
-prism_patterns$amplitudes <- prism_patterns$amplitudes %>%
-  mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude))
-```
-
-
-
-Plot the eofs. 
-```{r echo = FALSE, fig.asp = 1}
-plot_eofs(prism_patterns, 'vik') 
-```
-
-
-```{r}
-full_join(prism_patterns$amplitudes, prism_dat, by = 'year') %>%
-  group_by(x, y, PC) %>%
-  summarise(correlation = cor(amplitude, SWE)) %>%
-    semi_join(prism_mask) %>%
-   ggplot() +
-    geom_raster(aes(x, y, fill = correlation)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-    facet_wrap(~paste0('EOF', PC)) +
-    scale_fill_scico(palette = 'broc', limits = c(-1, 1)) +
-  theme_void()+
-    ggtitle('Observed March SWE EOFS')
-```
-
-```{r}
-prism_patterns$eofs %>%
-    mutate(EOF = paste0('EOF', EOF)) %>%
-  left_join(prism_patterns$climatology) %>%
-  ggplot() +
-      geom_raster(aes(x, y, fill = weight/swe_sd)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      facet_wrap(~EOF, ncol = 2) +
-      scale_fill_distiller(name = 'weight/sdev', palette = 'BrBG', direction = 1, limits = c(-1, 1) ) +
-      theme_void()+
-  theme(legend.position = 'bottom')
 ```
 
 ### Internal variability
 
 ```{r, fig.asp = .9}
-swe_recon <- prism_patterns %>%
-  unnest(amplitudes) %>%
-  unnest(patterns) %>%
-  mutate(anomaly = value * amplitude) %>%
+recon <- left_join(prism_patterns$amplitudes, prism_patterns$eofs, by = c('PC' = 'EOF')) %>%
+  mutate(PC = as.numeric(PC)) %>%
+  #left_join(dplyr::select(prism_patterns$eigenvalues, PC, std.dev), by = 'PC') %>%
+  mutate(anomaly = weight * amplitude) %>% # should be weight for reofs or?
   dplyr::select(-c(amplitude, value, weight)) %>%
   group_by(x, y, year) %>%
   summarize(anomaly = sum(anomaly)) %>%
-    left_join(prism_climatology) %>%
+    left_join(prism_patterns$climatology) %>%
   mutate(SWE = anomaly + swe_mean)# * swe_sd + swe_mean) 
 
-swe_recon %>%
+recon %>%
   filter(year <= 1985) %>%
 ggplot() +
   geom_raster(aes(x, y, fill = SWE)) +
@@ -204,32 +161,35 @@ ggplot() +
 ```
 
 ```{r}
-swe_recon %>%
+recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  gather(type, SWE, SWE_recon:SWE_obs) %>%
-  mutate(anomaly = SWE - swe_mean) %>%
-  filter(year <= 1985) %>% 
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_grid(type~year) +
-  scale_fill_scico(palette = 'vik', direction = -1) +
-  ggtitle('Differences in observed and reconstructed SWE')
-
-swe_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  filter(year <= 1985) %>%
-  mutate(error = (SWE_recon - SWE_obs) / swe_sd) %>%
-filter(year <= 1985) %>% 
+  filter(year <= 1993) %>%
+  mutate(error = abs(SWE_obs - SWE_recon)) %>% # absolute error
 ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, name = 'Standard deviations', limits = c(-10, 10)) +
+  facet_wrap(~year,ncol = 4) +
+  scale_fill_viridis_c(name = 'Absolute error') +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+
+recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  filter(year <= 1993) %>%
+  mutate(error = abs(SWE_obs - SWE_recon)/swe_sd) %>% # absolute error
+ggplot() +
+  geom_raster(aes(x, y, fill = error)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  facet_wrap(~year,ncol = 4) +
+  scale_fill_viridis_c(name = 'Absolute error') +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
+
+
+
+
+
 
 ## Teleconnections
 
