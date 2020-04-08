@@ -40,7 +40,7 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
        pca = pca,
        eigenvalues = eigenvalues)
 
-  class(patterns) <- 'pattern'
+  class(patterns) <- 'patterns'
   return(patterns)
 }
 

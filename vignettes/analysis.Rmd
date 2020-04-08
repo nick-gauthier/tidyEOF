@@ -343,17 +343,16 @@ First look at just the error from the dimensionality reduction  with the PCs. Th
 ## GAM
 
 ```{r}
-
+gam_mod <- couple_patterns(cera_patterns, prism_patterns)
 ```
 
-
 ```{r}
-gam_mod <- couple_patterns(cera_patterns, prism_patterns)
+walk(gam_mod$model$mod, plot)
 ```
 
 How do the models perform?
 ```{r}
-gam_mod %>%
+gam_mod$model %>%
   dplyr::select(PC, r2) %>%
   arrange(-r2)
 ```
@@ -361,7 +360,7 @@ gam_mod %>%
 
 Are the residuals autocorrelated? Some are
 ```{r}
-gam_preds %>%
+gam_mod$data %>%
   group_by(PC) %>%
   summarise(autocor = cor(resid, lag(resid), use = 'pairwise.complete.obs')) %>%
   arrange(-abs(autocor))
@@ -371,7 +370,8 @@ gam_preds %>%
 ggplot(gam_preds, aes(year)) +
   geom_line(aes(y = amplitude)) +
   geom_line(aes(y = pred), color = 'red') +
-  facet_wrap(~PC)
+  facet_wrap(~PC) +
+  theme_bw()
 ```
 
 ```{r}
@@ -383,36 +383,15 @@ ggplot(gam_preds, aes(resid)) +
   theme_bw()
 ```
 
-
-
 ```{r}
-walk(gam_mod$mod, plot)
-```
-
-
-```{r}
-
-predict_patterns <- function(models, patterns.x) {
-  predictors <- patterns.x$amplitudes %>%
-    mutate(PC = paste0('PC', PC)) %>% 
-    spread(PC, amplitude)
-  
-  models$mod %>%
-    map(~add_predictions(predictors, ., var = 'amplitude', type = 'response')) %>%
-    bind_rows(.id = 'PC') %>%
-    dplyr::select(year, PC, amplitude)
-}
+gam_mod$data %>%
+  dplyr::select(PC, year, pred) %>%
+  rename(amplitude = pred)
 ```
 
 ```{r}
-cera_patterns$amplitudes
-
-
-cera_patterns$amplitudes
-```
-
-```{r}
-gam_recon <- reconstruct(prism_patterns, predict_patterns(gam_mod, cera_patterns))
+gam_recon <- predict_patterns(gam_mod, cera_patterns) %>%
+  reconstruct_field(prism_patterns, .)
 ```
 
 ```{r}
@@ -455,6 +434,7 @@ ggplot() +
   ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
 ```
 
+### Cross validation
 
 ## CCA
 

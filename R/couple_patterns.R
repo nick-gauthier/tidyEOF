@@ -8,7 +8,8 @@
 #'
 #' @examples
 couple_patterns <- function(patterns.x, patterns.y) {
-  predictors <- patterns.x$amplitudes %>%
+  amps <- if('patterns' %in% class(patterns.x)) patterns.x$amplitudes else patterns.x
+  predictors <- amps %>%
     mutate(PC = paste0('PC', PC)) %>%
     spread(PC, amplitude)
 
@@ -21,6 +22,7 @@ couple_patterns <- function(patterns.x, patterns.y) {
     paste('amplitude ~ ', .) %>%
     as.formula()
 
+  # should check how many overlapping years there are during model fitting, print result, and error if none
   model <- inner_join(predictands, predictors, by = 'year') %>%
     group_by(PC) %>%
     nest() %>%
@@ -42,10 +44,9 @@ couple_patterns <- function(patterns.x, patterns.y) {
     unnest(cols = c(data)) %>%
     dplyr::select(PC, amplitude, year, pred, resid)
 
+  # would it be worth it to also return the reconstructed spatial field here or not?
   coupled_patterns <- list(model = dplyr::select(model, -data),
                            data = data)
-
   class(coupled_patterns) <- 'coupled_patterns'
-
   return(coupled_patterns)
 }
