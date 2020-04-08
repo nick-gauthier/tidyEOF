@@ -14,11 +14,11 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
   if(!is.null(mask)) dat <- semi_join(dat, mask, by = c("x", "y"))
 
   climatology <- get_climatology(dat)
-  pca_object <- get_pcs(dat, scale = scale)
-  eigenvalues <- get_eigenvalues(pca_object)
-  eofs <- get_eofs(dat, pca_object, k, eigenvalues, rotate)
+  pca <- get_pcs(dat, scale = scale)
+  eigenvalues <- get_eigenvalues(pca)
+  eofs <- get_eofs(dat, pca, k, eigenvalues, rotate)
 
-  amplitudes <- pca_object$x %>%
+  amplitudes <- pca$x %>%
     .[,1:k] %>%
     scale() %>%
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
@@ -26,7 +26,7 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
     gather(PC, amplitude, -year) %>%
     mutate(year = as.numeric(year))
 
-  eofs_scaled <- amplitudes %>%
+  eofs_corr <- amplitudes %>%
     mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpetable
     full_join(dat, by = 'year') %>%
     group_by(x, y, PC) %>%
@@ -34,10 +34,10 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
     {if(!is.null(mask)) semi_join(., mask, by = c("x", "y")) else .}
 
   patterns <- list(eofs = eofs$eofs,
-                   eofs_scaled = eofs_scaled,
+                   eofs_corr = eofs_corr,
        amplitudes = amplitudes,
        climatology = climatology,
-       pca_object = pca_object,
+       pca = pca,
        eigenvalues = eigenvalues)
 
   class(patterns) <- 'patterns'

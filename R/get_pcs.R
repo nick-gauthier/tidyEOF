@@ -21,10 +21,10 @@ get_pcs <- function(dat, scale = FALSE){
     prcomp()
 }
 
-get_eigenvalues <- function(pca_object){
-  n <- length(pca_object$sdev)
+get_eigenvalues <- function(pca){
+  n <- length(pca$sdev)
 
-  pca_object %>%
+  pca %>%
     broom::tidy(matrix = 'pcs') %>%
     mutate(eigenvalues = std.dev ^ 2,
            error = sqrt(2 / n),

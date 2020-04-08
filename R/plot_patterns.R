@@ -10,7 +10,7 @@
 #' @examples
 plot_eofs <- function(patterns, palette = 'vik', scaled = TRUE){
   if(scaled){
-    ggplot(patterns$eofs_scaled) +
+    ggplot(patterns$eofs_corr) +
       geom_raster(aes(x, y, fill = correlation)) +
       geom_sf(data = states_wus, fill = NA, color = 'black') +
       facet_wrap(~paste0('EOF', PC)) +
