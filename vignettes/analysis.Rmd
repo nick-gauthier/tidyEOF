@@ -343,46 +343,12 @@ First look at just the error from the dimensionality reduction  with the PCs. Th
 ## GAM
 
 ```{r}
-couple_patterns <- function(patterns.x, patterns.y) {
-  predictors <- patterns.x$amplitudes %>%
-    mutate(PC = paste0('PC', PC)) %>%
-    spread(PC, amplitude)
-  
-  predictands <- patterns.y$amplitudes %>%
-    mutate(PC = paste0('PC', PC))
-  
-  gam_formula <- names(predictors) %>%
-    map( ~ paste0('s(', ., ', k = 4)')) %>%
-    paste(collapse = ' + ') %>%
-    paste('amplitude ~ ', .) %>%
-    as.formula()
-  
-  model <- inner_join(predictands, predictors, by = 'year') %>%
-    group_by(PC) %>%
-    nest() %>%
-    mutate(mod = map(data, ~ gam(
-      gam_formula,
-      data = .,
-      method = 'REML',
-      select = TRUE
-    ))) %>%
-    mutate(r2 = map_dbl(mod, ~ summary(.)$r.sq)) %>%
-    mutate(
-      data = map2(data, mod, add_predictions),
-      data = map2(data, mod, add_residuals)
-    )
-}
+
 ```
 
 
 ```{r}
 gam_mod <- couple_patterns(cera_patterns, prism_patterns)
-
-gam_preds <- gam_mod %>%
-  dplyr::select(PC, data) %>%
-  unnest(cols = c(data)) %>%
-  dplyr::select(PC, amplitude, year, pred, resid) %>%
-  ungroup()
 ```
 
 How do the models perform?
