@@ -42,7 +42,8 @@ prep_data <- function(patterns.x, patterns.y) {
 
 fit_model <- function(data_in) {
   gam_formula <- data_in %>%
-    dplyr::select(-PC, -amplitude) %>% #, -year) %>%
+    # this should be more flexible below, checking for innapropriate predictors
+    dplyr::select(-PC, -amplitude, -year) %>%
     names() %>%
     map( ~ paste0("s(", ., ", bs = 'cr', k = 3)")) %>%
     paste(collapse = ' + ') %>%

@@ -426,57 +426,53 @@ couple_patterns(cera_patterns, prism_patterns)  %>%
   reconstruct_field(prism_patterns, .)
 ```
 
-
-```{r}
-# prepare data frame for cross validation by dividing into k folds
-prep_kfold <- function(data){
-  data %>%
-      mutate(PC = paste0(PC, 'response')) %>%
-      spread(PC, amplitude) %>%
-      crossv_kfold(5) %>%
-      mutate(
-        train = map(
-          train,
-          ~ as_tibble(.) %>% gather(PC, amplitude, contains('response')) %>% mutate(PC = str_remove(PC, 'response'))
-        ),
-        test = map(test, ~ as_tibble(.) %>% dplyr::select(-contains('response')))
-      )
-}
-
-fit_kfold <- function(kfold, obs_val) {
-  kfold %>%
-      mutate(test_mod = map(train, fit_model)) %>%
-      mutate(test_result = map2(test_mod, test, ~ predict_patterns(.x, .y) %>% 
-            reconstruct_field(obs_val, .)
-      ))
-}
-```
+setup a 5 fold cross validation experiment for selecting k.
 
 ```{r}
 exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
   mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
          prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
+```
 
+Define a cv function.
+```{r}
+fit_kfold <- function(data, obs_val){
+  # prepare data frame for cross validation by dividing into k folds
+  folds <- data %>%
+    group_by(PC) %>%
+    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
+    ungroup()
 
-test_dat <- expand_grid(k_cera = exp_test$k_cera, k_prism = exp_test$k_prism) %>%
-  mutate(data = map2(k_cera, k_prism, ~prep_data(exp_test[[.x, 3]], exp_test[[.y, 4]])))  %>%
-  mutate(kfold = map(data, prep_kfold)) %>%
-  mutate(fit_kfold = map2(kfold, k_prism, ~fit_kfold(.x, exp_test[[.y, "prism_patterns"]])))
+  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
+  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
+
+  cv <- map2_dfr(train, test, ~ fit_model(.x) %>% 
+                            predict_patterns(.y) %>% 
+                            reconstruct_field(obs_val, .))
+}
 ```
 
 ```{r}
-rmse <- test2 %>%
-      pull(test_result) %>%
-      bind_rows() %>%
+cv_dat <- expand_grid(k_cera = exp_test$k_cera, k_prism = exp_test$k_prism) %>%
+  mutate(data = map2(k_cera, k_prism, ~prep_data(exp_test[[.x, "cera_patterns"]], exp_test[[.y, "prism_patterns"]])))  %>%
+  mutate(cv = map2(data, k_prism, ~fit_kfold(.x, exp_test[[.y, "prism_patterns"]])))
+```
+
+```{r}
+rmse_dat <- cv_dat %>%
+  dplyr::select(-data) %>%
+  unnest(cv) %>%
       left_join(prism_dat,
                 by = c('x', 'y', 'year'),
                 suffix = c('_recon', '_obs')) %>%
-      group_by(year) %>%
+      group_by(k_cera,k_prism, year) %>%
       summarise(total_recon = sum(SWE_recon),
                 total_obs = sum(SWE_obs)) %>%
-      summarise(sqrt(mean((
-        total_obs - total_recon
-      ) ^ 2))) %>% pull
+      summarise(mse =mean((total_obs - total_recon) ^ 2),
+                rmse = sqrt(mse)) %>% 
+  arrange(mse, rmse)
+
+rmse_dat
 ```
 
 
