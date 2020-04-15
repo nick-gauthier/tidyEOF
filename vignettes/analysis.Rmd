@@ -52,7 +52,8 @@ state_names <- c('arizona', 'new mexico', 'colorado',
 states_wus <- maps::map('state', regions = state_names, 
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 
-prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% dplyr::select(-X1982)
+prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
+livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 
 world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ```
@@ -85,7 +86,7 @@ First plot the March SWE climatology.
 
 ```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
 prism_dat %>%
-  filter(between(year, 2000, 2005)) %>%
+  filter(between(year, 2000, 2004)) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = SWE)) +
   scale_fill_scico(palette = 'davos', direction = -1) +
@@ -101,6 +102,7 @@ Run a principal components analysis. Get the eigenvalues, and run some truncatio
 
 ```{r, fig.asp = 0.75, echo = FALSE}
 prism_dat %>% 
+    semi_join(prism_mask) %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(4)
@@ -108,7 +110,7 @@ prism_dat %>%
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
 
 ```{r}
-nmodes <- 4
+nmodes <- 6
 ```
 
 ```{r, fig.asp = 1}
@@ -123,7 +125,7 @@ prism_patterns <- get_patterns(prism_dat, k = nmodes, mask = prism_mask, rotate 
 ```
 
 ```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_vline(xintercept = 2004)#geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
+plot_amps(prism_patterns) + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) #+ geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
 ```
 
 
@@ -158,7 +160,7 @@ extreme_years <- prism_patterns$amplitudes %>%
 ### Internal variability
 
 ```{r, fig.asp = .9}
-prism_recon <- reconstruct(prism_patterns)
+prism_recon <- reconstruct_field(prism_patterns)
 ```
   
 
@@ -258,7 +260,7 @@ cera_dat %>%
 ```
 
 ```{r}
-nmodes <- 4
+nmodes <- 7
 ```
 
 
@@ -270,7 +272,7 @@ plot_eofs(get_patterns(cera_dat, k = nmodes, rotate = TRUE), 'vik', scaled = TRU
 ```
 
 ```{r}
-cera_patterns <- get_patterns(cera_dat, k = nmodes, rotate = FALSE)
+cera_patterns <- get_patterns(cera_dat, k = nmodes)
 ```
 
 ```{r, echo = FALSE}
@@ -283,7 +285,7 @@ plot_eofs(prism_patterns, 'vik')
 ```
 
 ```{r}
-cera_recon <- reconstruct(cera_patterns)
+cera_recon <- reconstruct_field(cera_patterns)
 ```
 
 
@@ -324,18 +326,6 @@ ggplot() +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 
-```{r}
-f <- lhs ~ rhs
-add_predictors(f, ~var1, ~var2)
-
-# Left-hand sides are ignored:
-add_predictors(f, lhs1 ~ var1, lhs2 ~ var2)
-
-# fun can also be set to a function like "*":
-add_predictors(f, ~var1, ~var2, fun = "*")
-```
-
-
 # Coupled Pattern Analysis
 
 First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
@@ -375,18 +365,12 @@ ggplot(gam_preds, aes(year)) +
 ```
 
 ```{r}
-ggplot(gam_preds, aes(resid)) +
+ggplot(gam_mod$data, aes(resid)) +
   #geom_histogram() + 
   geom_density(fill = NA) +
   geom_vline(xintercept = 0, color = 'red', linetype = 2) +
   facet_wrap(~PC) +
   theme_bw()
-```
-
-```{r}
-gam_mod$data %>%
-  dplyr::select(PC, year, pred) %>%
-  rename(amplitude = pred)
 ```
 
 ```{r}
@@ -435,6 +419,66 @@ ggplot() +
 ```
 
 ### Cross validation
+
+```{r}
+couple_patterns(cera_patterns, prism_patterns)  %>%
+  predict_patterns(cera_patterns) %>%
+  reconstruct_field(prism_patterns, .)
+```
+
+
+```{r}
+# prepare data frame for cross validation by dividing into k folds
+prep_kfold <- function(data){
+  data %>%
+      mutate(PC = paste0(PC, 'response')) %>%
+      spread(PC, amplitude) %>%
+      crossv_kfold(5) %>%
+      mutate(
+        train = map(
+          train,
+          ~ as_tibble(.) %>% gather(PC, amplitude, contains('response')) %>% mutate(PC = str_remove(PC, 'response'))
+        ),
+        test = map(test, ~ as_tibble(.) %>% dplyr::select(-contains('response')))
+      )
+}
+
+fit_kfold <- function(kfold, obs_val) {
+  kfold %>%
+      mutate(test_mod = map(train, fit_model)) %>%
+      mutate(test_result = map2(test_mod, test, ~ predict_patterns(.x, .y) %>% 
+            reconstruct_field(obs_val, .)
+      ))
+}
+```
+
+```{r}
+exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
+  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
+         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
+
+
+test_dat <- expand_grid(k_cera = exp_test$k_cera, k_prism = exp_test$k_prism) %>%
+  mutate(data = map2(k_cera, k_prism, ~prep_data(exp_test[[.x, 3]], exp_test[[.y, 4]])))  %>%
+  mutate(kfold = map(data, prep_kfold)) %>%
+  mutate(fit_kfold = map2(kfold, k_prism, ~fit_kfold(.x, exp_test[[.y, "prism_patterns"]])))
+```
+
+```{r}
+rmse <- test2 %>%
+      pull(test_result) %>%
+      bind_rows() %>%
+      left_join(prism_dat,
+                by = c('x', 'y', 'year'),
+                suffix = c('_recon', '_obs')) %>%
+      group_by(year) %>%
+      summarise(total_recon = sum(SWE_recon),
+                total_obs = sum(SWE_obs)) %>%
+      summarise(sqrt(mean((
+        total_obs - total_recon
+      ) ^ 2))) %>% pull
+```
+
 
 ## CCA
 
@@ -1335,24 +1379,46 @@ ggplot(livneh_climatology) +
   ggtitle('Standard Deviation of March SWE, 1901-2010', 'Livneh')
 ```
 
-Run the principal components analysis.
+
+
+```{r, fig.asp = 0.75, echo = FALSE}
+livneh_dat %>% 
+  semi_join(livneh_mask) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(8)
+```
+Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
+
 ```{r}
-livneh_pcs <- calc_pcs(livneh_dat)
+nmodes <- 5
 ```
 
-Get the eigenvalues, and run some truncation tests.
+```{r, fig.asp = 1}
+plot_eofs(get_patterns(livneh_dat, k = nmodes, rotate = FALSE), 'vik', scaled = FALSE)
+plot_eofs(get_patterns(livneh_dat, k = nmodes, rotate = TRUE), 'vik', scaled = FALSE)
+plot_eofs(get_patterns(livneh_dat, k = nmodes, rotate = FALSE), 'vik', scaled = TRUE)
+plot_eofs(get_patterns(livneh_dat, k = nmodes, rotate = TRUE), 'vik', scaled = TRUE)
+```
+
+Run the principal components analysis.
 ```{r}
-livneh_eigs <- get_eigs(livneh_pcs)
-nFactors::nScree(livneh_eigs$eigenvalues)
+livneh_patterns <- get_patterns(livneh_dat, k = 5, rotate = TRUE)
 ```
 
 ```{r, echo = FALSE}
-plot_scree(livneh_eigs, c(5,8))
+plot_amps(livneh_patterns) + geom_vline(xintercept = 2004, color = 'red')#geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
 ```
 
-```{r}
-livneh_patterns <- get_patterns(livneh_pcs, livneh_dat, livneh_eigs, k = 8, mask = FALSE)
+
+Plot the eofs. 
+```{r echo = FALSE, fig.asp = 1}
+plot_eofs(livneh_patterns, 'vik', scaled = FALSE) 
+plot_eofs(livneh_patterns, 'vik', scaled = TRUE) 
+plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
+
 ```
+
 
 ```{r, echo = FALSE}
 plot_amps(livneh_patterns) + geom_vline(xintercept = c(1983, 1998,1992, 1931, 1987))
