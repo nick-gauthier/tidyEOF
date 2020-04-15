@@ -9,7 +9,7 @@
 #' @examples
 #'
 
-get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
+get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = FALSE){
 
   if(!is.null(mask)) dat <- semi_join(dat, mask, by = c("x", "y"))
 
@@ -24,7 +24,7 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = TRUE){
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'year', .name_repair = ~1:k) %>%
     gather(PC, amplitude, -year) %>%
-    mutate(year = as.numeric(year))
+    mutate(year = as.numeric(year)) # note that this object still has scale and center attributes
 
   eofs_corr <- amplitudes %>%
     mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpetable
