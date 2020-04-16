@@ -72,8 +72,9 @@ obs_agg <- prism_dat %>%
   filter(SWE > 0) %>%
   left_join(areas, by = c("x", "y")) %>%
   group_by(year) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
   summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            extent = sum(area))
+            SCA = sum(covered))
 ```
 
 How has total SWE varied over the observational period?
@@ -99,15 +100,15 @@ ggplot(obs_agg, aes(year, SWE)) +
 
 What about total area covered?
 ```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, extent)) +
-  geom_col(aes(fill = extent)) +
+ggplot(obs_agg, aes(year, SCA)) +
+  geom_col(aes(fill = SCA)) +
   scale_fill_viridis_c(guide = FALSE) +
   theme_minimal() +
   ggtitle('Total snow area over western North America')
 ```
 
 ```{r, echo = FALSE}
-ggplot(obs_agg, aes(extent, SWE)) +
+ggplot(obs_agg, aes(SCA, SWE)) +
   geom_point(aes(color = year), size = 2.5) +
   scale_color_viridis_c() +
   geom_smooth(method = 'lm') +
@@ -196,12 +197,12 @@ cv_dat <- expand_grid(k_cera = exp_test$k_cera,
 
 ```{r}
 cv_recons <- cv_dat %>%
+  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
   unnest(cv) %>%
-  left_join(areas, by = c("x", "y")) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
   group_by(k_cera, k_prism, year) %>%
-  filter(SWE > 0) %>%
   summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            extent = sum(area)) %>%
+            SCA = sum(covered)) %>%
   left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
 ```
 
@@ -210,29 +211,64 @@ cv_recons %>%
   filter(k_prism == 4, k_cera == 4) %>%
   ggplot(aes(year)) +
   geom_line(aes(y = SWE_obs)) +
-  geom_line(aes(y = SWE_recon))
+  geom_line(aes(y = SWE_recon), color = 'red')
+
+cv_recons %>%
+  filter(k_prism == 10, k_cera == 8) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SCA_obs)) +
+  geom_line(aes(y = SCA_recon), color = 'red')
 ```
 
 
 ```{r}
 rmse_dat <- cv_recons %>%
-      summarise(mse =mean((total_obs - total_recon) ^ 2),
-                rmse = sqrt(mse)) %>% 
-  arrange(rmse)
+      summarise(SWE_rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2)),
+                SCA_rmse = sqrt(mean((SCA_obs - SCA_recon) ^ 2)))
+
+rmse_dat %>%
+  arrange(SWE_rmse)
+
+rmse_dat %>% arrange(SCA_rmse)
 ```
 
 The cross validation routine selects `r rmse_dat[[1, "k_prism"]]` PRISM PCs and  `r rmse_dat[[1, "k_cera"]]` CERA PCs 
 ```{r}
 rmse_dat %>%
-  ggplot(aes(k_cera, k_prism, fill = rmse)) +
+  ggplot(aes(k_cera, k_prism, fill = SWE_rmse)) +
   geom_tile() +
   scale_fill_viridis_c(direction = -1) +
   coord_equal() +
   theme_minimal()
 
-rmse_dat
+
+rmse_dat %>%
+  ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
 ```
 
+
+```{r}
+prism_patterns <- get_patterns(prism_dat, k = 4, mask = prism_mask)
+cera_patterns <- get_patterns(cera_dat, k = 4)
+
+test <- couple_patterns(cera_patterns, prism_patterns) %>%
+  predict_patterns(cera_patterns) %>%
+  reconstruct_field(prism_patterns, .) %>%
+  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
+
+test %>%
+  group_by(x, y) %>%
+  mutate(corr = cor(SWE_recon, SWE_obs)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = corr)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+```
 
 
 ### PCA
