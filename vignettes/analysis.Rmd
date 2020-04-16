@@ -57,6 +57,64 @@ livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, 
 
 world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ```
+ 
+ # Snowpack variability 
+ 
+
+Some aggregate statistics. Is this the right way to aggregate?
+
+```{r}
+areas <- area(prism) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  rename(area = layer)
+
+obs_agg <- prism_dat %>%
+  filter(SWE > 0) %>%
+  left_join(areas, by = c("x", "y")) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            extent = sum(area))
+```
+
+How has total SWE varied over the observational period?
+```{r, echo = FALSE, fig.fullwidth = TRUE}
+ggplot(obs_agg, aes(year, SWE)) +
+  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
+  geom_col(aes(fill = SWE)) +
+  scale_fill_viridis_c(guide = FALSE) +
+  theme_minimal() +
+  ggtitle('Total SWE over western North America')
+```
+
+```{r, echo = FALSE, fig.fullwidth = TRUE}
+ggplot(obs_agg, aes(year, SWE)) +
+  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
+  geom_line(aes(y = SWE), alpha = .4) +
+  geom_point(aes(color = SWE)) +
+  scale_color_viridis_c(guide = FALSE) +
+  geom_smooth(method = 'lm') +
+  theme_minimal() +
+  ggtitle('Total SWE over western North America')
+```
+
+What about total area covered?
+```{r, echo = FALSE, fig.fullwidth = TRUE}
+ggplot(obs_agg, aes(year, extent)) +
+  geom_col(aes(fill = extent)) +
+  scale_fill_viridis_c(guide = FALSE) +
+  theme_minimal() +
+  ggtitle('Total snow area over western North America')
+```
+
+```{r, echo = FALSE}
+ggplot(obs_agg, aes(extent, SWE)) +
+  geom_point(aes(color = year), size = 2.5) +
+  scale_color_viridis_c() +
+  geom_smooth(method = 'lm') +
+  theme_minimal() +
+  labs(x = 'Area (km2)', title = 'Relationship between total SWE and snow extent')
+```
+
 
 # Modes of Snowpack Variability
 
@@ -96,6 +154,87 @@ prism_dat %>%
   transition_states(year)
 ```
 
+
+
+
+## Choose K
+
+setup a 5 fold cross validation experiment for selecting k.
+
+```{r}
+exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
+  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
+         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
+```
+
+Define a cv function.
+```{r}
+fit_kfold <- function(k_preds, k_obs){
+  preds <- exp_test[[k_preds, "cera_patterns"]]
+  obs <- exp_test[[k_obs, "prism_patterns"]]
+
+  # prepare data frame for cross validation by dividing into k folds
+  folds <- prep_data(preds, obs) %>%
+    group_by(PC) %>%
+    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
+    ungroup()
+
+  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
+  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
+
+  map2_dfr(train, test, ~ fit_model(.x) %>% 
+                            predict_patterns(.y) %>% 
+                            reconstruct_field(obs, .))
+}
+```
+
+```{r}
+cv_dat <- expand_grid(k_cera = exp_test$k_cera, 
+                      k_prism = exp_test$k_prism) %>%
+  mutate(cv = map2(k_cera, k_prism, fit_kfold))
+```
+
+```{r}
+cv_recons <- cv_dat %>%
+  unnest(cv) %>%
+  left_join(areas, by = c("x", "y")) %>%
+  group_by(k_cera, k_prism, year) %>%
+  filter(SWE > 0) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            extent = sum(area)) %>%
+  left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
+```
+
+```{r}
+cv_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SWE_obs)) +
+  geom_line(aes(y = SWE_recon))
+```
+
+
+```{r}
+rmse_dat <- cv_recons %>%
+      summarise(mse =mean((total_obs - total_recon) ^ 2),
+                rmse = sqrt(mse)) %>% 
+  arrange(rmse)
+```
+
+The cross validation routine selects `r rmse_dat[[1, "k_prism"]]` PRISM PCs and  `r rmse_dat[[1, "k_cera"]]` CERA PCs 
+```{r}
+rmse_dat %>%
+  ggplot(aes(k_cera, k_prism, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
+
+rmse_dat
+```
+
+
+
 ### PCA
 
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
@@ -107,10 +246,10 @@ prism_dat %>%
   get_eigenvalues() %>% 
   plot_scree(4)
 ```
-Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 6 modes.
+Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
-nmodes <- 6
+nmodes <- 4
 ```
 
 ```{r, fig.asp = 1}
@@ -417,64 +556,6 @@ ggplot() +
   #scale_fill_scico(palette = 'vik', direction = -1, limits = c(-450, 450)) +
   ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
 ```
-
-### Cross validation
-
-```{r}
-couple_patterns(cera_patterns, prism_patterns)  %>%
-  predict_patterns(cera_patterns) %>%
-  reconstruct_field(prism_patterns, .)
-```
-
-setup a 5 fold cross validation experiment for selecting k.
-
-```{r}
-exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
-  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
-         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
-```
-
-Define a cv function.
-```{r}
-fit_kfold <- function(data, obs_val){
-  # prepare data frame for cross validation by dividing into k folds
-  folds <- data %>%
-    group_by(PC) %>%
-    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
-    ungroup()
-
-  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
-  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
-
-  cv <- map2_dfr(train, test, ~ fit_model(.x) %>% 
-                            predict_patterns(.y) %>% 
-                            reconstruct_field(obs_val, .))
-}
-```
-
-```{r}
-cv_dat <- expand_grid(k_cera = exp_test$k_cera, k_prism = exp_test$k_prism) %>%
-  mutate(data = map2(k_cera, k_prism, ~prep_data(exp_test[[.x, "cera_patterns"]], exp_test[[.y, "prism_patterns"]])))  %>%
-  mutate(cv = map2(data, k_prism, ~fit_kfold(.x, exp_test[[.y, "prism_patterns"]])))
-```
-
-```{r}
-rmse_dat <- cv_dat %>%
-  dplyr::select(-data) %>%
-  unnest(cv) %>%
-      left_join(prism_dat,
-                by = c('x', 'y', 'year'),
-                suffix = c('_recon', '_obs')) %>%
-      group_by(k_cera,k_prism, year) %>%
-      summarise(total_recon = sum(SWE_recon),
-                total_obs = sum(SWE_obs)) %>%
-      summarise(mse =mean((total_obs - total_recon) ^ 2),
-                rmse = sqrt(mse)) %>% 
-  arrange(mse, rmse)
-
-rmse_dat
-```
-
 
 ## CCA
 
@@ -844,55 +925,6 @@ tele.preds %>%
 
 ```{r, echo = FALSE}
 knitr::knint_exit()
-```
-
-
-Some aggregate statistics. Is this the right way to aggregate?
-
-```{r}
-obs_agg <- prism_dat %>%
-  filter(SWE > 0) %>%
-  group_by(year) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            area = sum(area))
-```
-
-How has total SWE varied over the observational period?
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, SWE)) +
-  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
-  geom_col(aes(fill = SWE)) +
-  scale_fill_viridis_c(guide = FALSE) +
-  theme_minimal() +
-  ggtitle('Total SWE over western North America')
-```
-
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, SWE)) +
-  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
-  geom_point(aes(color = SWE)) +
-  scale_color_viridis_c(guide = FALSE) +
-  geom_smooth(method = 'lm') +
-  theme_minimal() +
-  ggtitle('Total SWE over western North America')
-```
-
-What about total area covered?
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, area)) +
-  geom_col(aes(fill = area)) +
-  scale_fill_viridis_c(guide = FALSE) +
-  theme_minimal() +
-  ggtitle('Total snow area over western North America')
-```
-
-```{r, echo = FALSE}
-ggplot(obs_agg, aes(area, SWE)) +
-  geom_point(aes(color = year), size = 2.5) +
-  scale_color_viridis_c() +
-  geom_smooth(method = 'lm') +
-  theme_minimal() +
-  labs(x = 'Area (km2)', title = 'Relationship between total SWE and snow extent')
 ```
 
 
