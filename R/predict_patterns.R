@@ -9,7 +9,7 @@
 #' @examples
 predict_patterns <- function(coupled_patterns, predictors) {# new_amps) {
 
-  preds <- if('patterns' %in% class(predictors)) predictors$amplitudes else new_amps
+  preds <- if('patterns' %in% class(predictors)) predictors$amplitudes else predictors
 if('patterns' %in% class(predictors)) {
   preds <- preds %>%
    mutate(PC = paste0('PC', PC)) %>%

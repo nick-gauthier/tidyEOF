@@ -69,10 +69,56 @@ mountains_mask <- mountains %>%
   dplyr::select(-X1982)
 ```
  
- # Snowpack variability 
+# Snowpack in the western US
  
+ 
+First plot the March SWE climatology.
 
-Some aggregate statistics. Is this the right way to aggregate?
+```{r, echo = FALSE, fig.asp = .8, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010. C) Standard deviation of March SWE from PRISM/SNOTEL observations, 1982-2017. B) Standard deviation of March SWE from CERA-20C Reanalysis, 1901-2010."}
+a <- ggplot(get_climatology(prism_dat)) +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1)
+
+b <- ggplot(get_climatology(cera_dat)) +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_scico(palette = 'davos', direction = -1)
+
+c <- ggplot(get_climatology(prism_dat)) +
+  geom_raster(aes(x, y, fill = swe_sd)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c()
+
+d <- ggplot(get_climatology(cera_dat)) +
+  geom_raster(aes(x, y, fill = swe_sd)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c()
+
+(a + c) / (b + d) + plot_annotation(tag_levels = 'A')
+```
+
+
+
+```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
+prism_dat %>%
+  filter(between(year, 2000, 2004)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  scale_fill_scico(palette = 'davos', direction = -1) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
+  transition_states(year)
+```
+
+
+
+How has total SWE varied over the observational period?
 
 ```{r}
 areas <- area(prism) %>%
