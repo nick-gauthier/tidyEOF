@@ -56,6 +56,17 @@ prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy
 livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 
 world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
+
+mountains <- read_sf('../data/ne_10m_geography_regions_polys.shp') %>%
+  filter(name %in% c('SIERRA NEVADA', 'CASCADE RANGE', 'ROCKY MOUNTAINS')) %>%
+  dplyr::select(name, geometry)
+
+mountains_mask <- mountains %>% 
+  mutate(rasters = split(., 1:3) %>% map(~mask(prism[[1]], .))) %>%
+  st_drop_geometry() %>%
+  mutate(rasters = map(rasters, as.data.frame, na.rm = TRUE, xy = TRUE)) %>%
+  unnest(rasters) %>%
+  dplyr::select(-X1982)
 ```
  
  # Snowpack variability 
@@ -115,6 +126,21 @@ ggplot(obs_agg, aes(SCA, SWE)) +
   theme_minimal() +
   labs(x = 'Area (km2)', title = 'Relationship between total SWE and snow extent')
 ```
+```{r}
+mountains_agg <- prism_dat %>%
+  filter(SWE > 0) %>%
+  left_join(areas, by = c("x", "y")) %>%
+  inner_join(mountains_mask, by = c("x", "y")) %>%
+  group_by(year, name) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            SCA = sum(covered))
+
+
+ggplot(mountains_agg, aes(year, SWE, color = name)) +
+  geom_line()
+```
+
 
 
 # Modes of Snowpack Variability
@@ -204,7 +230,20 @@ cv_recons <- cv_dat %>%
   summarise(SWE = sum(SWE * area), # units in megaliters (?)
             SCA = sum(covered)) %>%
   left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
+
+range_recons <- cv_dat %>%
+  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
+                    inner_join(mountains_mask, by = c("x", "y")))) %>%
+  unnest(cv) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  group_by(k_cera, k_prism, name, year) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            SCA = sum(covered)) %>%
+  left_join(mountains_agg, by = c('year', 'name'), suffix = c('_recon', '_obs'))
+
+gc()
 ```
+
 
 ```{r}
 cv_recons %>%
@@ -218,6 +257,50 @@ cv_recons %>%
   ggplot(aes(year)) +
   geom_line(aes(y = SCA_obs)) +
   geom_line(aes(y = SCA_recon), color = 'red')
+
+t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
+  gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type')) %>%
+  mutate(name = 'WESTERN US')
+
+t2 <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+   gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type'))
+
+bind_rows(t1, t2) %>%
+   ggplot(aes(year)) +
+  geom_line(aes(y = value, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_grid(name~var, scales = 'free_y') +
+  theme_bw()
+```
+
+
+```{r, fig.asp = .8}
+a <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+  dplyr::select(-SCA_recon, -SCA_obs) %>%
+  rename(recon = SWE_recon, obs = SWE_obs) %>%
+  gather(type, SWE, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SWE, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+  facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+b <- range_recons %>%
+  filter(k_prism == 10, k_cera == 8) %>%
+  dplyr::select(-SWE_recon, -SWE_obs) %>%
+  rename(recon = SCA_recon, obs = SCA_obs) %>%
+  gather(type, SCA, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SCA, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+a + b + plot_annotation(tag_levels = 'A')
 ```
 
 
