@@ -58,6 +58,10 @@ prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy
 cera_mask <- cera[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 
+areas <- area(prism) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  rename(area = layer)
+
 mountains <- read_sf('../data/ne_10m_geography_regions_polys.shp') %>%
   filter(name %in% c('SIERRA NEVADA', 'CASCADE RANGE', 'ROCKY MOUNTAINS')) %>%
   dplyr::select(name, geometry)
@@ -234,24 +238,46 @@ cv_dat <- expand_grid(k_cera = exp_test$k_cera,
 ```
 
 ```{r}
+wus_stats <- prism_dat %>%
+  filter(SWE > 0) %>%
+  left_join(areas, by = c("x", "y")) %>%
+  semi_join(prism_mask, by = c("x", "y")) %>%
+  group_by(year) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            SCA = sum(covered))
+
+mountains_stats <- prism_dat %>%
+  filter(SWE > 0) %>%
+  left_join(areas, by = c("x", "y")) %>%
+  inner_join(mountains_mask, by = c("x", "y")) %>%
+  group_by(year, name) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+  summarise(SWE = sum(SWE * area), 
+            SCA = sum(covered))
+```
+
+```{r}
 cv_recons <- cv_dat %>%
   mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
   unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
   group_by(k_cera, k_prism, year) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+  summarise(SWE = sum(SWE * area), 
             SCA = sum(covered)) %>%
-  left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
+  left_join(wus_stats, by = 'year', suffix = c('_recon', '_obs'))
+
+gc()
 
 range_recons <- cv_dat %>%
   mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
                     inner_join(mountains_mask, by = c("x", "y")))) %>%
   unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
   group_by(k_cera, k_prism, name, year) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+  summarise(SWE = sum(SWE * area),
             SCA = sum(covered)) %>%
-  left_join(mountains_agg, by = c('year', 'name'), suffix = c('_recon', '_obs'))
+  left_join(mountains_stats, by = c('year', 'name'), suffix = c('_recon', '_obs'))
 
 gc()
 ```
@@ -261,15 +287,13 @@ gc()
 rmse_dat <- cv_recons %>%
       summarise(SWE_rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2)),
                 SCA_rmse = sqrt(mean((SCA_obs - SCA_recon) ^ 2)))
-
-rmse_dat %>%
-  arrange(SWE_rmse)
-
-rmse_dat %>% arrange(SCA_rmse)
 ```
 
 The cross validation routine selects `r rmse_dat[[1, "k_prism"]]` PRISM PCs and  `r rmse_dat[[1, "k_cera"]]` CERA PCs 
 ```{r}
+arrange(rmse_dat, SWE_rmse)
+arrange(rmse_dat, SCA_rmse)
+
 rmse_dat %>%
   ggplot(aes(k_cera, k_prism, fill = SWE_rmse)) +
   geom_tile() +
@@ -277,9 +301,7 @@ rmse_dat %>%
   coord_equal() +
   theme_minimal()
 
-
-rmse_dat %>%
-  ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
+ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
   geom_tile() +
   scale_fill_viridis_c(direction = -1) +
   coord_equal() +
@@ -295,6 +317,7 @@ e <- prism_dat %>%
   plot_scree(4)
 
 f <- cera_dat %>% 
+      semi_join(cera_mask, by = c('x', 'y')) %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(4)
@@ -302,10 +325,77 @@ f <- cera_dat %>%
 e + f
 ```
 
-```{r}
-prism_patterns <- get_patterns(prism_dat, k = 4, mask = prism_mask)
-cera_patterns <- get_patterns(cera_dat, k = 4)
 
+```{r, fig.asp = .35}
+t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
+  gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type')) %>%
+  mutate(name = 'Western US')
+
+ggplot(t1, aes(year)) +
+  geom_line(aes(y = value, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_wrap(~var, scales = 'free_y') +
+  theme_bw()
+```
+
+
+```{r, fig.width = 8}
+g <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+  dplyr::select(-SCA_recon, -SCA_obs) %>%
+  rename(recon = SWE_recon, obs = SWE_obs) %>%
+  gather(type, SWE, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SWE, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+  facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+h <- range_recons %>%
+  filter(k_prism == 7, k_cera == 9) %>%
+  dplyr::select(-SWE_recon, -SWE_obs) %>%
+  rename(recon = SCA_recon, obs = SCA_obs) %>%
+  gather(type, SCA, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SCA, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+g / h + plot_annotation(tag_levels = 'A')
+```
+
+```{r, echo = FALSE, eval = FALSE}
+# trying to combine above?
+t2 <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+   gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type'))
+
+bind_rows(t1, t2) %>%
+   ggplot(aes(year)) +
+  geom_line(aes(y = value, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_grid(var~name, scales = 'free_y') +
+  theme_bw()
+```
+
+## EOFs
+
+So let's stick with the 4 and 4 solution, and investigate those patterns more. 
+Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
+
+```{r}
+nmodes <- 4
+```
+
+```{r}
+prism_patterns <- get_patterns(prism_dat, k = nmodes, mask = prism_mask)
+cera_patterns <- get_patterns(cera_dat, k = nmodes, mask = cera_mask)
+```
+
+```{r}
 test <- couple_patterns(cera_patterns, prism_patterns) %>%
   predict_patterns(cera_patterns) %>%
   reconstruct_field(prism_patterns, .) %>%
@@ -322,164 +412,17 @@ test %>%
 ```
 
 
-```{r}
-cv_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SWE_obs)) +
-  geom_line(aes(y = SWE_recon), color = 'red')
-
-cv_recons %>%
-  filter(k_prism == 10, k_cera == 8) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SCA_obs)) +
-  geom_line(aes(y = SCA_recon), color = 'red')
-
-t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
-  gather(type, value, SWE_recon:SCA_obs) %>%
-  separate(type, c('var', 'type')) %>%
-  mutate(name = 'WESTERN US')
-
-t2 <- range_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-   gather(type, value, SWE_recon:SCA_obs) %>%
-  separate(type, c('var', 'type'))
-
-bind_rows(t1, t2) %>%
-   ggplot(aes(year)) +
-  geom_line(aes(y = value, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-    facet_grid(name~var, scales = 'free_y') +
-  theme_bw()
-```
-
-
-```{r, fig.asp = .8}
-a <- range_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-  dplyr::select(-SCA_recon, -SCA_obs) %>%
-  rename(recon = SWE_recon, obs = SWE_obs) %>%
-  gather(type, SWE, recon:obs) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SWE, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-  facet_wrap(~name, scales = 'free_y', ncol = 3) +
-  theme_bw()
-
-b <- range_recons %>%
-  filter(k_prism == 10, k_cera == 8) %>%
-  dplyr::select(-SWE_recon, -SWE_obs) %>%
-  rename(recon = SCA_recon, obs = SCA_obs) %>%
-  gather(type, SCA, recon:obs) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SCA, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-    facet_wrap(~name, scales = 'free_y', ncol = 3) +
-  theme_bw()
-
-a + b + plot_annotation(tag_levels = 'A')
-```
-
-
-
-How has total SWE varied over the observational period?
-
-```{r}
-areas <- area(prism) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
-  rename(area = layer)
-
-obs_agg <- prism_dat %>%
-  filter(SWE > 0) %>%
-  left_join(areas, by = c("x", "y")) %>%
-  group_by(year) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            SCA = sum(covered))
-```
-
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, SWE)) +
-  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
-  geom_col(aes(fill = SWE)) +
-  scale_fill_viridis_c(guide = FALSE) +
-  theme_minimal() +
-  ggtitle('Total SWE over western North America')
-```
-
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, SWE)) +
-  #geom_vline(xintercept = 2015, color = 'red', linetype = 2) +
-  geom_line(aes(y = SWE), alpha = 1) +
-  geom_point(aes(color = SWE)) +
-  scale_color_viridis_c(guide = FALSE) +
-  geom_smooth(method = 'lm') +
-  theme_minimal() +
-  ggtitle('Total SWE over western North America')
-```
-
-What about total area covered?
-```{r, echo = FALSE, fig.fullwidth = TRUE}
-ggplot(obs_agg, aes(year, SCA)) +
-  geom_col(aes(fill = SCA)) +
-  scale_fill_viridis_c(guide = FALSE) +
-  theme_minimal() +
-  ggtitle('Total snow area over western North America')
-```
-
 ```{r, echo = FALSE}
-ggplot(obs_agg, aes(SCA, SWE)) +
-  geom_point(aes(color = year), size = 2.5) +
-  scale_color_viridis_c() +
-  geom_smooth(method = 'lm') +
-  theme_minimal() +
-  labs(x = 'Area (km2)', title = 'Relationship between total SWE and snow extent')
+plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2) 
+plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
 ```
-```{r}
-mountains_agg <- prism_dat %>%
-  filter(SWE > 0) %>%
-  left_join(areas, by = c("x", "y")) %>%
-  inner_join(mountains_mask, by = c("x", "y")) %>%
-  group_by(year, name) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            SCA = sum(covered))
-
-
-ggplot(mountains_agg, aes(year, SWE, color = name)) +
-  geom_line()
-```
-
-
-
-# PCA
-
-Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
-
-```{r}
-nmodes <- 4
-```
-
-```{r, fig.asp = 1}
-plot_eofs(get_patterns(prism_dat, mask = prism_mask, k = nmodes, rotate = FALSE), 'vik', scaled = FALSE)
-plot_eofs(get_patterns(prism_dat, mask = prism_mask, k = nmodes, rotate = TRUE), 'vik', scaled = FALSE)
-plot_eofs(get_patterns(prism_dat, mask = prism_mask, k = nmodes, rotate = FALSE), 'vik', scaled = TRUE)
-plot_eofs(get_patterns(prism_dat, mask = prism_mask, k = nmodes, rotate = TRUE), 'vik', scaled = TRUE)
-```
-
-```{r}
-prism_patterns <- get_patterns(prism_dat, k = nmodes, mask = prism_mask, rotate = FALSE)
-```
-
-```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_vline(xintercept = c(1983, 1998, 1992, 2010, 1987)) + geom_hline(yintercept = 0, linetype = 2) #+ geom_vline(xintercept = c(2011, 1989, 2000, 2008), color = 'red')
-```
-
 
 Plot the eofs. 
 ```{r echo = FALSE, fig.asp = 1}
 plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
+plot_eofs(cera_patterns, 'vik', scaled = FALSE)
 plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
+plot_eofs(cera_patterns, 'vik', scaled = TRUE)
 ```
 
 ```{r}
@@ -504,54 +447,37 @@ extreme_years <- prism_patterns$amplitudes %>%
   theme_void()
 ```
 
-### Internal variability
+## Internal variability
 
 ```{r, fig.asp = .9}
 prism_recon <- reconstruct_field(prism_patterns)
 ```
-  
 
-
-```{r, echo = FALSE}
-prism_recon %>%
-  filter(year <= 1985) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-    facet_wrap(~year) +
-  scale_fill_scico(palette = 'davos', direction = -1)
-```
 
 ```{r}
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  filter(year <= 1993) %>%
-  mutate(error = abs(SWE_obs - SWE_recon)) %>% # absolute error
-ggplot() +
+  group_by(x, y) %>%
+  summarise(error = sqrt(mean((SWE_obs - SWE_recon) ^ 2))) %>% 
+  ggplot() +
   geom_raster(aes(x, y, fill = error)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
-  facet_wrap(~year,ncol = 4) +
-  scale_fill_viridis_c(name = 'Absolute error') +
+  scale_fill_viridis_c(name = 'RMSE') +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  filter(year <= 1993) %>%
-  mutate(error = abs(SWE_obs - SWE_recon)/swe_sd) %>% # absolute error
-ggplot() +
-  geom_raster(aes(x, y, fill = error)) +
+  group_by(x, y) %>%
+  summarise(corr = cor(SWE_obs, SWE_recon)) %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = corr)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
-  facet_wrap(~year,ncol = 4) +
-  scale_fill_viridis_c(name = 'Absolute error') +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
+  scale_fill_viridis_c(name = 'Correlation')
 ```
 
-
-### Trends
-
+## Trends
 
 Are there any trends?
 
@@ -573,91 +499,13 @@ walk(trends_mod$mod, plot)
 ```
 
 
-
-
-## Simulated Modes
-
-
-
-Run the principal components analysis. Get the eigenvalues, and run some truncation tests.
-
-```{r, echo = FALSE}
-
-```
-
-```{r}
-nmodes <- 7
-```
-
-
-```{r, fig.asp = 1}
-plot_eofs(get_patterns(cera_dat, k = nmodes, rotate = FALSE), 'vik', scaled = FALSE)
-plot_eofs(get_patterns(cera_dat, k = nmodes, rotate = TRUE), 'vik', scaled = FALSE)
-plot_eofs(get_patterns(cera_dat, k = nmodes, rotate = FALSE), 'vik', scaled = TRUE)
-plot_eofs(get_patterns(cera_dat, k = nmodes, rotate = TRUE), 'vik', scaled = TRUE)
-```
-
-```{r}
-cera_patterns <- get_patterns(cera_dat, k = nmodes)
-```
-
-```{r, echo = FALSE}
-plot_amps(cera_patterns)
-```
-
-```{r echo = FALSE}
-plot_eofs(cera_patterns, 'vik')
-plot_eofs(prism_patterns, 'vik')
-```
-
-```{r}
-cera_recon <- reconstruct_field(cera_patterns)
-```
-
-
-```{r, echo = FALSE}
-cera_recon %>%
-  filter(between(year, 1982, 1985)) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-    facet_wrap(~year) +
-  scale_fill_scico(palette = 'davos', direction = -1)
-```
-
-```{r}
-cera_recon %>%
-  left_join(cera_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  filter(between(year, 1982, 1993)) %>%
-  mutate(error = abs(SWE_obs - SWE_recon)) %>% # absolute error
-ggplot() +
-  geom_raster(aes(x, y, fill = error)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year,ncol = 4) +
-  scale_fill_viridis_c(name = 'Absolute error') +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-
-cera_recon %>%
-  left_join(cera_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  filter(between(year, 1982, 1993)) %>%
-  mutate(error = abs(SWE_obs - SWE_recon)/swe_sd) %>% # absolute error
-ggplot() +
-  geom_raster(aes(x, y, fill = error)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year,ncol = 4) +
-  scale_fill_viridis_c(name = 'Absolute error') +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-```
-
 # Coupled Pattern Analysis
 
 First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
 
 ## GAM
 
+Let's look under the hood of what the GAM models above were doing.
 ```{r}
 gam_mod <- couple_patterns(cera_patterns, prism_patterns)
 ```
@@ -673,21 +521,12 @@ gam_mod$model %>%
   arrange(-r2)
 ```
 
-
 Are the residuals autocorrelated? Some are
 ```{r}
 gam_mod$data %>%
   group_by(PC) %>%
   summarise(autocor = cor(resid, lag(resid), use = 'pairwise.complete.obs')) %>%
   arrange(-abs(autocor))
-```
-
-```{r}
-ggplot(gam_preds, aes(year)) +
-  geom_line(aes(y = amplitude)) +
-  geom_line(aes(y = pred), color = 'red') +
-  facet_wrap(~PC) +
-  theme_bw()
 ```
 
 ```{r}
