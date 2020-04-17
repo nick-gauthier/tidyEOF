@@ -174,64 +174,43 @@ for(i in 2:100){
 new_gif
 ```
 
-```{r, echo = FALSE}
-prism_dat %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'broc',
-                   direction = -1,
-                   limits = c(-1300, 1300)) +
-  transition_states(year) +
-  theme_void()
-
-
-```
-
-
-```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
-prism_dat %>%
-  filter(between(year, 2000, 2004)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
-  transition_states(year)
-```
-
 ## PCA
 
+We can decompose all this year-to-year variability into the dominant spatial modes -- robust spatial anomaly patterns that tend to co-occur.
 
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
 
-```{r, fig.asp = 0.75, echo = FALSE}
-prism_dat %>% 
-    semi_join(prism_mask) %>%
+```{r, fig.width = 8, fig.asp = .4, echo = FALSE}
+e <- prism_dat %>% 
+    semi_join(prism_mask, by = c('x', 'y')) %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(4)
+  plot_scree(NA)
+
+f <- cera_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(NA)
+
+e + f
 ```
 
 
 ### Choosing K
 
-setup a 5 fold cross validation experiment for selecting k.
+Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
 ```{r}
-exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
-  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
+exp_test <- tibble(k_cera = 1:9, k_prism = 1:9) %>%
+  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = ., mask = cera_mask)),
          prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
 ```
 
 Define a cv function.
 ```{r}
 fit_kfold <- function(k_preds, k_obs){
-  preds <- exp_test[[k_preds, "cera_patterns"]]
-  obs <- exp_test[[k_obs, "prism_patterns"]]
+  preds <- exp_test[[k_preds, "cera_patterns"]][[1]]
+  obs <- exp_test[[k_obs, "prism_patterns"]][[1]]
 
   # prepare data frame for cross validation by dividing into k folds
   folds <- prep_data(preds, obs) %>%
@@ -307,6 +286,21 @@ rmse_dat %>%
   theme_minimal()
 ```
 
+So let's truncate the PCs at 4.
+```{r, fig.width = 8, fig.asp = .4, echo = FALSE}
+e <- prism_dat %>% 
+    semi_join(prism_mask, by = c('x', 'y')) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(4)
+
+f <- cera_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(4)
+
+e + f
+```
 
 ```{r}
 prism_patterns <- get_patterns(prism_dat, k = 4, mask = prism_mask)
@@ -588,10 +582,7 @@ walk(trends_mod$mod, plot)
 Run the principal components analysis. Get the eigenvalues, and run some truncation tests.
 
 ```{r, echo = FALSE}
-cera_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(4)
+
 ```
 
 ```{r}

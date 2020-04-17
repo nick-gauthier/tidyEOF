@@ -38,7 +38,7 @@ plot_amps <- function(patterns) {
     theme_bw()
 }
 
-plot_scree <- function(eigenvalues, k, kmax = 20){
+plot_scree <- function(eigenvalues, k, kmax = 15){
   eigenvalues %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
            multiplet = as.factor(cumsum(separated))) %>%
