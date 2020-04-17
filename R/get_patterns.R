@@ -22,7 +22,7 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = FALSE){
     .[,1:k] %>%
     scale() %>%
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
-    as_tibble(rownames = 'year', .name_repair = ~1:k) %>%
+    as_tibble(rownames = 'year', .name_repair = ~as.character(1:k)) %>%
     gather(PC, amplitude, -year) %>%
     mutate(year = as.numeric(year)) # note that this object still has scale and center attributes
 
