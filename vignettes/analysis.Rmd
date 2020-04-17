@@ -35,8 +35,10 @@ library(modelr)
 # plotting
 library(sf) # shapefiles and plotting
 library(gganimate) # animated gifs
+library(magick) # for multi-panel animations
 library(scico) # color palettes
 library(patchwork)
+
 
 # this package
 devtools::load_all()
@@ -53,9 +55,8 @@ states_wus <- maps::map('state', regions = state_names,
                     fill = TRUE, plot = FALSE) %>% st_as_sf
 
 prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
+cera_mask <- cera[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
-
-world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 
 mountains <- read_sf('../data/ne_10m_geography_regions_polys.shp') %>%
   filter(name %in% c('SIERRA NEVADA', 'CASCADE RANGE', 'ROCKY MOUNTAINS')) %>%
@@ -71,37 +72,123 @@ mountains_mask <- mountains %>%
  
 # Snowpack in the western US
  
- 
-First plot the March SWE climatology.
+First plot March SWE climatology from observations and reanalysis data. We immediately see the mismatch between the two because of the coarse resolution reanalysis. To drive home the point, here's the high-resolution observations, resampled to the reanalysis resolution. For a better comparison, each dataset was reduced to the common range of 1982--2010. The coarse data fail to capture the topographic heterogeneity of the domain, and thus the small-scale variations in elevation and temperature that influence snow accumulation and melt.
 
-```{r, echo = FALSE, fig.asp = .8, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010. C) Standard deviation of March SWE from PRISM/SNOTEL observations, 1982-2017. B) Standard deviation of March SWE from CERA-20C Reanalysis, 1901-2010."}
-a <- ggplot(get_climatology(prism_dat)) +
+```{r, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010. C) Standard deviation of March SWE from PRISM/SNOTEL observations, 1982-2017. B) Standard deviation of March SWE from CERA-20C Reanalysis, 1901-2010."}
+a <- prism_dat %>%
+  semi_join(prism_mask, by = c('x', 'y')) %>%
+  get_climatology() %>%
+  ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE (mm)') +
   theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1)
+  theme(legend.position = 'bottom')
 
-b <- ggplot(get_climatology(cera_dat)) +
+b <- cera_dat %>%
+  semi_join(cera_mask, by = c('x', 'y')) %>%
+  get_climatology() %>%
+  ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE (mm)') +
   theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1)
+  theme(legend.position = 'bottom')
 
-c <- ggplot(get_climatology(prism_dat)) +
-  geom_raster(aes(x, y, fill = swe_sd)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c()
-
-d <- ggplot(get_climatology(cera_dat)) +
-  geom_raster(aes(x, y, fill = swe_sd)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c()
-
-(a + c) / (b + d) + plot_annotation(tag_levels = 'A')
+a + b + plot_annotation(tag_levels = 'A')
 ```
 
+```{r}
+a <- prism_dat %>%
+  semi_join(prism_mask, by = c('x', 'y')) %>%
+  get_climatology() %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+b <- cera_dat %>%
+  semi_join(cera_mask, by = c('x', 'y')) %>%
+  get_climatology() %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+a + b + plot_annotation(tag_levels = 'A')
+```
+
+Next we'll look at how SWE has varied over time and space.
+
+
+# Modes of Snowpack Variability
+
+In spite of the mismatch in mean values, perhaps the *variability* in SWE from year to year has something in common.
+
+```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
+# code courtesy of https://github.com/thomasp85/gganimate/wiki/Animation-Composition
+c <- prism_dat %>%
+  filter(between(year, 1985, 2000)) %>%
+  semi_join(prism_mask, by = c('x', 'y')) %>%
+  group_by(x, y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1800, 1800)) +
+  transition_states(year) +
+    ggtitle("March, {closest_state}", "Observed") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+d <- cera_dat %>%
+  filter(between(year, 1985, 2000)) %>%
+    semi_join(cera_mask, by = c('x', 'y')) %>%
+  group_by(x, y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-110, 110)) +
+  transition_states(year) +
+  ggtitle("", "Simulated") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+c_gif <- gganimate::animate(c)
+d_gif <- gganimate::animate(d)
+
+c_mgif <- image_read(c_gif)
+d_mgif <- image_read(d_gif)
+
+new_gif <- image_append(c(c_mgif[1], d_mgif[1]))
+for(i in 2:100){
+  combined <- image_append(c(c_mgif[i], d_mgif[i]))
+  new_gif <- c(new_gif, combined)
+}
+
+new_gif
+```
+
+```{r, echo = FALSE}
+prism_dat %>%
+  group_by(x, y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'broc',
+                   direction = -1,
+                   limits = c(-1300, 1300)) +
+  transition_states(year) +
+  theme_void()
+
+
+```
 
 
 ```{r prism_animation, fig.asp = 8, echo = FALSE, warning=FALSE, cache = TRUE}
@@ -114,6 +201,189 @@ prism_dat %>%
   theme_void() +
   ggtitle("Snow Water Equivalent", "March, {closest_state}") +
   transition_states(year)
+```
+
+## PCA
+
+
+Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
+
+```{r, fig.asp = 0.75, echo = FALSE}
+prism_dat %>% 
+    semi_join(prism_mask) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(4)
+```
+
+
+### Choosing K
+
+setup a 5 fold cross validation experiment for selecting k.
+
+```{r}
+exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
+  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
+         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
+```
+
+Define a cv function.
+```{r}
+fit_kfold <- function(k_preds, k_obs){
+  preds <- exp_test[[k_preds, "cera_patterns"]]
+  obs <- exp_test[[k_obs, "prism_patterns"]]
+
+  # prepare data frame for cross validation by dividing into k folds
+  folds <- prep_data(preds, obs) %>%
+    group_by(PC) %>%
+    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
+    ungroup()
+
+  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
+  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
+
+  map2_dfr(train, test, ~ fit_model(.x) %>% 
+                            predict_patterns(.y) %>% 
+                            reconstruct_field(obs, .))
+}
+```
+
+```{r}
+cv_dat <- expand_grid(k_cera = exp_test$k_cera, 
+                      k_prism = exp_test$k_prism) %>%
+  mutate(cv = map2(k_cera, k_prism, fit_kfold))
+```
+
+```{r}
+cv_recons <- cv_dat %>%
+  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
+  unnest(cv) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  group_by(k_cera, k_prism, year) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            SCA = sum(covered)) %>%
+  left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
+
+range_recons <- cv_dat %>%
+  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
+                    inner_join(mountains_mask, by = c("x", "y")))) %>%
+  unnest(cv) %>%
+  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  group_by(k_cera, k_prism, name, year) %>%
+  summarise(SWE = sum(SWE * area), # units in megaliters (?)
+            SCA = sum(covered)) %>%
+  left_join(mountains_agg, by = c('year', 'name'), suffix = c('_recon', '_obs'))
+
+gc()
+```
+
+
+```{r}
+rmse_dat <- cv_recons %>%
+      summarise(SWE_rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2)),
+                SCA_rmse = sqrt(mean((SCA_obs - SCA_recon) ^ 2)))
+
+rmse_dat %>%
+  arrange(SWE_rmse)
+
+rmse_dat %>% arrange(SCA_rmse)
+```
+
+The cross validation routine selects `r rmse_dat[[1, "k_prism"]]` PRISM PCs and  `r rmse_dat[[1, "k_cera"]]` CERA PCs 
+```{r}
+rmse_dat %>%
+  ggplot(aes(k_cera, k_prism, fill = SWE_rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
+
+
+rmse_dat %>%
+  ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
+```
+
+
+```{r}
+prism_patterns <- get_patterns(prism_dat, k = 4, mask = prism_mask)
+cera_patterns <- get_patterns(cera_dat, k = 4)
+
+test <- couple_patterns(cera_patterns, prism_patterns) %>%
+  predict_patterns(cera_patterns) %>%
+  reconstruct_field(prism_patterns, .) %>%
+  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
+
+test %>%
+  group_by(x, y) %>%
+  mutate(corr = cor(SWE_recon, SWE_obs)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = corr)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+```
+
+
+```{r}
+cv_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SWE_obs)) +
+  geom_line(aes(y = SWE_recon), color = 'red')
+
+cv_recons %>%
+  filter(k_prism == 10, k_cera == 8) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SCA_obs)) +
+  geom_line(aes(y = SCA_recon), color = 'red')
+
+t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
+  gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type')) %>%
+  mutate(name = 'WESTERN US')
+
+t2 <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+   gather(type, value, SWE_recon:SCA_obs) %>%
+  separate(type, c('var', 'type'))
+
+bind_rows(t1, t2) %>%
+   ggplot(aes(year)) +
+  geom_line(aes(y = value, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_grid(name~var, scales = 'free_y') +
+  theme_bw()
+```
+
+
+```{r, fig.asp = .8}
+a <- range_recons %>%
+  filter(k_prism == 4, k_cera == 4) %>%
+  dplyr::select(-SCA_recon, -SCA_obs) %>%
+  rename(recon = SWE_recon, obs = SWE_obs) %>%
+  gather(type, SWE, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SWE, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+  facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+b <- range_recons %>%
+  filter(k_prism == 10, k_cera == 8) %>%
+  dplyr::select(-SWE_recon, -SWE_obs) %>%
+  rename(recon = SCA_recon, obs = SCA_obs) %>%
+  gather(type, SCA, recon:obs) %>%
+  ggplot(aes(year)) +
+  geom_line(aes(y = SCA, color = type)) +
+  scale_color_manual(values = c('black', 'red')) +
+    facet_wrap(~name, scales = 'free_y', ncol = 3) +
+  theme_bw()
+
+a + b + plot_annotation(tag_levels = 'A')
 ```
 
 
@@ -188,278 +458,8 @@ ggplot(mountains_agg, aes(year, SWE, color = name)) +
 
 
 
-```{r}
-cera_dat %>%
-  group_by(x, y) %>%
-  summarise(SWE = mean(SWE))%>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Reanalysis mean March SWE, 1900-2010', 'PRISM')
-```
+# PCA
 
-
-To what extent is this mismatch due to bias or scale effects? Test by resampling the observations to the CERA grid.
-
-```{r, echo = FALSE}
-mean_swe_cera <- cera_dat %>%
-  filter(year >= 1982) %>%
-  group_by(x, y) %>%
-  summarise(sim = mean(SWE))
-
-prism_resamp <- prism %>%
-  subset(1:29) %>%
-  mean %>%
-  resample(cera) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
-  rename(obs = layer)
-
-left_join(prism_resamp, mean_swe_cera, by = c('x', 'y')) %>%
-  gather(type, SWE, 3:4) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~type) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  ggtitle('Observed vs Simulated mean March SWE', '1982-2010')
-```
-
-
-Look at how SWE has varied over time and space.
-
-```{r cera_animation, echo = FALSE, warning=FALSE,cache = TRUE}
-cera_dat %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = SWE)) +
-    scale_fill_scico(palette = 'davos', direction = -1) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  ggtitle("Snow Water Equivalent", "March, {closest_state}") +
-  transition_states(year)
-```
-
-```{r, echo = FALSE}
-prism_dat %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'broc',
-                   direction = -1,
-                   limits = c(-1300, 1300)) +
-  transition_states(year) +
-  theme_void()
-
-cera_dat %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'broc',
-                   direction = -1,
-                   limits = c(-130, 130)) +
-  transition_states(year) +
-  theme_void()
-```
-
-
-
-So there's a clear bias here. As we see below, the mean of the observations is well higher than it should be. Looks like the simulation underpredicts snow -- likely because of all the small-scale topographic influences that CESM can't resolve.
-
-
-
-# Modes of Snowpack Variability
-
-## Observed Modes
-
-
-
-## Choose K
-
-setup a 5 fold cross validation experiment for selecting k.
-
-```{r}
-exp_test <- tibble(k_cera = 1:10, k_prism = 1:10) %>%
-  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
-         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
-```
-
-Define a cv function.
-```{r}
-fit_kfold <- function(k_preds, k_obs){
-  preds <- exp_test[[k_preds, "cera_patterns"]]
-  obs <- exp_test[[k_obs, "prism_patterns"]]
-
-  # prepare data frame for cross validation by dividing into k folds
-  folds <- prep_data(preds, obs) %>%
-    group_by(PC) %>%
-    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
-    ungroup()
-
-  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
-  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
-
-  map2_dfr(train, test, ~ fit_model(.x) %>% 
-                            predict_patterns(.y) %>% 
-                            reconstruct_field(obs, .))
-}
-```
-
-```{r}
-cv_dat <- expand_grid(k_cera = exp_test$k_cera, 
-                      k_prism = exp_test$k_prism) %>%
-  mutate(cv = map2(k_cera, k_prism, fit_kfold))
-```
-
-```{r}
-cv_recons <- cv_dat %>%
-  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
-  unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
-  group_by(k_cera, k_prism, year) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            SCA = sum(covered)) %>%
-  left_join(obs_agg, by = 'year', suffix = c('_recon', '_obs'))
-
-range_recons <- cv_dat %>%
-  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
-                    inner_join(mountains_mask, by = c("x", "y")))) %>%
-  unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
-  group_by(k_cera, k_prism, name, year) %>%
-  summarise(SWE = sum(SWE * area), # units in megaliters (?)
-            SCA = sum(covered)) %>%
-  left_join(mountains_agg, by = c('year', 'name'), suffix = c('_recon', '_obs'))
-
-gc()
-```
-
-
-```{r}
-cv_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SWE_obs)) +
-  geom_line(aes(y = SWE_recon), color = 'red')
-
-cv_recons %>%
-  filter(k_prism == 10, k_cera == 8) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SCA_obs)) +
-  geom_line(aes(y = SCA_recon), color = 'red')
-
-t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
-  gather(type, value, SWE_recon:SCA_obs) %>%
-  separate(type, c('var', 'type')) %>%
-  mutate(name = 'WESTERN US')
-
-t2 <- range_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-   gather(type, value, SWE_recon:SCA_obs) %>%
-  separate(type, c('var', 'type'))
-
-bind_rows(t1, t2) %>%
-   ggplot(aes(year)) +
-  geom_line(aes(y = value, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-    facet_grid(name~var, scales = 'free_y') +
-  theme_bw()
-```
-
-
-```{r, fig.asp = .8}
-a <- range_recons %>%
-  filter(k_prism == 4, k_cera == 4) %>%
-  dplyr::select(-SCA_recon, -SCA_obs) %>%
-  rename(recon = SWE_recon, obs = SWE_obs) %>%
-  gather(type, SWE, recon:obs) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SWE, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-  facet_wrap(~name, scales = 'free_y', ncol = 3) +
-  theme_bw()
-
-b <- range_recons %>%
-  filter(k_prism == 10, k_cera == 8) %>%
-  dplyr::select(-SWE_recon, -SWE_obs) %>%
-  rename(recon = SCA_recon, obs = SCA_obs) %>%
-  gather(type, SCA, recon:obs) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = SCA, color = type)) +
-  scale_color_manual(values = c('black', 'red')) +
-    facet_wrap(~name, scales = 'free_y', ncol = 3) +
-  theme_bw()
-
-a + b + plot_annotation(tag_levels = 'A')
-```
-
-
-```{r}
-rmse_dat <- cv_recons %>%
-      summarise(SWE_rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2)),
-                SCA_rmse = sqrt(mean((SCA_obs - SCA_recon) ^ 2)))
-
-rmse_dat %>%
-  arrange(SWE_rmse)
-
-rmse_dat %>% arrange(SCA_rmse)
-```
-
-The cross validation routine selects `r rmse_dat[[1, "k_prism"]]` PRISM PCs and  `r rmse_dat[[1, "k_cera"]]` CERA PCs 
-```{r}
-rmse_dat %>%
-  ggplot(aes(k_cera, k_prism, fill = SWE_rmse)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_equal() +
-  theme_minimal()
-
-
-rmse_dat %>%
-  ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_equal() +
-  theme_minimal()
-```
-
-
-```{r}
-prism_patterns <- get_patterns(prism_dat, k = 4, mask = prism_mask)
-cera_patterns <- get_patterns(cera_dat, k = 4)
-
-test <- couple_patterns(cera_patterns, prism_patterns) %>%
-  predict_patterns(cera_patterns) %>%
-  reconstruct_field(prism_patterns, .) %>%
-  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
-
-test %>%
-  group_by(x, y) %>%
-  mutate(corr = cor(SWE_recon, SWE_obs)) %>%
-   ggplot() +
-      geom_raster(aes(x, y, fill = corr)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-```
-
-
-### PCA
-
-Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
-
-```{r, fig.asp = 0.75, echo = FALSE}
-prism_dat %>% 
-    semi_join(prism_mask) %>%
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(4)
-```
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
