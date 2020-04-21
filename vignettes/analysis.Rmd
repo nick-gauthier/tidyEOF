@@ -199,8 +199,27 @@ f <- cera_dat %>%
 e + f
 ```
 
+```{r}
+dof_p <- prism_dat %>% 
+    semi_join(prism_mask, by = c('x', 'y')) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>%
+  pull(eigenvalues)
 
-### Choosing K
+sum(dof_p)^2 / sum(dof_p^2) # from bretheron et al 1999
+
+dof_c <- cera_dat %>% 
+    semi_join(cera_mask, by = c('x', 'y')) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>%
+  pull(eigenvalues)
+
+sum(dof_c)^2 / sum(dof_c^2) # from bretheron et al 1999
+```
+
+Looks like there are ~4 spatial degrees of freedom in the data
+
+### Pre-filtering and cross-validation
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
