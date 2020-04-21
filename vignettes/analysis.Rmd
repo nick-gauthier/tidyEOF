@@ -436,6 +436,15 @@ plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2)
 plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
 ```
 
+Are the PCs normal? Yes
+```{r}
+prism_patterns$amplitudes %>%
+  group_by(PC) %>%
+  nest() %>% 
+  pull(data) %>%
+  map(~shapiro.test(c(.$amplitude)))
+```
+
 Plot the eofs. 
 ```{r echo = FALSE, fig.asp = 1}
 plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
