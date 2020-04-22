@@ -256,6 +256,7 @@ cv_dat <- expand_grid(k_cera = exp_test$k_cera,
   mutate(cv = map2(k_cera, k_prism, fit_kfold))
 ```
 
+#### Domain averages
 ```{r}
 wus_stats <- prism_dat %>%
   filter(SWE > 0) %>%
@@ -400,6 +401,54 @@ bind_rows(t1, t2) %>%
   theme_bw()
 ```
 
+#### Spatially-explicit perfomance
+```{r}
+
+```
+
+
+```{r, warning = FALSE, fig.width = 10, fig.asp = 1}
+get_corr_map<- function(x) {
+  x %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))%>%
+  group_by(x, y) %>%
+  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
+  ungroup()
+}
+
+get_rmsss
+
+cor_map <- cv_dat %>%
+  mutate(corr_map = map(cv, get_corr_map)) %>%
+  dplyr::select(-cv) %>%
+  mutate(corr_sum = map_dbl(corr_map, ~summarise(., corr = sum(corr > 0.3, na.rm = TRUE)) %>% pull)) %>%
+  mutate(corr_mean = map_dbl(corr_map, ~summarise(., corr = mean(corr, na.rm = TRUE)) %>% pull)) %>%
+    arrange(-corr_sum)
+
+ggplot(cor_map, aes(k_cera, k_prism, fill = corr_sum)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  coord_equal() +
+  theme_minimal()
+
+ggplot(cor_map, aes(k_cera, k_prism, fill = corr_mean)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  coord_equal() +
+  theme_minimal()
+
+
+cor_map %>%
+  unnest(corr_map) %>%
+ggplot() +
+      geom_raster(aes(x, y, fill = corr)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+  facet_grid(k_prism~k_cera) +
+      theme_void()
+```
+
+
 ## EOFs
 
 So let's stick with the 4 and 4 solution, and investigate those patterns more. 
@@ -414,21 +463,6 @@ prism_patterns <- get_patterns(prism_dat, k = nmodes, mask = prism_mask)
 cera_patterns <- get_patterns(cera_dat, k = nmodes, mask = cera_mask)
 ```
 
-```{r}
-test <- couple_patterns(cera_patterns, prism_patterns) %>%
-  predict_patterns(cera_patterns) %>%
-  reconstruct_field(prism_patterns, .) %>%
-  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
-
-test %>%
-  group_by(x, y) %>%
-  mutate(corr = cor(SWE_recon, SWE_obs)) %>%
-   ggplot() +
-      geom_raster(aes(x, y, fill = corr)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-```
 
 
 ```{r, echo = FALSE}
@@ -442,7 +476,7 @@ prism_patterns$amplitudes %>%
   group_by(PC) %>%
   nest() %>% 
   pull(data) %>%
-  map(~shapiro.test(c(.$amplitude)))
+  map_dbl(~shapiro.test(c(.$amplitude))$p)
 ```
 
 Plot the eofs. 
@@ -481,18 +515,80 @@ extreme_years <- prism_patterns$amplitudes %>%
 prism_recon <- reconstruct_field(prism_patterns)
 ```
 
+look at the mean and standard deviation of the unexplained variance.
+```{r}
+prism_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  mutate(residuals = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(residuals),
+            stdev = sd(residuals)) %>%
+    ggplot() +
+  geom_raster(aes(x, y, fill = avg)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+
+prism_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  mutate(residuals = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(residuals),
+            stdev = sd(residuals)) %>%
+    ggplot() +
+  geom_raster(aes(x, y, fill = stdev)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
+Is it normal?
+
+
+```{r}
+prism_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  mutate(residuals = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  summarise(p = shapiro.test(residuals)$p) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = p < 0.05)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
 
 ```{r}
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
   group_by(x, y) %>%
-  summarise(error = sqrt(mean((SWE_obs - SWE_recon) ^ 2))) %>% 
+  summarise(rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2, na.rm = TRUE))) %>% 
   ggplot() +
-  geom_raster(aes(x, y, fill = error)) +
+  geom_raster(aes(x, y, fill = rmse)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   scale_fill_viridis_c(name = 'RMSE') +
   ggtitle('Error from dimensionality reduction', 'PRISM')
+
+
+
+prism_recon %>%
+  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+  group_by(x, y) %>%
+  summarise(rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2, na.rm = TRUE)),
+            sd = sd(SWE_obs),
+            srmse = rmse / sd) %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = srmse)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c(limits = c(0, 1)) +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+
 
 prism_recon %>%
   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
@@ -503,6 +599,115 @@ prism_recon %>%
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   scale_fill_viridis_c(name = 'Correlation')
+```
+
+
+
+```{r}
+test <- couple_patterns(cera_patterns, prism_patterns) %>%
+  predict_patterns(cera_patterns) %>%
+  reconstruct_field(prism_patterns, .) %>%
+  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
+
+test %>%
+  group_by(x, y) %>%
+  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = corr)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+
+test %>%
+   left_join(areas, by = c("x", "y")) %>%
+  group_by(x, y) %>%
+  summarise(rmse = sqrt(mean((SWE_recon - SWE_obs)^2, na.rm = TRUE)),
+            area = mean(area)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = rmse * area * .001)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+
+## values greater than one here would be better represented by a random normal draw, i.e. it is the ratio of the variation unexplained by the regression to the total variance
+test %>%
+   left_join(areas, by = c("x", "y")) %>%
+  inner_join(prism_patterns$climatology) %>%
+  group_by(x, y) %>%
+  summarise(rmse = sqrt(mean((SWE_recon - SWE_obs)^2, na.rm = TRUE)),
+            mae = mean(abs(SWE_recon - SWE_obs)),
+            area = mean(area),
+            sd = mean(swe_sd),
+            pbias = sum(SWE_recon - SWE_obs) / sum(SWE_obs) * 100,
+            srmse = rmse/sd) %>% # aka rsr
+   ggplot() +
+      geom_raster(aes(x, y, fill = srmse)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+
+
+   ggplot(prism_patterns$climatology) +
+      geom_raster(aes(x, y, fill = swe_sd)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+   
+test %>%
+     group_by(x, y) %>%
+  mutate(SWE_recon = if_else(SWE_recon < 5, 0, SWE_recon),
+         SWE_obs = if_else(SWE_obs < 5, 0, SWE_obs)) %>%
+     summarise(xbar = mean(SWE_obs),
+               mse = mean((SWE_recon - SWE_obs)^2, na.rm = TRUE),
+               mse_clim = sum((SWE_obs - xbar)^2, na.rm = TRUE) * (1 / (n() - 1)) * ((n() - 1) / n()),
+               msss = 1 - mse / mse_clim,
+               rmse = sqrt(mse),
+               rmse_cv = rmse / xbar) %>% 
+        ggplot() +
+      geom_raster(aes(x, y, fill = msss)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+```
+
+The 4 pc model underpredicts snow in areas with very low accumulation, which makes sense because of the use of the covariance matrix earlier.
+```{r}
+test %>%
+     group_by(x, y) %>%
+      summarise(obs = all(SWE_obs < 0.05),
+             recon = all(SWE_recon < 0.05)) %>%
+  gather(test, value, obs:recon) %>%
+        ggplot() +
+      geom_raster(aes(x, y, fill = value)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~test) +
+      scale_fill_viridis_d() +
+      theme_void()
+```
+
+```{r}
+
+test %>%
+     mutate(error = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(error),
+            std = sd(error)) %>%
+        ggplot() +
+      geom_raster(aes(x, y, fill = avg)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_distiller(palette = 'RdBu', limits = c(-120, 120)) +
+      theme_void()
+
+test %>%
+     mutate(error = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(error),
+            std = sd(error)) %>%
+        ggplot() +
+      geom_raster(aes(x, y, fill = avg)) + # gigaliters?
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_distiller(palette = 'RdBu', limits = c(-120, 120)) +
+      theme_void()
 ```
 
 ## Trends
