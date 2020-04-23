@@ -229,27 +229,6 @@ exp_test <- tibble(k_cera = 1:9, k_prism = 1:9) %>%
          prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = ., mask = prism_mask)))
 ```
 
-Define a cv function.
-```{r}
-fit_kfold <- function(k_preds, k_obs){
-  preds <- exp_test[[k_preds, "cera_patterns"]][[1]]
-  obs <- exp_test[[k_obs, "prism_patterns"]][[1]]
-
-  # prepare data frame for cross validation by dividing into k folds
-  folds <- prep_data(preds, obs) %>%
-    group_by(PC) %>%
-    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
-    ungroup()
-
-  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
-  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
-
-  map2_dfr(train, test, ~ fit_model(.x) %>% 
-                            predict_patterns(.y) %>% 
-                            reconstruct_field(obs, .))
-}
-```
-
 ```{r}
 cv_dat <- expand_grid(k_cera = exp_test$k_cera, 
                       k_prism = exp_test$k_prism) %>%
@@ -401,8 +380,108 @@ bind_rows(t1, t2) %>%
   theme_bw()
 ```
 
-#### Spatially-explicit perfomance
+#### Local error
 ```{r}
+scores <- cv_dat %>%
+  mutate(errors = map(cv, get_errors),
+        score_map = map(errors, ~group_by(., x,y) %>% get_scores),
+         score_ts = map(errors, ~group_by(., year) %>% get_scores)) %>%
+  dplyr::select(-cv, -errors)
+```
+
+time
+```{r, fig.width=15}
+scores %>% mutate(k = interaction(k_prism, k_cera)) %>%
+  dplyr::select(k, score_ts) %>%
+  unnest(score_ts) %>%
+  gather(metric, value, me:rmsle) %>%
+  ggplot(aes(year, value)) +
+  geom_line(aes(color = k), alpha = .5) +
+  facet_wrap(~metric, scales = 'free_y') +
+  scale_color_viridis_d() +
+  theme_bw() +
+  theme(legend.position = 'hide')
+```
+
+```{r}
+scores %>% mutate(k = interaction(k_prism, k_cera)) %>%
+  dplyr::select(k, score_ts) %>%
+  unnest(score_ts) %>%
+  dplyr::select(k, mdsa, year) %>%
+  ggplot(aes(year, mdsa)) +
+  geom_line(aes(color = k)) +
+  scale_color_viridis_d() +
+  theme_bw()
+```
+
+```{r}
+plot_fun1 <- function(x, name) {
+  ggplot(x, aes(k_cera, k_prism, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1, name = name) +
+  coord_equal() +
+  theme_minimal()
+}
+tmp1 <- scores %>%
+  dplyr::select(k_prism, k_cera, score_ts) %>%
+  unnest(score_ts) %>%
+  group_by(k_prism, k_cera) %>%
+  summarise_at(vars(me:rmsle), mean) %>%
+  gather(metric, value, me:rmsle) %>%
+group_by(metric) %>%
+  nest %>%
+  mutate(plots = map2(data, metric, plot_fun1))
+
+tmp1$plots
+```
+
+space 
+
+```{r}
+scores %>%
+  dplyr::select(k_prism, k_cera, score_map) %>%
+  unnest(score_map) %>%
+  dplyr::select(k_prism:y, mdsa, srmse) %>%
+  ggplot() +
+      geom_raster(aes(x, y, fill = mdsa)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+  facet_grid(k_prism~k_cera) +
+      theme_void()
+  group_by(k_prism, k_cera) %>%
+  summarise_at(vars(mdsa, srmse), mean, na.rm = TRUE) %>%
+  arrange(mdsa, srmse)
+```
+
+```{r}
+skill_test <- skill_map %>%
+  # add area weighting here
+  mutate(rmse_avg = map_dbl(skill_map, ~summarise(., rmse = mean(rmse, na.rm = TRUE)) %>% pull),
+         srmse_avg = map_dbl(skill_map, ~summarise(., srmse = mean(srmse, na.rm = TRUE)) %>% pull),
+         srmse_sum = map_dbl(skill_map, ~summarise(., srmse_sum = sum(srmse > .8, na.rm= TRUE)) %>% pull)) %>%
+  dplyr::select(-skill_map)
+
+arrange(skill_test, rmse_avg)
+arrange(skill_test, srmse_avg)
+arrange(skill_test, srmse_sum)
+
+ggplot(skill_test, aes(k_cera, k_prism, fill = rmse_avg)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
+
+ggplot(skill_test, aes(k_cera, k_prism, fill = srmse_avg)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
+
+ggplot(skill_test, aes(k_cera, k_prism, fill = srmse_sum)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_equal() +
+  theme_minimal()
 
 ```
 
@@ -415,8 +494,6 @@ get_corr_map<- function(x) {
   summarise(corr = cor(SWE_recon, SWE_obs)) %>%
   ungroup()
 }
-
-get_rmsss
 
 cor_map <- cv_dat %>%
   mutate(corr_map = map(cv, get_corr_map)) %>%
@@ -517,40 +594,54 @@ prism_recon <- reconstruct_field(prism_patterns)
 
 look at the mean and standard deviation of the unexplained variance.
 ```{r}
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  mutate(residuals = SWE_recon - SWE_obs) %>%
-  group_by(x, y) %>%
-  summarise(avg = mean(residuals),
-            stdev = sd(residuals)) %>%
-    ggplot() +
-  geom_raster(aes(x, y, fill = avg)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c() +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
+resid <- prism_recon %>%
+   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    mutate(error = SWE_recon - SWE_obs) 
 
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  mutate(residuals = SWE_recon - SWE_obs) %>%
+resid %>%
   group_by(x, y) %>%
-  summarise(avg = mean(residuals),
-            stdev = sd(residuals)) %>%
+  summarise(avg = mean(error),
+            stdev = sd(error)) %>%
     ggplot() +
-  geom_raster(aes(x, y, fill = stdev)) +
+  geom_raster(aes(x, y, fill = avg/stdev)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
   scale_fill_viridis_c() +
   ggtitle('Error from dimensionality reduction', 'PRISM')
 ```
 
+```{r}
+prism_recon %>%
+   get_errors %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(accuracy_ratio)) %>%
+    ggplot() +
+  geom_raster(aes(x, y, fill = avg)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
+```{r}
+resid %>%
+  ggplot(aes(SWE_obs, SWE_recon)) +
+  geom_point(alpha = .1) +
+  geom_smooth() +
+  theme_bw()
+
+resid %>%
+  ggplot(aes(SWE_obs, std_resid, color = year)) +
+  geom_point(alpha = 0.1) +
+  theme_bw()
+```
+
+
 Is it normal?
 
 
 ```{r}
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  mutate(residuals = SWE_recon - SWE_obs) %>%
+resid %>%
   group_by(x, y) %>%
   summarise(p = shapiro.test(residuals)$p) %>%
   ggplot() +
@@ -563,44 +654,84 @@ prism_recon %>%
 
 
 ```{r}
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+score_map <- prism_recon %>%
+  get_errors() %>%
   group_by(x, y) %>%
-  summarise(rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2, na.rm = TRUE))) %>% 
-  ggplot() +
-  geom_raster(aes(x, y, fill = rmse)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c(name = 'RMSE') +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
+  get_scores()
 
-
-
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  group_by(x, y) %>%
-  summarise(rmse = sqrt(mean((SWE_obs - SWE_recon) ^ 2, na.rm = TRUE)),
-            sd = sd(SWE_obs),
-            srmse = rmse / sd) %>% 
-  ggplot() +
-  geom_raster(aes(x, y, fill = srmse)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c(limits = c(0, 1)) +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-
-
-prism_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-  group_by(x, y) %>%
-  summarise(corr = cor(SWE_obs, SWE_recon)) %>% 
-  ggplot() +
-  geom_raster(aes(x, y, fill = corr)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c(name = 'Correlation')
+score_ts <- prism_recon %>%
+  get_errors() %>%
+  group_by(year) %>%
+  get_scores()
 ```
 
+
+```{r, fig.width = 10}
+score_ts %>%
+  gather(metric, value, me:rmsle) %>%
+  ggplot(aes(year, value)) +
+  geom_line() +
+  facet_wrap(~metric, scales = 'free_y') +
+  theme_bw()
+```
+
+
+```{r}
+  
+  plot_fun <- function(x, name) {
+      ggplot(x) +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c(name = name)
+  }
+
+tmp <- score_map %>%
+gather(metric, value, me:rmsle) %>%
+group_by(metric) %>%
+  nest %>%
+  mutate(plots = map2(data, metric, plot_fun))
+  gridExtra::grid.arrange(grobs = tmp$plots)
+  
+  tmp$plots
+```
+
+
+```{r}
+prism_recon %>%
+    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    mutate(SWE_recon = if_else(SWE_recon < .03, .03, SWE_recon),
+           SWE_obs = if_else(SWE_obs < .03, .03, SWE_obs),
+           error = SWE_recon - SWE_obs,
+           relative_error = error / SWE_obs,
+           accuracy_ratio = SWE_recon / SWE_obs,
+           log_q = log(accuracy_ratio)) %>%
+  group_by(x,y) %>%
+  get_scores() %>%
+  dplyr::select(x,y, mdsa) %>%
+        ggplot() +
+  geom_raster(aes(x, y, fill = mdsa)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c()
+
+prism_recon %>%
+    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    mutate(SWE_recon = if_else(SWE_recon < .03, .03, SWE_recon),
+           SWE_obs = if_else(SWE_obs < .03, .03, SWE_obs),
+           error = SWE_recon - SWE_obs,
+           relative_error = error / SWE_obs,
+           accuracy_ratio = SWE_recon / SWE_obs,
+           log_q = log(accuracy_ratio)) %>%
+  group_by(x,y) %>%
+  get_scores() %>%
+  dplyr::select(x,y, sspb) %>%
+        ggplot() +
+  geom_raster(aes(x, y, fill = sspb)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c()
+```
 
 
 ```{r}
@@ -639,9 +770,10 @@ test %>%
             area = mean(area),
             sd = mean(swe_sd),
             pbias = sum(SWE_recon - SWE_obs) / sum(SWE_obs) * 100,
-            srmse = rmse/sd) %>% # aka rsr
+            srmse = rmse/sd,
+                        rmsle = sqrt(mean((log(SWE_recon + 1) - log(SWE_obs + 1))^2, na.rm = TRUE))) %>%
    ggplot() +
-      geom_raster(aes(x, y, fill = srmse)) + # gigaliters?
+      geom_raster(aes(x, y, fill = rmsle)) + # gigaliters?
       geom_sf(data = states_wus, fill = NA, color = 'black') +
       scale_fill_viridis_c() +
       theme_void()

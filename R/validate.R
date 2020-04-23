@@ -19,8 +19,8 @@ fit_kfold <- function(k_preds, k_obs){
 get_errors <- function(x) {
   x %>%
     left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(SWE_recon = if_else(SWE_recon < 0.01, 0.01, SWE_recon),
-           SWE_obs = if_else(SWE_obs < 0.01, 0.01, SWE_obs),
+    mutate(SWE_recon = if_else(SWE_recon < 0.03, 0.03, SWE_recon),
+           SWE_obs = if_else(SWE_obs < 0.03, 0.03, SWE_obs),
            error = SWE_recon - SWE_obs,
            relative_error = error / SWE_obs,
            accuracy_ratio = SWE_recon / SWE_obs,
@@ -45,5 +45,6 @@ get_scores <- function(x) {
               mdsa = 100 * (exp(median(abs(log_q))) - 1), # median symmetric accuracy
               sspb = 100 * sign(median(log_q)) * (exp(abs(median(log_q))) - 1),
               rmsle = sqrt(mean(log(SWE_obs / SWE_recon)^2))) %>%
-    ungroup()
+    ungroup() %>%
+    dplyr::select(-xbar, -sd, -mse_clim)
 }
