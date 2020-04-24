@@ -242,7 +242,8 @@ wus_stats <- prism_dat %>%
   left_join(areas, by = c("x", "y")) %>%
   semi_join(prism_mask, by = c("x", "y")) %>%
   group_by(year) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+  #mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
+    mutate(covered = pmin(1, SWE / 3)) %>% # linear decline below 3mm
   summarise(SWE = sum(SWE * area), # units in megaliters (?)
             SCA = sum(covered))
 
@@ -251,7 +252,8 @@ mountains_stats <- prism_dat %>%
   left_join(areas, by = c("x", "y")) %>%
   inner_join(mountains_mask, by = c("x", "y")) %>%
   group_by(year, name) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+ # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+  mutate(covered = pmin(1, SWE / 3)) %>%
   summarise(SWE = sum(SWE * area), 
             SCA = sum(covered))
 ```
@@ -260,7 +262,8 @@ mountains_stats <- prism_dat %>%
 cv_recons <- cv_dat %>%
   mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
   unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+ # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+      mutate(covered = pmin(1, SWE / 3)) %>% # linear decline below 3mm
   group_by(k_cera, k_prism, year) %>%
   summarise(SWE = sum(SWE * area), 
             SCA = sum(covered)) %>%
@@ -272,7 +275,8 @@ range_recons <- cv_dat %>%
   mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
                     inner_join(mountains_mask, by = c("x", "y")))) %>%
   unnest(cv) %>%
-  mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+ # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
+      mutate(covered = pmin(1, SWE / 3)) %>% # linear decline below 3mm
   group_by(k_cera, k_prism, name, year) %>%
   summarise(SWE = sum(SWE * area),
             SCA = sum(covered)) %>%
