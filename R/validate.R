@@ -18,7 +18,7 @@ fit_kfold <- function(k_preds, k_obs){
 
 get_errors <- function(x) {
   x %>%
-    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
     mutate(SWE_recon = if_else(SWE_recon < 0.03, 0.03, SWE_recon),
            SWE_obs = if_else(SWE_obs < 0.03, 0.03, SWE_obs),
            error = SWE_recon - SWE_obs,
