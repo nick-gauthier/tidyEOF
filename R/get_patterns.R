@@ -9,9 +9,7 @@
 #' @examples
 #'
 
-get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = FALSE){
-
-  if(!is.null(mask)) dat <- semi_join(dat, mask, by = c("x", "y"))
+get_patterns <- function(dat, k, scale = FALSE, rotate = FALSE){
 
   climatology <- get_climatology(dat)
   pca <- get_pcs(dat, scale = scale)
@@ -30,8 +28,7 @@ get_patterns <- function(dat, k, mask = NULL, scale = FALSE, rotate = FALSE){
     mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpetable
     full_join(dat, by = 'year') %>%
     group_by(x, y, PC) %>%
-    summarise(correlation = cor(amplitude, SWE)) %>%
-    {if(!is.null(mask)) semi_join(., mask, by = c("x", "y")) else .}
+    summarise(correlation = cor(amplitude, SWE))
 
   patterns <- list(eofs = eofs$eofs,
                    eofs_corr = eofs_corr,
