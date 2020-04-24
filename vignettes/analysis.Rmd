@@ -71,6 +71,77 @@ b <- cera_dat %>%
 a + b + plot_annotation(tag_levels = 'A')
 ```
 
+When were the max and min SWE years?
+```{r}
+prism_dat %>%
+  group_by(x,y) %>%
+  filter(SWE == max(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = year)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+prism_dat %>%
+  group_by(x,y) %>%
+  filter(SWE == min(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = year)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+     scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+```
+
+Where are the snowy pixels?
+```{r}
+prism_dat %>%
+  group_by(x,y) %>%
+  summarise(median_swe = median(SWE)) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = median_swe > 3)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_viridis_d() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+```
+
+
+```{r}
+prism_dat %>%
+  ggplot(aes((SWE))) +
+  geom_histogram()
+
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(kurt =  e1071::kurtosis(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = kurt > 3)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(skew =  e1071::skewness(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = skew)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+  
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(p = shapiro.test(log(SWE + 1))$p) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = p < 0.05)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d() +
+```
+
 ```{r}
 a <- prism_dat %>%
   get_climatology() %>%
@@ -153,19 +224,18 @@ Run a principal components analysis. Get the eigenvalues, and run some truncatio
 e <- prism_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(NA)
+  plot_scree(4)
 
 f <- cera_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(NA)
+  plot_scree(4)
 
 e + f
 ```
 
 ```{r}
 dof_p <- prism_dat %>% 
-  
   get_pcs() %>%
   get_eigenvalues() %>%
   pull(eigenvalues)
@@ -181,6 +251,569 @@ sum(dof_c)^2 / sum(dof_c^2) # from bretheron et al 1999
 ```
 
 Looks like there are ~4 spatial degrees of freedom in the data
+
+## EOFs
+
+So let's stick with the 4 and 4 solution, and investigate those patterns more. 
+Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
+
+```{r}
+n_modes <- 4
+```
+
+```{r}
+prism_patterns <- get_patterns(prism_dat, k = n_modes)
+cera_patterns <- get_patterns(cera_dat, k = n_modes)
+```
+
+
+```{r, echo = FALSE}
+plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2) 
+plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
+```
+
+Are the PCs normal? Yes
+```{r}
+cera_patterns$amplitudes %>%
+  group_by(PC) %>%
+  nest() %>% 
+  pull(data) %>%
+  map_dbl(~shapiro.test(c(.$amplitude))$p)
+prism_patterns$amplitudes %>%
+  group_by(PC) %>%
+  nest() %>% 
+  pull(data) %>%
+  map_dbl(~shapiro.test(c(.$amplitude))$p)
+
+cera_patterns$amplitudes %>%
+  ggplot(aes(amplitude)) +
+  geom_density() +
+  facet_wrap(~PC)
+prism_patterns$amplitudes %>%
+  ggplot(aes(amplitude)) +
+  geom_density() +
+  facet_wrap(~PC)
+```
+
+Plot the eofs. 
+```{r echo = FALSE, fig.asp = 1}
+plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
+plot_eofs(cera_patterns, 'vik', scaled = FALSE)
+plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
+plot_eofs(cera_patterns, 'vik', scaled = TRUE)
+```
+
+```{r}
+# For each PC amplitude time series, plot out the wettest and driest years from the observations.
+# From this we can tell that pc1 and 2 need to reverse signs to be physically consistent
+extreme_years <- prism_patterns$amplitudes %>%
+  group_by(PC) %>%
+  filter(amplitude == max(amplitude) | amplitude == min(amplitude)) %>%
+  pull(year)
+
+(prism - mean(prism)) %>%
+  .[[extreme_years - 1981]] %>%
+  setNames(extreme_years) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  gather(year, swe, 3:10) %>%
+  mutate(year = factor(year, levels = paste0('X', extreme_years))) %>%
+  ggplot(aes(x, y, fill = swe)) +
+  geom_raster() +
+  facet_wrap(~year) +
+  coord_quickmap() +
+  scale_fill_distiller(palette = 'BrBG', direction = 1, limits = c(-1500, 1500)) +
+  theme_void()
+```
+
+## Internal variability
+
+```{r, fig.asp = .9}
+prism_recon <- reconstruct_field(prism_patterns)
+```
+
+look at the mean and standard deviation of the unexplained variance. We're only focusing on "snowy pixels" where the median is > 3mm
+```{r}
+resids <- prism_recon %>%
+   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    mutate(error = SWE_recon - SWE_obs) %>%
+  group_by(x, y) %>%
+  filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  ungroup()
+
+resids %>%
+  group_by(x, y) %>%
+  summarise(avg = mean(error),
+            stdev = sd(error)) %>%
+    ggplot() +
+  geom_raster(aes(x, y, fill = avg)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
+```{r}
+prism_recon %>%
+   get_errors %>%
+  group_by(x, y) %>%
+   # filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  summarise(avg = mean(accuracy_ratio)) %>%
+    ggplot() +
+  geom_raster(aes(x, y, fill = avg)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
+Differences in snowy pixels. in general, by truncating at 4, we slightly overestimate the amount of snowy pixels.
+```{r}
+prism_recon %>%
+   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))%>%
+  group_by(x, y) %>%
+  summarise(rec_med = median(SWE_recon),
+            obs_med = median(SWE_obs)) %>%
+  mutate(obs_snowy = obs_med > 3,
+         rec_snowy = rec_med > 3,
+         agreed = case_when(obs_snowy == rec_snowy & obs_snowy == TRUE ~'True positive',
+                            obs_snowy == rec_snowy & obs_snowy == FALSE ~'True negative',
+                            obs_snowy != rec_snowy & obs_snowy == TRUE ~'False negative',
+                            obs_snowy != rec_snowy & obs_snowy == FALSE ~ 'False positive')) %>%
+      ggplot() +
+  geom_raster(aes(x, y, fill = agreed)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d()
+```
+
+
+Look here, the observations have some extremely (suspect?) high values -- noise that the pca removes? or real?
+```{r}
+resids %>%
+  ggplot(aes(SWE_obs, SWE_recon)) +
+  geom_point(alpha = .1) +
+  geom_smooth() +
+  theme_bw()
+
+resids %>%
+  ggplot(aes(error)) +
+  geom_histogram() +
+  theme_bw()
+
+resids %>% group_by(x, y) %>%
+  filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  ggplot(aes(error)) +
+  geom_histogram() +
+  theme_bw()
+```
+
+```{r}
+resids %>%
+  arrange(error)
+```
+
+
+Is it normal?
+
+
+```{r}
+resids %>%
+  group_by(x, y) %>%
+  summarise(p = shapiro.test(error)$p) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = p < 0.05)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d() +
+  ggtitle('Error from dimensionality reduction', 'PRISM')
+```
+
+
+```{r}
+score_map <- prism_recon %>%
+  get_errors() %>%
+  group_by(x, y) %>%
+  get_scores()
+
+score_ts <- prism_recon %>%
+  get_errors() %>%
+    group_by(x, y) %>%
+    filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  ungroup() %>%
+  group_by(year) %>%
+  get_scores()
+```
+
+
+```{r, fig.width = 10}
+score_ts %>%
+  gather(metric, value, me:rmsle) %>%
+  ggplot(aes(year, value)) +
+  geom_line() +
+  facet_wrap(~metric, scales = 'free_y') +
+  theme_bw()
+```
+
+
+```{r}
+  plot_fun <- function(x, name) {
+      ggplot(x) +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_c(name = name)
+  }
+
+tmp <- score_map %>%
+gather(metric, value, me:rmsle) %>%
+group_by(metric) %>%
+  nest %>%
+  mutate(plots = map2(data, metric, plot_fun))
+tmp$plots
+```
+
+```{r}
+score_map %>%
+      ggplot() +
+  geom_raster(aes(x, y, fill = srmse < .7)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d()
+```
+
+
+## Trends
+
+Are there any trends?
+
+```{r}
+trends_mod <- prism_patterns$amplitudes %>%
+  mutate(PC = paste0('PC', PC)) %>% 
+  group_by(PC) %>%
+  nest() %>%
+  mutate(mod = map(data, ~gam(amplitude ~ 
+                                s(year, k = 4), 
+                              data = ., 
+                              method = 'REML', 
+                              select = TRUE))) %>%
+  mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
+  mutate(data = map2(data, mod, add_predictions),
+         data = map2(data, mod, add_residuals)) 
+
+walk(trends_mod$mod, plot)
+```
+
+```{r}
+
+test <- prism_dat %>%
+  group_by(x, y) %>%
+  nest() %>%
+  mutate(mod = map(data, ~lm(SWE ~ year, data = .) %>% broom::tidy())) %>%
+  dplyr::select(-data) %>%
+  unnest %>%
+  filter(term == 'year')
+
+
+test %>%
+   ggplot() +
+    geom_raster(aes(x, y, fill = estimate)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_distiller(palette = 'RdBu')
+
+
+test %>%
+   ggplot() +
+    geom_raster(aes(x, y, fill = p.value < .05)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() 
+```
+
+
+# Coupled Pattern Analysis
+
+First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
+
+## GAM
+
+Let's look under the hood of what the GAM models above were doing.
+```{r}
+gam_mod <- couple_patterns(cera_patterns, prism_patterns)
+```
+
+```{r}
+walk(gam_mod$model$mod, plot)
+```
+
+How do the models perform?
+```{r}
+gam_mod$model %>%
+  dplyr::select(PC, r2) %>%
+  arrange(-r2)
+```
+
+Are the residuals autocorrelated? Some are
+```{r}
+gam_mod$data %>%
+  group_by(PC) %>%
+  summarise(autocor = cor(resid, lag(resid), use = 'pairwise.complete.obs')) %>%
+  arrange(-abs(autocor))
+```
+
+```{r}
+ggplot(gam_mod$data, aes(resid)) +
+  #geom_histogram() + 
+  geom_density(fill = NA) +
+  geom_vline(xintercept = 0, color = 'red', linetype = 2) +
+  facet_wrap(~PC) +
+  theme_bw()
+```
+
+```{r}
+gam_recon <- predict_patterns(gam_mod, cera_patterns) %>%
+  reconstruct_field(prism_patterns, .)
+
+gam_score_map <- prism_recon %>%
+  get_errors() %>%
+  group_by(x, y) %>%
+  get_scores()
+```
+
+
+```{r}
+gam_recon %>%
+  group_by(x, y) %>%
+  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = corr)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+```
+
+```{r}
+
+ggplot(gam_score_map ) +
+      geom_raster(aes(x, y, fill = srmse < .7)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_d() +
+      theme_void()
+```
+
+```{r}
+knitr::knit_exit()
+```
+
+## CCA
+
+```{r}
+t1 <- prism_patterns$amplitudes %>%
+  filter(year <= 2010) %>%
+  spread(PC, amplitude) %>%
+  dplyr::select(-year) %>%
+  as.matrix() %>%
+  scale()
+
+t2 <- cera_patterns$amplitudes %>%
+  filter(year >= 1982) %>% 
+    spread(PC, amplitude) %>%
+  dplyr::select(-year) %>%
+  as.matrix() %>%
+  scale()
+
+can_cor<- cancor(t1, t2, xcenter = FALSE, ycenter = FALSE) # pcs already centered
+```
+
+```{r}
+can_cor$cor
+```
+
+```{r}
+cera_can <- cera_patterns$eofs %>%
+  dplyr::select(-value) %>%  # use normalized or unnormalized?
+  spread(EOF, weight) %>%
+  dplyr::select(-x, -y) %>%
+  as.matrix() %>%
+  `%*%`(can_cor$ycoef) %>%
+    `colnames<-`(paste0('PC', 1:n_modes)) %>%
+  as_tibble()
+  
+prism_can <- prism_patterns$eofs %>%
+  dplyr::select(-value) %>%
+  spread(EOF, weight) %>%
+  dplyr::select(-x, -y) %>%
+  as.matrix() %>%
+  `%*%`(can_cor$xcoef) %>%
+  `colnames<-`(paste0('PC', 1:n_modes)) %>%
+  as_tibble()
+```
+
+```{r}
+cera_dat %>%
+  spread(year, SWE) %>%
+  mutate(column = 1:n()) %>%
+  dplyr::select(x, y, column) %>%
+  bind_cols(cera_can) %>%
+  gather(pattern, value, starts_with('PC')) %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 8) +
+  theme_void()+
+  coord_sf() +
+  ggtitle('Reanalysis CCA')
+
+prism_dat %>%
+  spread(year, SWE) %>%
+  mutate(column = 1:n()) %>%
+  dplyr::select(x, y, column) %>%
+  bind_cols(prism_can) %>%
+  gather(pattern, value, starts_with('PC')) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 80) +
+  theme_void()+
+  coord_sf() +
+  ggtitle('Observed CCA')
+```
+
+```{r}
+plot_cancor <- function(x1, x2, y1, y2){
+  p1 <- x1 %>%
+  spread(year, SWE) %>%
+  mutate(column = 1:n()) %>%
+  dplyr::select(x, y, column) %>%
+  bind_cols(x2) %>%
+  gather(pattern, value, starts_with('PC')) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+  scale_fill_distiller(palette = 'RdBu') +
+  theme_void()+
+  #coord_quickmap() +
+  ggtitle('Reanalysis CCA') +
+    theme(legend.position = 'bottom')
+
+p2 <- y1 %>%
+  spread(year, SWE) %>%
+  mutate(column = 1:n()) %>%
+  dplyr::select(x, y, column) %>%
+  bind_cols(y2) %>%
+  gather(pattern, value, starts_with('PC')) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+  scale_fill_distiller(palette = 'RdBu') +
+  theme_void()+
+  #coord_quickmap() +
+  ggtitle('Observed CCA') +
+  theme(legend.position = 'bottom')
+
+p1 + p2
+}
+
+plot_cancor(cera_dat, cera_can, prism_dat, prism_can)
+```
+
+
+```{r}
+library(telefit)
+
+t1 <- prism_dat %>%
+  filter(year <= 2010) %>%
+  spread(year, SWE) %>%
+  dplyr::select(-x, -y) %>%
+  as.matrix()
+
+t2 <- cera_dat %>%
+  filter(year >= 1982) %>% 
+  spread(year, SWE) %>%
+  dplyr::select(-x, -y) %>%
+  as.matrix()
+
+any(is.infinite(t2))
+
+t3 <- prism_dat %>%
+  filter(year <= 2010) %>%
+  spread(year, SWE) %>%
+  dplyr::select(x, y)
+
+tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 4)
+1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
+```
+
+it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
+
+```{r}
+prism_scaler <- prism_dat %>%
+  group_by(x,y) %>%
+  summarise(avg = mean(SWE), sdev = sd(SWE, na.rm = TRUE))
+```
+
+```{r}
+prism_dat %>%
+  filter(year <= 2010) %>%
+  snow_only() %>%
+  spread(year, SWE) %>%
+  dplyr::select(x, y) %>%
+  cbind(tele.preds) %>%
+  gather(year, SWE, `1982`:`2010`) %>%
+  left_join(prism_scaler) %>%
+  mutate(SWE = SWE * sdev + avg) %>%
+  filter(year <=1984) %>%
+  ggplot(aes(x,y)) +
+  geom_raster(aes(fill = SWE)) +
+  facet_wrap(~year) +
+  coord_quickmap()
+```
+
+
+```{r}
+cca.predict
+
+scale(t2) %>% is.infinite %>% any
+```
+
+
+## EOTs
+
+```{r}
+eot1 <- cera_dat %>%
+  filter(year >= 1982) %>%
+  spread(year, SWE) %>%
+  rasterFromXYZ() %>%
+  anomalize() %>%
+  denoise(expl.var = .85, weighted = TRUE)
+
+eot2 <- prism_dat %>%
+  filter(year <= 2010) %>%
+  spread(year, SWE) %>%
+  rasterFromXYZ() %>%
+  anomalize() %>% 
+  denoise(expl.var = .85, weighted = TRUE)
+```
+
+```{r}
+telecon <- eot(eot1, eot2, n = 6)
+```
+
+
+```{r}
+walk(1:6, ~plot(telecon, y = ., show.bp = TRUE))
+```
+
+```{r}
+predict(telecon, eot1) %>% .[[1]] %>% `+`(mean(prism)) %>% plot
+```
+
+
+# Validation
+
 
 ### Pre-filtering and cross-validation
 
@@ -489,645 +1122,7 @@ ggplot() +
       theme_void()
 ```
 
-
-## EOFs
-
-So let's stick with the 4 and 4 solution, and investigate those patterns more. 
-Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
-
-```{r}
-n_modes <- 4
-```
-
-```{r}
-prism_patterns <- get_patterns(prism_dat, k = n_modes)
-cera_patterns <- get_patterns(cera_dat, k = n_modes)
-```
-
-
-
-```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2) 
-plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
-```
-
-Are the PCs normal? Yes
-```{r}
-prism_patterns$amplitudes %>%
-  group_by(PC) %>%
-  nest() %>% 
-  pull(data) %>%
-  map_dbl(~shapiro.test(c(.$amplitude))$p)
-```
-
-Plot the eofs. 
-```{r echo = FALSE, fig.asp = 1}
-plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
-plot_eofs(cera_patterns, 'vik', scaled = FALSE)
-plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
-plot_eofs(cera_patterns, 'vik', scaled = TRUE)
-```
-
-```{r}
-# For each PC amplitude time series, plot out the wettest and driest years from the observations.
-# From this we can tell that pc1 and 2 need to reverse signs to be physically consistent
-extreme_years <- prism_patterns$amplitudes %>%
-  group_by(PC) %>%
-  filter(amplitude == max(amplitude) | amplitude == min(amplitude)) %>%
-  pull(year)
-
-(prism - mean(prism)) %>%
-  .[[extreme_years - 1981]] %>%
-  setNames(extreme_years) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
-  gather(year, swe, 3:10) %>%
-  mutate(year = factor(year, levels = paste0('X', extreme_years))) %>%
-  ggplot(aes(x, y, fill = swe)) +
-  geom_raster() +
-  facet_wrap(~year) +
-  coord_quickmap() +
-  scale_fill_distiller(palette = 'BrBG', direction = 1, limits = c(-1500, 1500)) +
-  theme_void()
-```
-
-## Internal variability
-
-```{r, fig.asp = .9}
-prism_recon <- reconstruct_field(prism_patterns)
-```
-
-look at the mean and standard deviation of the unexplained variance.
-```{r}
-resid <- prism_recon %>%
-   left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(error = SWE_recon - SWE_obs) 
-
-resid %>%
-  group_by(x, y) %>%
-  summarise(avg = mean(error),
-            stdev = sd(error)) %>%
-    ggplot() +
-  geom_raster(aes(x, y, fill = avg/stdev)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c() +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-```
-
-```{r}
-prism_recon %>%
-   get_errors %>%
-  group_by(x, y) %>%
-  summarise(avg = mean(accuracy_ratio)) %>%
-    ggplot() +
-  geom_raster(aes(x, y, fill = avg)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c() +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-```
-
-```{r}
-resid %>%
-  ggplot(aes(SWE_obs, SWE_recon)) +
-  geom_point(alpha = .1) +
-  geom_smooth() +
-  theme_bw()
-
-resid %>%
-  ggplot(aes(SWE_obs, std_resid, color = year)) +
-  geom_point(alpha = 0.1) +
-  theme_bw()
-```
-
-
-Is it normal?
-
-
-```{r}
-resid %>%
-  group_by(x, y) %>%
-  summarise(p = shapiro.test(residuals)$p) %>%
-  ggplot() +
-    geom_raster(aes(x, y, fill = p < 0.05)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_d() +
-  ggtitle('Error from dimensionality reduction', 'PRISM')
-```
-
-
-```{r}
-score_map <- prism_recon %>%
-  get_errors() %>%
-  group_by(x, y) %>%
-  get_scores()
-
-score_ts <- prism_recon %>%
-  get_errors() %>%
-  group_by(year) %>%
-  get_scores()
-```
-
-
-```{r, fig.width = 10}
-score_ts %>%
-  gather(metric, value, me:rmsle) %>%
-  ggplot(aes(year, value)) +
-  geom_line() +
-  facet_wrap(~metric, scales = 'free_y') +
-  theme_bw()
-```
-
-
-```{r}
-  
-  plot_fun <- function(x, name) {
-      ggplot(x) +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c(name = name)
-  }
-
-tmp <- score_map %>%
-gather(metric, value, me:rmsle) %>%
-group_by(metric) %>%
-  nest %>%
-  mutate(plots = map2(data, metric, plot_fun))
-  gridExtra::grid.arrange(grobs = tmp$plots)
-  
-  tmp$plots
-```
-
-
-```{r}
-prism_recon %>%
-    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(SWE_recon = if_else(SWE_recon < .03, .03, SWE_recon),
-           SWE_obs = if_else(SWE_obs < .03, .03, SWE_obs),
-           error = SWE_recon - SWE_obs,
-           relative_error = error / SWE_obs,
-           accuracy_ratio = SWE_recon / SWE_obs,
-           log_q = log(accuracy_ratio)) %>%
-  group_by(x,y) %>%
-  get_scores() %>%
-  dplyr::select(x,y, mdsa) %>%
-        ggplot() +
-  geom_raster(aes(x, y, fill = mdsa)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c()
-
-prism_recon %>%
-    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(SWE_recon = if_else(SWE_recon < .03, .03, SWE_recon),
-           SWE_obs = if_else(SWE_obs < .03, .03, SWE_obs),
-           error = SWE_recon - SWE_obs,
-           relative_error = error / SWE_obs,
-           accuracy_ratio = SWE_recon / SWE_obs,
-           log_q = log(accuracy_ratio)) %>%
-  group_by(x,y) %>%
-  get_scores() %>%
-  dplyr::select(x,y, sspb) %>%
-        ggplot() +
-  geom_raster(aes(x, y, fill = sspb)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_c()
-```
-
-
-```{r}
-test <- couple_patterns(cera_patterns, prism_patterns) %>%
-  predict_patterns(cera_patterns) %>%
-  reconstruct_field(prism_patterns, .) %>%
-  inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
-
-test %>%
-  group_by(x, y) %>%
-  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
-   ggplot() +
-      geom_raster(aes(x, y, fill = corr)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-
-test %>%
-   left_join(areas, by = c("x", "y")) %>%
-  group_by(x, y) %>%
-  summarise(rmse = sqrt(mean((SWE_recon - SWE_obs)^2, na.rm = TRUE)),
-            area = mean(area)) %>%
-   ggplot() +
-      geom_raster(aes(x, y, fill = rmse * area * .001)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-
-## values greater than one here would be better represented by a random normal draw, i.e. it is the ratio of the variation unexplained by the regression to the total variance
-test %>%
-   left_join(areas, by = c("x", "y")) %>%
-  inner_join(prism_patterns$climatology) %>%
-  group_by(x, y) %>%
-  summarise(rmse = sqrt(mean((SWE_recon - SWE_obs)^2, na.rm = TRUE)),
-            mae = mean(abs(SWE_recon - SWE_obs)),
-            area = mean(area),
-            sd = mean(swe_sd),
-            pbias = sum(SWE_recon - SWE_obs) / sum(SWE_obs) * 100,
-            srmse = rmse/sd,
-                        rmsle = sqrt(mean((log(SWE_recon + 1) - log(SWE_obs + 1))^2, na.rm = TRUE))) %>%
-   ggplot() +
-      geom_raster(aes(x, y, fill = rmsle)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-
-
-   ggplot(prism_patterns$climatology) +
-      geom_raster(aes(x, y, fill = swe_sd)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-   
-test %>%
-     group_by(x, y) %>%
-  mutate(SWE_recon = if_else(SWE_recon < 5, 0, SWE_recon),
-         SWE_obs = if_else(SWE_obs < 5, 0, SWE_obs)) %>%
-     summarise(xbar = mean(SWE_obs),
-               mse = mean((SWE_recon - SWE_obs)^2, na.rm = TRUE),
-               mse_clim = sum((SWE_obs - xbar)^2, na.rm = TRUE) * (1 / (n() - 1)) * ((n() - 1) / n()),
-               msss = 1 - mse / mse_clim,
-               rmse = sqrt(mse),
-               rmse_cv = rmse / xbar) %>% 
-        ggplot() +
-      geom_raster(aes(x, y, fill = msss)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-      theme_void()
-```
-
-The 4 pc model underpredicts snow in areas with very low accumulation, which makes sense because of the use of the covariance matrix earlier.
-```{r}
-test %>%
-     group_by(x, y) %>%
-      summarise(obs = all(SWE_obs < 0.05),
-             recon = all(SWE_recon < 0.05)) %>%
-  gather(test, value, obs:recon) %>%
-        ggplot() +
-      geom_raster(aes(x, y, fill = value)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~test) +
-      scale_fill_viridis_d() +
-      theme_void()
-```
-
-```{r}
-
-test %>%
-     mutate(error = SWE_recon - SWE_obs) %>%
-  group_by(x, y) %>%
-  summarise(avg = mean(error),
-            std = sd(error)) %>%
-        ggplot() +
-      geom_raster(aes(x, y, fill = avg)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_distiller(palette = 'RdBu', limits = c(-120, 120)) +
-      theme_void()
-
-test %>%
-     mutate(error = SWE_recon - SWE_obs) %>%
-  group_by(x, y) %>%
-  summarise(avg = mean(error),
-            std = sd(error)) %>%
-        ggplot() +
-      geom_raster(aes(x, y, fill = avg)) + # gigaliters?
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_distiller(palette = 'RdBu', limits = c(-120, 120)) +
-      theme_void()
-```
-
-## Trends
-
-Are there any trends?
-
-```{r}
-trends_mod <- prism_patterns$amplitudes %>%
-  mutate(PC = paste0('PC', PC)) %>% 
-  group_by(PC) %>%
-  nest() %>%
-  mutate(mod = map(data, ~gam(amplitude ~ 
-                                s(year, k = 4), 
-                              data = ., 
-                              method = 'REML', 
-                              select = TRUE))) %>%
-  mutate(r2 = map_dbl(mod, ~summary(.)$r.sq)) %>%
-  mutate(data = map2(data, mod, add_predictions),
-         data = map2(data, mod, add_residuals)) 
-
-walk(trends_mod$mod, plot)
-```
-
-
-# Coupled Pattern Analysis
-
-First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
-
-## GAM
-
-Let's look under the hood of what the GAM models above were doing.
-```{r}
-gam_mod <- couple_patterns(cera_patterns, prism_patterns)
-```
-
-```{r}
-walk(gam_mod$model$mod, plot)
-```
-
-How do the models perform?
-```{r}
-gam_mod$model %>%
-  dplyr::select(PC, r2) %>%
-  arrange(-r2)
-```
-
-Are the residuals autocorrelated? Some are
-```{r}
-gam_mod$data %>%
-  group_by(PC) %>%
-  summarise(autocor = cor(resid, lag(resid), use = 'pairwise.complete.obs')) %>%
-  arrange(-abs(autocor))
-```
-
-```{r}
-ggplot(gam_mod$data, aes(resid)) +
-  #geom_histogram() + 
-  geom_density(fill = NA) +
-  geom_vline(xintercept = 0, color = 'red', linetype = 2) +
-  facet_wrap(~PC) +
-  theme_bw()
-```
-
-```{r}
-gam_recon <- predict_patterns(gam_mod, cera_patterns) %>%
-  reconstruct_field(prism_patterns, .)
-```
-
-```{r}
-gam_recon %>%
-filter(between(year, 1982, 1987)) %>% 
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1300, 1300)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-
-prism_dat %>%
-    group_by(x, y) %>%
-  mutate(SWE_mean = mean(SWE),
-         anomaly = SWE - SWE_mean) %>% 
-filter(year <= 1987) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1300, 1300)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-```
-
-
-```{r}
-gam_recon %>%
-  left_join(prism_dat, by = c('x', 'y', 'year')) %>%
-  mutate(error = SWE.x - SWE.y) %>%
-filter(between(year, 1982, 1987)) %>%
-ggplot() +
-  geom_raster(aes(x, y, fill = error)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  facet_wrap(~year) +
-  #scale_fill_scico(palette = 'vik', direction = -1, limits = c(-450, 450)) +
-  ggtitle('Observed mean April 1st SWE, 1982-2017', 'PRISM')
-```
-
-
-```{r}
-knitr::knit_exit()
-```
-
-## CCA
-
-```{r}
-t1 <- prism_patterns$amplitudes %>%
-  filter(year <= 2010) %>%
-  spread(PC, amplitude) %>%
-  dplyr::select(-year) %>%
-  as.matrix() %>%
-  scale()
-
-t2 <- cera_patterns$amplitudes %>%
-  filter(year >= 1982) %>% 
-    spread(PC, amplitude) %>%
-  dplyr::select(-year) %>%
-  as.matrix() %>%
-  scale()
-
-can_cor<- cancor(t1, t2, xcenter = FALSE, ycenter = FALSE) # pcs already centered
-```
-
-```{r}
-can_cor$cor
-```
-
-```{r}
-cera_can <- cera_patterns$eofs %>%
-  dplyr::select(-value) %>%  # use normalized or unnormalized?
-  spread(EOF, weight) %>%
-  dplyr::select(-x, -y) %>%
-  as.matrix() %>%
-  `%*%`(can_cor$ycoef) %>%
-    `colnames<-`(paste0('PC', 1:n_modes)) %>%
-  as_tibble()
-  
-prism_can <- prism_patterns$eofs %>%
-  dplyr::select(-value) %>%
-  spread(EOF, weight) %>%
-  dplyr::select(-x, -y) %>%
-  as.matrix() %>%
-  `%*%`(can_cor$xcoef) %>%
-  `colnames<-`(paste0('PC', 1:n_modes)) %>%
-  as_tibble()
-```
-
-```{r}
-cera_dat %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
-  bind_cols(cera_can) %>%
-  gather(pattern, value, starts_with('PC')) %>% 
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 8) +
-  theme_void()+
-  coord_sf() +
-  ggtitle('Reanalysis CCA')
-
-prism_dat %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
-  bind_cols(prism_can) %>%
-  gather(pattern, value, starts_with('PC')) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 80) +
-  theme_void()+
-  coord_sf() +
-  ggtitle('Observed CCA')
-```
-
-```{r}
-plot_cancor <- function(x1, x2, y1, y2){
-  p1 <- x1 %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
-  bind_cols(x2) %>%
-  gather(pattern, value, starts_with('PC')) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
-  theme_void()+
-  #coord_quickmap() +
-  ggtitle('Reanalysis CCA') +
-    theme(legend.position = 'bottom')
-
-p2 <- y1 %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
-  bind_cols(y2) %>%
-  gather(pattern, value, starts_with('PC')) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
-  theme_void()+
-  #coord_quickmap() +
-  ggtitle('Observed CCA') +
-  theme(legend.position = 'bottom')
-
-p1 + p2
-}
-
-plot_cancor(cera_dat, cera_can, prism_dat, prism_can)
-```
-
-
-```{r}
-library(telefit)
-
-t1 <- prism_dat %>%
-  filter(year <= 2010) %>%
-  spread(year, SWE) %>%
-  dplyr::select(-x, -y) %>%
-  as.matrix()
-
-t2 <- cera_dat %>%
-  filter(year >= 1982) %>% 
-  spread(year, SWE) %>%
-  dplyr::select(-x, -y) %>%
-  as.matrix()
-
-any(is.infinite(t2))
-
-t3 <- prism_dat %>%
-  filter(year <= 2010) %>%
-  spread(year, SWE) %>%
-  dplyr::select(x, y)
-
-tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 4)
-1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
-```
-
-it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
-
-```{r}
-prism_scaler <- prism_dat %>%
-  group_by(x,y) %>%
-  summarise(avg = mean(SWE), sdev = sd(SWE, na.rm = TRUE))
-```
-
-```{r}
-prism_dat %>%
-  filter(year <= 2010) %>%
-  snow_only() %>%
-  spread(year, SWE) %>%
-  dplyr::select(x, y) %>%
-  cbind(tele.preds) %>%
-  gather(year, SWE, `1982`:`2010`) %>%
-  left_join(prism_scaler) %>%
-  mutate(SWE = SWE * sdev + avg) %>%
-  filter(year <=1984) %>%
-  ggplot(aes(x,y)) +
-  geom_raster(aes(fill = SWE)) +
-  facet_wrap(~year) +
-  coord_quickmap()
-```
-
-
-```{r}
-cca.predict
-
-scale(t2) %>% is.infinite %>% any
-```
-
-
-## EOTs
-
-```{r}
-eot1 <- cera_dat %>%
-  filter(year >= 1982) %>%
-  spread(year, SWE) %>%
-  rasterFromXYZ() %>%
-  anomalize() %>%
-  denoise(expl.var = .85, weighted = TRUE)
-
-eot2 <- prism_dat %>%
-  filter(year <= 2010) %>%
-  spread(year, SWE) %>%
-  rasterFromXYZ() %>%
-  anomalize() %>% 
-  denoise(expl.var = .85, weighted = TRUE)
-```
-
-```{r}
-telecon <- eot(eot1, eot2, n = 6)
-```
-
-
-```{r}
-walk(1:6, ~plot(telecon, y = ., show.bp = TRUE))
-```
-
-```{r}
-predict(telecon, eot1) %>% .[[1]] %>% `+`(mean(prism)) %>% plot
-```
-
-
-# Validation
-
-
+## older stuff
 ```{r}
 anomaly_dat <- prism_dat %>%
   filter( year <= 2010) %>% # important to make sure everything's calculated on the same time scale, may be best to do this further up?
