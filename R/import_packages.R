@@ -1,2 +1,2 @@
-#' @import raster dplyr broom tidyr stringr methods
+#' @import dplyr broom tidyr stringr methods
 NULL

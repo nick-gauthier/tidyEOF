@@ -4,7 +4,7 @@
 \alias{get_eofs}
 \title{Title}
 \usage{
-get_eofs(dat, pca_object, k, eigenvalues, rotate)
+get_eofs(dat, pca, k, eigenvalues, rotate)
 }
 \arguments{
 \item{rotate}{}
