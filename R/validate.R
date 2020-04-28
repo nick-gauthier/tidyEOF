@@ -11,9 +11,8 @@ fit_kfold <- function(k_preds, k_obs){
   train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
   test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
 
-  map2_dfr(train, test, ~ fit_model(.x) %>%
-             predict_patterns(.y) %>%
-             reconstruct_field(obs, .))
+  map2_dfr(train, test, ~ fit_model(.x) %>% predict_patterns(.y)) %>%
+    reconstruct_field(obs, .)
 }
 
 get_errors <- function(x) {
