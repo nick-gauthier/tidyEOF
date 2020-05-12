@@ -25,10 +25,9 @@ Import the packages required for this analysis.
 knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
 
 # analysis
-library(raster) # processing raster data
+library(remote) # empirical orthogonal teleconnections
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
-library(remote) # empirical orthogonal teleconnections
 library(modelr)
 
 # plotting
@@ -139,10 +138,20 @@ prism_dat %>%
     geom_raster(aes(x, y, fill = p < 0.05)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   theme_void() +
-  scale_fill_viridis_d() +
+  scale_fill_viridis_d() 
 ```
 
 ```{r}
+# prism_dat %>%
+#   get_climatology() %>%
+#   ggplot() +
+#   geom_raster(aes(x, y, fill = swe_mean)) +
+#   geom_sf(data = states_wus, fill = NA, color = 'black') +
+#   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
+#   theme_void() +
+#   theme(legend.position = 'bottom') +
+#       ggtitle("Mean March Snow Water Equivalent", "1982-2017")
+# ggsave('swe_mean.png', height = 7, width = 7)
 a <- prism_dat %>%
   get_climatology() %>%
   ggplot() +
@@ -150,7 +159,8 @@ a <- prism_dat %>%
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
   theme_void() +
-  theme(legend.position = 'bottom')
+  theme(legend.position = 'bottom') +
+      ggtitle("Mean March Snow Water Equivalent", "Observed")
 
 b <- cera_dat %>%
   get_climatology() %>%
@@ -159,9 +169,11 @@ b <- cera_dat %>%
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
   theme_void() +
+    ggtitle("", "Simulated") +
   theme(legend.position = 'bottom')
 
 a + b + plot_annotation(tag_levels = 'A')
+ggsave('swe_comparison.png', width = 7, height = .61*7)
 ```
 
 Next we'll look at how SWE has varied over time and space.
@@ -174,26 +186,26 @@ In spite of the mismatch in mean values, perhaps the *variability* in SWE from y
 ```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
 # code courtesy of https://github.com/thomasp85/gganimate/wiki/Animation-Composition
 c <- prism_dat %>%
-  filter(between(year, 1985, 2000)) %>%
+      filter(between(year, 1990, 2010)) %>%
   group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
+  mutate(anomaly = (SWE - mean(SWE)) / sd(SWE))  %>% 
   ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1800, 1800)) +
-  transition_states(year) +
-    ggtitle("March, {closest_state}", "Observed") +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-4.5, 4.5), name = 'Standard\n deviations') +
+    transition_states(year) +
+    ggtitle("March {closest_state} SWE anomaly", "Observed") +
   theme_void() +
   theme(legend.position = 'bottom')
 
 d <- cera_dat %>%
-  filter(between(year, 1985, 2000)) %>%
-  group_by(x, y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
+      filter(between(year, 1990, 2010)) %>%
+    group_by(x, y) %>%
+    mutate(anomaly = (SWE - mean(SWE)) / sd(SWE)) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-110, 110)) +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-4.5, 4.5), name = 'Standard\n deviations') +
   transition_states(year) +
   ggtitle("", "Simulated") +
   theme_void() +
@@ -212,6 +224,8 @@ for(i in 2:100){
 }
 
 new_gif
+
+image_write(new_gif, 'anomalies.mp4')
 ```
 
 ## PCA
@@ -258,7 +272,7 @@ So let's stick with the 4 and 4 solution, and investigate those patterns more.
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
-n_modes <- 4
+n_modes <- 5
 ```
 
 ```{r}
@@ -272,35 +286,24 @@ plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2)
 plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
 ```
 
-Are the PCs normal? Yes
-```{r}
-cera_patterns$amplitudes %>%
-  group_by(PC) %>%
-  nest() %>% 
-  pull(data) %>%
-  map_dbl(~shapiro.test(c(.$amplitude))$p)
-prism_patterns$amplitudes %>%
-  group_by(PC) %>%
-  nest() %>% 
-  pull(data) %>%
-  map_dbl(~shapiro.test(c(.$amplitude))$p)
-
-cera_patterns$amplitudes %>%
-  ggplot(aes(amplitude)) +
-  geom_density() +
-  facet_wrap(~PC)
-prism_patterns$amplitudes %>%
-  ggplot(aes(amplitude)) +
-  geom_density() +
-  facet_wrap(~PC)
-```
-
 Plot the eofs. 
 ```{r echo = FALSE, fig.asp = 1}
 plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
 plot_eofs(cera_patterns, 'vik', scaled = FALSE)
 plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
 plot_eofs(cera_patterns, 'vik', scaled = TRUE)
+```
+
+```{r, fig.width = 8, fig.asp = .7}
+prism_patterns$eofs_corr <- prism_patterns$eofs_corr %>% mutate(correlation = if_else(PC == 4, correlation, correlation * -1))
+
+a<-plot_eofs(prism_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('Leading March SWE spatial modes', 'Observed') + theme(legend.position = 'bottom')
+
+b<-plot_eofs(cera_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('', 'Simulated') + theme(legend.position = 'bottom')
+
+c <- a / b & theme(legend.position = "bottom")
+c + plot_layout(guides = "collect", heights = 1,1)
+ggsave('eofs.png')
 ```
 
 ```{r}
@@ -509,7 +512,7 @@ test <- prism_dat %>%
   group_by(x, y) %>%
   nest() %>%
   mutate(mod = map(data, ~lm(SWE ~ year, data = .) %>% broom::tidy())) %>%
-  dplyr::select(-data) %>%
+  select(-data) %>%
   unnest %>%
   filter(term == 'year')
 
@@ -534,6 +537,89 @@ test %>%
 
 First look at just the error from the dimensionality reduction  with the PCs. This is basically the error in the pc targets, so is the minimum error we'd get even from the best downscaling
 
+## GLM
+
+```{r}
+library(glmnet)
+library(MuMIn)
+
+gam_formula <-  prep_data(cera_patterns, prism_patterns)  %>%
+    # this should be more flexible below, checking for innapropriate predictors
+    dplyr::select(-PC, -amplitude, -year) %>%
+    names() %>%
+    map( ~ paste0("s(", ., ", bs = 'cr', k = 4)")) %>%
+    paste(collapse = ' + ') %>%
+    paste('amplitude ~ ', .) %>%
+    as.formula
+glm_formula <- prep_data(cera_patterns, prism_patterns)  %>%
+    # this should be more flexible below, checking for innapropriate predictors
+    dplyr::select(-PC, -amplitude, -year) %>%
+    names() %>%
+    paste(collapse = ' + ') %>%
+    paste('amplitude ~ ', .) %>%
+    as.formula
+
+test <- prep_data(cera_patterns, prism_patterns) %>%
+   group_by(PC) %>%
+    nest()# %>%
+testdat <- test[[1,2]][[1]]
+
+glm(glm_formula, data = testdat)
+
+t1 <- lm(glm_formula, data = testdat, na.action = "na.fail")
+
+test_gam <- gam(gam_formula, method = 'REML',select = TRUE, data = testdat, na.action = "na.fail")
+test_gam2 <- gam(gam_formula, data = testdat, na.action = "na.fail")
+
+t2 <- dredge(t1)
+summary(get.models(t2, 1)[[1]])
+t2
+
+t3 <- dredge(test_gam2)
+t3
+summary(get.models(t3, 1)[[1]])
+
+plot(test_gam)
+
+t4 <- glmnet(testdat %>%
+  select(PC1:PC9) %>% 
+  as.matrix(), pull(testdat, amplitude), standardize = FALSE)
+plot(t4)
+coef(t4, s = .1);coef(t4, s = .05)
+
+# this is unstable
+t5 <- cv.glmnet(testdat %>%
+  select(PC1:PC9) %>% 
+  as.matrix(), pull(testdat, amplitude), standardize = FALSE, nfolds = 5)
+plot(t5)
+coef(t5, s = "lambda.1se")
+
+# this isnt!
+t6 <- cv.glmnet(testdat %>%
+  select(PC1:PC9) %>% 
+  as.matrix(), pull(testdat, amplitude), standardize = FALSE, nfolds = 5, foldid = rep(1:5, each = 6, length.out =29))
+plot(t6)
+coef(t6, s = "lambda.1se")
+coef(t6, s = "lambda.min")
+
+t7<- prep_data(cera_patterns, prism_patterns) %>%
+   group_by(PC) %>%
+    nest() %>%
+mutate(mod1 = map(data, ~ gam(gam_formula, data = ., method = 'REML',select = TRUE)),
+       mod2 = map(data, ~ eval(getCall(dredge(gam(gam_formula, data = ., na.action = "na.fail")), 1))),
+       mod3 = map(data, ~ eval(getCall(dredge(lm(glm_formula, data = ., na.action = "na.fail")), 1)))) %>%
+    ungroup() %>%
+    mutate(r21 = map_dbl(mod1, ~ sqrt(mean(.$residuals^2))),
+           r22 = map_dbl(mod2, ~ sqrt(mean(.$residuals^2))),
+           r23 = map_dbl(mod3, ~ sqrt(mean(.$residuals^2)))) 
+
+sqrt(mean(res$residuals^2))
+
+t7$mod1[[1]] %>% plot
+t7$mod2[[1]] %>% plot
+```
+
+
 ## GAM
 
 Let's look under the hood of what the GAM models above were doing.
@@ -548,7 +634,7 @@ walk(gam_mod$model$mod, plot)
 How do the models perform?
 ```{r}
 gam_mod$model %>%
-  dplyr::select(PC, r2) %>%
+  select(PC, r2) %>%
   arrange(-r2)
 ```
 
@@ -573,7 +659,7 @@ ggplot(gam_mod$data, aes(resid)) +
 gam_recon <- predict_patterns(gam_mod, cera_patterns) %>%
   reconstruct_field(prism_patterns, .)
 
-gam_score_map <- prism_recon %>%
+gam_score_map <- gam_recon %>%
   get_errors() %>%
   group_by(x, y) %>%
   get_scores()
@@ -581,9 +667,9 @@ gam_score_map <- prism_recon %>%
 
 
 ```{r}
-gam_recon %>%
-  group_by(x, y) %>%
-  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
+gam_score_map %>%
+ # group_by(x, y) %>%
+#  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
    ggplot() +
       geom_raster(aes(x, y, fill = corr)) +
       geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -592,13 +678,65 @@ gam_recon %>%
 ```
 
 ```{r}
-
 ggplot(gam_score_map ) +
       geom_raster(aes(x, y, fill = srmse < .7)) +
       geom_sf(data = states_wus, fill = NA, color = 'black') +
       scale_fill_viridis_d() +
       theme_void()
 ```
+```{r}
+ggplot(gam_score_map ) +
+      geom_raster(aes(x, y, fill = srmse)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      scale_fill_viridis_c() +
+      theme_void()
+```
+
+
+```{r}
+e <- prism_dat %>%
+      filter(between(year, 1990, 2010)) %>%
+  group_by(x, y) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
+    transition_states(year) +
+    ggtitle("March {closest_state} SWE", "Observed") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+f <- gam_recon %>%
+      filter(between(year, 1990, 2010)) %>%
+  group_by(x, y) %>%
+  mutate(anomaly = (SWE - mean(SWE)) / sd(SWE))  %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
+    transition_states(year) +
+    ggtitle("", "Reconstructed") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+
+e_gif <- gganimate::animate(e)
+f_gif <- gganimate::animate(f)
+
+e_mgif <- image_read(e_gif)
+f_mgif <- image_read(f_gif)
+
+new_gif <- image_append(c(e_mgif[1], f_mgif[1]))
+for(i in 2:100){
+  combined <- image_append(c(e_mgif[i], f_mgif[i]))
+  new_gif <- c(new_gif, combined)
+}
+
+new_gif
+
+image_write(new_gif, 'reconstruction.gif')
+```
+
 
 ```{r}
 knitr::knit_exit()
@@ -610,14 +748,14 @@ knitr::knit_exit()
 t1 <- prism_patterns$amplitudes %>%
   filter(year <= 2010) %>%
   spread(PC, amplitude) %>%
-  dplyr::select(-year) %>%
+  select(-year) %>%
   as.matrix() %>%
   scale()
 
 t2 <- cera_patterns$amplitudes %>%
   filter(year >= 1982) %>% 
     spread(PC, amplitude) %>%
-  dplyr::select(-year) %>%
+  select(-year) %>%
   as.matrix() %>%
   scale()
 
@@ -630,18 +768,18 @@ can_cor$cor
 
 ```{r}
 cera_can <- cera_patterns$eofs %>%
-  dplyr::select(-value) %>%  # use normalized or unnormalized?
+  select(-value) %>%  # use normalized or unnormalized?
   spread(EOF, weight) %>%
-  dplyr::select(-x, -y) %>%
+  select(-x, -y) %>%
   as.matrix() %>%
   `%*%`(can_cor$ycoef) %>%
     `colnames<-`(paste0('PC', 1:n_modes)) %>%
   as_tibble()
   
 prism_can <- prism_patterns$eofs %>%
-  dplyr::select(-value) %>%
+  select(-value) %>%
   spread(EOF, weight) %>%
-  dplyr::select(-x, -y) %>%
+  select(-x, -y) %>%
   as.matrix() %>%
   `%*%`(can_cor$xcoef) %>%
   `colnames<-`(paste0('PC', 1:n_modes)) %>%
@@ -652,7 +790,7 @@ prism_can <- prism_patterns$eofs %>%
 cera_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
+  select(x, y, column) %>%
   bind_cols(cera_can) %>%
   gather(pattern, value, starts_with('PC')) %>% 
   ggplot() +
@@ -667,7 +805,7 @@ cera_dat %>%
 prism_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
+  select(x, y, column) %>%
   bind_cols(prism_can) %>%
   gather(pattern, value, starts_with('PC')) %>%
   ggplot() +
@@ -685,7 +823,7 @@ plot_cancor <- function(x1, x2, y1, y2){
   p1 <- x1 %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
+  select(x, y, column) %>%
   bind_cols(x2) %>%
   gather(pattern, value, starts_with('PC')) %>%
   ggplot() +
@@ -701,7 +839,7 @@ plot_cancor <- function(x1, x2, y1, y2){
 p2 <- y1 %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
-  dplyr::select(x, y, column) %>%
+  select(x, y, column) %>%
   bind_cols(y2) %>%
   gather(pattern, value, starts_with('PC')) %>%
   ggplot() +
@@ -727,13 +865,13 @@ library(telefit)
 t1 <- prism_dat %>%
   filter(year <= 2010) %>%
   spread(year, SWE) %>%
-  dplyr::select(-x, -y) %>%
+  select(-x, -y) %>%
   as.matrix()
 
 t2 <- cera_dat %>%
   filter(year >= 1982) %>% 
   spread(year, SWE) %>%
-  dplyr::select(-x, -y) %>%
+  select(-x, -y) %>%
   as.matrix()
 
 any(is.infinite(t2))
@@ -741,7 +879,7 @@ any(is.infinite(t2))
 t3 <- prism_dat %>%
   filter(year <= 2010) %>%
   spread(year, SWE) %>%
-  dplyr::select(x, y)
+  select(x, y)
 
 tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 4)
 1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
@@ -760,7 +898,7 @@ prism_dat %>%
   filter(year <= 2010) %>%
   snow_only() %>%
   spread(year, SWE) %>%
-  dplyr::select(x, y) %>%
+  select(x, y) %>%
   cbind(tele.preds) %>%
   gather(year, SWE, `1982`:`2010`) %>%
   left_join(prism_scaler) %>%
@@ -780,7 +918,7 @@ scale(t2) %>% is.infinite %>% any
 ```
 
 
-## EOTs
+## EOT
 
 ```{r}
 eot1 <- cera_dat %>%
@@ -815,20 +953,83 @@ predict(telecon, eot1) %>% .[[1]] %>% `+`(mean(prism)) %>% plot
 # Validation
 
 
-### Pre-filtering and cross-validation
+### Cross-validation
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
+get the training data
 ```{r}
-exp_test <- tibble(k_cera = 1:9, k_prism = 1:9) %>%
-  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
-         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = .)))
+#exp_test <- tibble(k_cera = 1:9, k_prism = 1:9) %>%
+#  mutate(cera_patterns = map(k_cera, ~get_patterns(cera_dat, k = .)),
+#         prism_patterns = map(k_prism, ~get_patterns(prism_dat, k = .)))
+
+ prism_train <- map(1:5, ~ filter(folds, fold == .) %>%
+    anti_join(prism_dat, ., by = 'year') %>% # training years
+    filter(year %in% years) %>% # remove years outside overlapping interval
+    get_patterns(k = 5))
+
+  cera_train <- map(1:5, ~ filter(folds, fold == .) %>%
+              anti_join(cera_dat, ., by = 'year') %>% # training years
+              filter(year %in% years) %>% # remove years outside overlapping interval
+              get_patterns(k = 5))
+```
+  
+  fit models to training data
+```{r}
+mod <- map2(cera_train, prism_train, prep_data) %>%
+  map(fit_model)
+```
+  
+  get test prdictors
+```{r}
+ cera_test <- map(1:5, ~ filter(folds, fold == .) %>%
+              semi_join(cera_dat, ., by = 'year') %>% # training years
+              filter(year %in% years))
+
+predictors <- map2(cera_train, cera_test, ~left_join(.y, .x$climatology, by = c("x", "y")) %>%
+  mutate(SWE = SWE - swe_mean) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+  select(-swe_mean, -swe_sd) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+   predict(.x$pca, .))
+```
+  
+predict the fields
+
+```{r}
+predict_cv <- function(mod, pred) {
+  pred_scale <- as_tibble(scale(pred), rownames = 'year')
+  
+  map(mod$mod, ~add_predictions(pred_scale, ., var = 'amplitude', type = 'response')) %>%
+    bind_rows(.id = 'PC') %>%
+    dplyr::select(year, PC, amplitude)
+}
+
+map2_dfr(mod, predictors, predict_cv) %>%
+  arrange(PC, year)
 ```
 
 ```{r}
-cv_dat <- expand_grid(k_cera = exp_test$k_cera, 
-                      k_prism = exp_test$k_prism) %>%
-  mutate(cv = map2(k_cera, k_prism, fit_kfold))
+
+```
+
+  
+```{r}
+t1  
+  map(t1, ~plot_eofs(., scaled = FALSE) )
+map(t1, plot_amps)
+t1[[2]] %>% plot_amps()
+
+map(t1, ~.$amplitudes)
+map_dfr(t1, ~.$amplitudes, .id = 'fold') %>% ggplot(aes(year, abs(amplitude), color = fold)) + geom_point() + facet_wrap(~PC)
+# 
+```
+
+```{r}
+cv_dat <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+  mutate(cv = map2(k_predictor, k_response, fit_kfold))
 ```
 
 #### Domain averages
@@ -905,21 +1106,6 @@ ggplot(aes(k_cera, k_prism, fill = SCA_rmse)) +
   theme_minimal()
 ```
 
-So let's truncate the PCs at 4.
-```{r, fig.width = 8, fig.asp = .4, echo = FALSE}
-e <- prism_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(4)
-
-f <- cera_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(4)
-
-e + f
-```
-
 
 ```{r, fig.asp = .35}
 t1 <- cv_recons %>% filter(k_prism == 4, k_cera == 4) %>%
@@ -938,7 +1124,7 @@ ggplot(t1, aes(year)) +
 ```{r, fig.width = 8}
 g <- range_recons %>%
   filter(k_prism == 4, k_cera == 4) %>%
-  dplyr::select(-SCA_recon, -SCA_obs) %>%
+  select(-SCA_recon, -SCA_obs) %>%
   rename(recon = SWE_recon, obs = SWE_obs) %>%
   gather(type, SWE, recon:obs) %>%
   ggplot(aes(year)) +
@@ -949,7 +1135,7 @@ g <- range_recons %>%
 
 h <- range_recons %>%
   filter(k_prism == 7, k_cera == 9) %>%
-  dplyr::select(-SWE_recon, -SWE_obs) %>%
+  select(-SWE_recon, -SWE_obs) %>%
   rename(recon = SCA_recon, obs = SCA_obs) %>%
   gather(type, SCA, recon:obs) %>%
   ggplot(aes(year)) +
@@ -979,25 +1165,14 @@ bind_rows(t1, t2) %>%
 #### Local error
 ```{r}
 scores <- cv_dat %>%
-  mutate(errors = map(cv, get_errors),
+  mutate(errors = map(cv, ~get_errors(.) %>% group_by(x, y) %>% filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  ungroup()),
         score_map = map(errors, ~group_by(., x,y) %>% get_scores),
          score_ts = map(errors, ~group_by(., year) %>% get_scores)) %>%
-  dplyr::select(-cv, -errors)
+  select(-cv, -errors)
 ```
 
 time
-```{r, fig.width=15}
-scores %>% mutate(k = interaction(k_prism, k_cera)) %>%
-  dplyr::select(k, score_ts) %>%
-  unnest(score_ts) %>%
-  gather(metric, value, me:rmsle) %>%
-  ggplot(aes(year, value)) +
-  geom_line(aes(color = k), alpha = .5) +
-  facet_wrap(~metric, scales = 'free_y') +
-  scale_color_viridis_d() +
-  theme_bw() +
-  theme(legend.position = 'hide')
-```
 
 ```{r}
 scores %>% mutate(k = interaction(k_prism, k_cera)) %>%
@@ -1019,7 +1194,7 @@ plot_fun1 <- function(x, name) {
   theme_minimal()
 }
 tmp1 <- scores %>%
-  dplyr::select(k_prism, k_cera, score_ts) %>%
+  select(k_prism, k_cera, score_ts) %>%
   unnest(score_ts) %>%
   group_by(k_prism, k_cera) %>%
   summarise_at(vars(me:rmsle), mean) %>%
@@ -1034,93 +1209,23 @@ tmp1$plots
 space 
 
 ```{r}
-scores %>%
-  dplyr::select(k_prism, k_cera, score_map) %>%
+tmp2 <- scores %>%
+  select(k_prism, k_cera, score_map) %>%
   unnest(score_map) %>%
-  dplyr::select(k_prism:y, mdsa, srmse) %>%
-  ggplot() +
-      geom_raster(aes(x, y, fill = mdsa)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-  facet_grid(k_prism~k_cera) +
-      theme_void()
+  select(k_prism:y, rmse, mdsa, srmse, rmsle) %>%
+  group_by(k_prism, k_cera) %>%
+  summarise(rmse = mean(rmse), mdsa = mean(mdsa), srmse_avg = mean(srmse), rmsle = mean(rmsle), srmse7 = sum(srmse>.7, na.rm = TRUE)) %>%
+  gather(metric, value, rmse:srmse7) %>%
+group_by(metric) %>%
+  nest %>%
+  mutate(plots = map2(data, metric, plot_fun1))
 
-#  group_by(k_prism, k_cera) %>%
- # summarise_at(vars(mdsa, srmse), mean, na.rm = TRUE) %>%
-  #arrange(mdsa, srmse)
+tmp2$plots
 ```
 
-```{r}
-skill_test <- skill_map %>%
-  # add area weighting here
-  mutate(rmse_avg = map_dbl(skill_map, ~summarise(., rmse = mean(rmse, na.rm = TRUE)) %>% pull),
-         srmse_avg = map_dbl(skill_map, ~summarise(., srmse = mean(srmse, na.rm = TRUE)) %>% pull),
-         srmse_sum = map_dbl(skill_map, ~summarise(., srmse_sum = sum(srmse > .8, na.rm= TRUE)) %>% pull)) %>%
-  dplyr::select(-skill_map)
-
-arrange(skill_test, rmse_avg)
-arrange(skill_test, srmse_avg)
-arrange(skill_test, srmse_sum)
-
-ggplot(skill_test, aes(k_cera, k_prism, fill = rmse_avg)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_equal() +
-  theme_minimal()
-
-ggplot(skill_test, aes(k_cera, k_prism, fill = srmse_avg)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_equal() +
-  theme_minimal()
-
-ggplot(skill_test, aes(k_cera, k_prism, fill = srmse_sum)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_equal() +
-  theme_minimal()
-
-```
+# Paleo
 
 
-```{r, warning = FALSE, fig.width = 10, fig.asp = 1}
-get_corr_map<- function(x) {
-  x %>%
-  left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))%>%
-  group_by(x, y) %>%
-  summarise(corr = cor(SWE_recon, SWE_obs)) %>%
-  ungroup()
-}
-
-cor_map <- cv_dat %>%
-  mutate(corr_map = map(cv, get_corr_map)) %>%
-  dplyr::select(-cv) %>%
-  mutate(corr_sum = map_dbl(corr_map, ~summarise(., corr = sum(corr > 0.3, na.rm = TRUE)) %>% pull)) %>%
-  mutate(corr_mean = map_dbl(corr_map, ~summarise(., corr = mean(corr, na.rm = TRUE)) %>% pull)) %>%
-    arrange(-corr_sum)
-
-ggplot(cor_map, aes(k_cera, k_prism, fill = corr_sum)) +
-  geom_tile() +
-  scale_fill_viridis_c() +
-  coord_equal() +
-  theme_minimal()
-
-ggplot(cor_map, aes(k_cera, k_prism, fill = corr_mean)) +
-  geom_tile() +
-  scale_fill_viridis_c() +
-  coord_equal() +
-  theme_minimal()
-
-
-cor_map %>%
-  unnest(corr_map) %>%
-ggplot() +
-      geom_raster(aes(x, y, fill = corr)) +
-      geom_sf(data = states_wus, fill = NA, color = 'black') +
-      scale_fill_viridis_c() +
-  facet_grid(k_prism~k_cera) +
-      theme_void()
-```
 
 ## older stuff
 ```{r}

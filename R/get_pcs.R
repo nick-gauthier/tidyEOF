@@ -18,7 +18,7 @@ get_pcs <- function(dat, scale = FALSE){
     tidyr::spread(year, SWE) %>%
     dplyr::select(-x, -y) %>%
     t() %>%
-    prcomp()
+    prcomp(center = FALSE)
 }
 
 get_eigenvalues <- function(pca){

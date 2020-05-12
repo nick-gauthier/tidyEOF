@@ -29,7 +29,7 @@ prep_data <- function(patterns.x, patterns.y) {
   amps.x <- if('patterns' %in% class(patterns.x)) patterns.x$amplitudes else patterns.x
   amps.y <- if('patterns' %in% class(patterns.y)) patterns.y$amplitudes else patterns.y
 
-    predictors <- amps.x %>%
+  predictors <- amps.x %>%
     mutate(PC = paste0('PC', PC)) %>%
     spread(PC, amplitude)
 
@@ -53,12 +53,7 @@ fit_model <- function(data_in) {
   model <- data_in %>%
     group_by(PC) %>%
     nest() %>%
-    mutate(mod = map(data, ~ gam(
-      gam_formula,
-      data = .,
-      method = 'REML',
-      select = TRUE
-    ))) %>%
+    mutate(mod = map(data, ~ gam(gam_formula, data = ., method = 'REML', select = TRUE))) %>%
     ungroup() %>%
     mutate(r2 = map_dbl(mod, ~ summary(.)$r.sq)) %>%
     mutate(
