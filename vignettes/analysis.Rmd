@@ -26,6 +26,7 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
 
 # analysis
 library(remote) # empirical orthogonal teleconnections
+library(telefit) # cca
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
 library(modelr)
@@ -818,70 +819,26 @@ prism_dat %>%
   ggtitle('Observed CCA')
 ```
 
-```{r}
-plot_cancor <- function(x1, x2, y1, y2){
-  p1 <- x1 %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
-  bind_cols(x2) %>%
-  gather(pattern, value, starts_with('PC')) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
-  theme_void()+
-  #coord_quickmap() +
-  ggtitle('Reanalysis CCA') +
-    theme(legend.position = 'bottom')
-
-p2 <- y1 %>%
-  spread(year, SWE) %>%
-  mutate(column = 1:n()) %>%
-  select(x, y, column) %>%
-  bind_cols(y2) %>%
-  gather(pattern, value, starts_with('PC')) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-  scale_fill_distiller(palette = 'RdBu') +
-  theme_void()+
-  #coord_quickmap() +
-  ggtitle('Observed CCA') +
-  theme(legend.position = 'bottom')
-
-p1 + p2
-}
-
-plot_cancor(cera_dat, cera_can, prism_dat, prism_can)
-```
-
 
 ```{r}
-library(telefit)
-
 t1 <- prism_dat %>%
   filter(year <= 2010) %>%
+    group_by(x,y) %>%
+  mutate(test = all(SWE == 0)) %>%
+  filter(test == FALSE) %>%
+  select(-test) %>%
+  ungroup() %>%
   spread(year, SWE) %>%
   select(-x, -y) %>%
-  as.matrix()
+  as.matrix
 
 t2 <- cera_dat %>%
   filter(year >= 1982) %>% 
   spread(year, SWE) %>%
   select(-x, -y) %>%
-  as.matrix()
+  as.matrix
 
-any(is.infinite(t2))
-
-t3 <- prism_dat %>%
-  filter(year <= 2010) %>%
-  spread(year, SWE) %>%
-  select(x, y)
-
-tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 4)
+tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 7)
 1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
 ```
 
@@ -896,25 +853,25 @@ prism_scaler <- prism_dat %>%
 ```{r}
 prism_dat %>%
   filter(year <= 2010) %>%
-  snow_only() %>%
+    group_by(x,y) %>%
+  mutate(test = all(SWE == 0)) %>%
+  filter(test == FALSE) %>%
+  select(-test) %>%
+    ungroup() %>%
   spread(year, SWE) %>%
   select(x, y) %>%
   cbind(tele.preds) %>%
   gather(year, SWE, `1982`:`2010`) %>%
-  left_join(prism_scaler) %>%
-  mutate(SWE = SWE * sdev + avg) %>%
-  filter(year <=1984) %>%
+ # left_join(prism_scaler) %>%
+  #mutate(SWE = SWE * sdev + avg) %>%
+  filter(year <=1987) %>%
   ggplot(aes(x,y)) +
   geom_raster(aes(fill = SWE)) +
   facet_wrap(~year) +
+  scale_fill_viridis_c() +
   coord_quickmap()
-```
 
-
-```{r}
-cca.predict
-
-scale(t2) %>% is.infinite %>% any
+eof
 ```
 
 
@@ -1228,6 +1185,8 @@ plot_fun1 <- function(x, name) {
   geom_tile() +
   scale_fill_viridis_c(direction = -1, name = name) +
   coord_equal() +
+      scale_x_continuous(breaks = 1:9, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:9, minor_breaks = NULL) +
   theme_minimal()
 }
 tmp1 <- scores %>%
