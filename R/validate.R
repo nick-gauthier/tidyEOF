@@ -3,6 +3,8 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
 
   # find the years of overlap between the response and predictor fields
   years <- intersect(preds$year, obs$year)
+  preds <- filter(preds, year %in% years)
+  obs <- filter(obs, year %in% years)
 
   # divide years into 5 contiguous folds
   n <- length(years)
@@ -19,40 +21,38 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
 
   pred_train <- map(1:5, ~ filter(folds, fold == .) %>%
                       anti_join(preds, ., by = 'year') %>% # training years
-                      filter(year %in% years) %>% # remove years outside overlapping interval
                       get_patterns(k = k_preds))
-
-  train <- map2(pred_train, obs_train, prep_data)
 
   # preprocess test data for each fold
   test <- map(1:5, ~ filter(folds, fold == .) %>%
-                semi_join(preds, ., by = 'year') %>% # test years
-                filter(year %in% years))
+                semi_join(preds, ., by = 'year')) # test years
 
   # fit model to training data and use to predict new fields
-  map2(train, test, fit_cv) %>%
-    map2_dfr(obs_train, ., reconstruct_field) # use obs_train to get training pcs
+  pmap_dfr(list(pred_train, obs_train, test), fit_cv)
 }
 
 # special predict method for cv that scales predictors (should fold into original predict method in future)
-fit_cv <- function(train, test) {
-  mod <- fit_model(train)
+fit_cv <- function(pred_train, obs_train, test) {
 
-  preds <- left_join(test, train$climatology, by = c("x", "y")) %>%
+  mod <- prep_data(pred_train, obs_train) %>%
+    fit_model()
+
+  preds <- left_join(test, pred_train$climatology, by = c("x", "y")) %>%
     mutate(SWE = SWE - swe_mean) %>%
     dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
     dplyr::select(-swe_mean, -swe_sd) %>%
     tidyr::spread(year, SWE) %>%
     dplyr::select(-x, -y) %>%
     t() %>%
-    predict(train$pca, .) %>%
+    predict(pred_train$pca, .) %>%
     scale() %>%
     as_tibble(rownames = 'year')
 
   map(mod$mod, ~add_predictions(preds, ., var = 'amplitude', type = 'response')) %>%
     bind_rows(.id = 'PC') %>%
     dplyr::select(year, PC, amplitude) %>%
-    mutate(year = as.numeric(year))
+    mutate(year = as.numeric(year)) %>%
+    reconstruct_field(obs_train, .)  # use obs_train to get training pcs
 }
 
 get_errors <- function(x) {
