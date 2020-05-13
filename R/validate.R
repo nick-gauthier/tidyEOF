@@ -1,24 +1,64 @@
-fit_kfold <- function(k_preds, k_obs){
-  preds <- exp_test[[k_preds, "cera_patterns"]][[1]]
-  obs <- exp_test[[k_obs, "prism_patterns"]][[1]]
+fit_kfold <- function(k_preds, k_obs, preds, obs){
+  # this should be refactored ...
 
-  # prepare data frame for cross validation by dividing into k folds
-  folds <- prep_data(preds, obs) %>%
-    group_by(PC) %>%
-    mutate(fold = rep(1:5, each = 6, length.out = n())) %>%
-    ungroup()
+  # find the years of overlap between the response and predictor fields
+  years <- intersect(preds$year, obs$year)
 
-  train <- map(1:5, ~filter(folds, fold != .) %>% dplyr::select(-fold))
-  test <- map(1:5, ~filter(folds, fold == .) %>% dplyr::select(-fold, -PC, -amplitude) %>% unique)
+  # divide years into 5 contiguous folds
+  n <- length(years)
+  r <- n %% 5
+  fold_times <- rep(n %/% 5, 5)
+  fold_times[1:r] <- fold_times[1:r] + 1
+  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
 
-  map2_dfr(train, test, ~ fit_model(.x) %>% predict_patterns(.y)) %>%
-    reconstruct_field(obs, .)
+  # preprocess the training data for each fold
+  obs_train <- map(1:5, ~ filter(folds, fold == .) %>%
+                     anti_join(obs, ., by = 'year') %>% # training years
+                     filter(year %in% years) %>% # remove years outside overlapping interval
+                     get_patterns(k = k_obs))
+
+  pred_train <- map(1:5, ~ filter(folds, fold == .) %>%
+                      anti_join(preds, ., by = 'year') %>% # training years
+                      filter(year %in% years) %>% # remove years outside overlapping interval
+                      get_patterns(k = k_preds))
+
+  train <- map2(pred_train, obs_train, prep_data)
+
+  # preprocess test data for each fold
+  test <- map(1:5, ~ filter(folds, fold == .) %>%
+                semi_join(preds, ., by = 'year') %>% # test years
+                filter(year %in% years))
+
+  # fit model to training data and use to predict new fields
+  map2(train, test, fit_cv) %>%
+    map2_dfr(obs_train, ., reconstruct_field) # use obs_train to get training pcs
+}
+
+# special predict method for cv that scales predictors (should fold into original predict method in future)
+fit_cv <- function(train, test) {
+  mod <- fit_model(train)
+
+  preds <- left_join(test, train$climatology, by = c("x", "y")) %>%
+    mutate(SWE = SWE - swe_mean) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+    dplyr::select(-swe_mean, -swe_sd) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+    predict(train$pca, .) %>%
+    scale() %>%
+    as_tibble(rownames = 'year')
+
+  map(mod$mod, ~add_predictions(preds, ., var = 'amplitude', type = 'response')) %>%
+    bind_rows(.id = 'PC') %>%
+    dplyr::select(year, PC, amplitude) %>%
+    mutate(year = as.numeric(year))
 }
 
 get_errors <- function(x) {
   x %>%
     inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(SWE_recon = if_else(SWE_recon < 0.03, 0.03, SWE_recon),
+    mutate(SWE_recon = if_else(SWE_recon < 0.03, 0.03, SWE_recon), #for the metrics that use logq
            SWE_obs = if_else(SWE_obs < 0.03, 0.03, SWE_obs),
            error = SWE_recon - SWE_obs,
            relative_error = error / SWE_obs,
@@ -27,7 +67,7 @@ get_errors <- function(x) {
 }
 
 get_scores <- function(x) {
-  x%>%
+  x %>%
     #filter(sd > 0) %>%
     summarise(xbar = mean(SWE_obs),
               sd = sd(SWE_obs),
