@@ -830,16 +830,62 @@ t1 <- prism_dat %>%
   ungroup() %>%
   spread(year, SWE) %>%
   select(-x, -y) %>%
-  as.matrix
+  as.matrix()
 
 t2 <- cera_dat %>%
   filter(year >= 1982) %>% 
   spread(year, SWE) %>%
   select(-x, -y) %>%
-  as.matrix
+  as.matrix()
 
-tele.preds <- cca.predict(t2, t1, t2, k.x = 7, k.y = 7)
+tele.preds <- cca.predict(t2, t1, t2, k.x = 5, k.y = 5)
 1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
+
+fit_kfold_cca <- function(k_preds, k_obs, preds, obs){
+  # this should be refactored ...
+  # find the years of overlap between the response and predictor fields
+  years <- intersect(preds$year, obs$year)
+  preds <- filter(preds, year %in% years)
+  obs <- filter(obs, year %in% years)
+
+  # divide years into 5 contiguous folds
+  n <- length(years)
+  r <- n %% 5
+  fold_times <- rep(n %/% 5, 5)
+  fold_times[1:r] <- fold_times[1:r] + 1
+  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
+  
+# preprocess the training data for each fold
+train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
+                   anti_join(obs, ., by = 'year') %>% # training years
+                   group_by(x,y) %>%
+                   mutate(test = all(SWE == 0)) %>%
+                   filter(test == FALSE) %>%
+                   select(-test) %>%
+                   ungroup() %>%
+                   spread(year, SWE) %>%
+                   select(-x, -y) %>%
+                   as.matrix())
+
+  train_pred <- map(1:5, ~ filter(folds, fold == .) %>%
+                      anti_join(preds, ., by = 'year') %>% # training years
+                      spread(year, SWE) %>%
+                      select(-x, -y) %>%
+                      as.matrix())
+
+  # preprocess test data for each fold
+  test <- map(1:5, ~ filter(folds, fold == .) %>%
+                semi_join(preds, ., by = 'year') %>%
+              spread(year, SWE) %>%
+                      select(-x, -y) %>%
+                      as.matrix()) # test years
+
+  pmap_dfr(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
+}
+
+cv_cca <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+  mutate(cv = map2(k_predictor, k_response, ~fit_kfold_cca(.x, .y, preds = cera_dat, obs = prism_dat)))
+
 ```
 
 it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
