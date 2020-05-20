@@ -16,7 +16,6 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
   # preprocess the training data for each fold
   obs_train <- map(1:5, ~ filter(folds, fold == .) %>%
                      anti_join(obs, ., by = 'year') %>% # training years
-                     filter(year %in% years) %>% # remove years outside overlapping interval
                      get_patterns(k = k_obs))
 
   pred_train <- map(1:5, ~ filter(folds, fold == .) %>%
@@ -45,7 +44,8 @@ fit_cv <- function(pred_train, obs_train, test) {
     dplyr::select(-x, -y) %>%
     t() %>%
     predict(pred_train$pca, .) %>%
-    scale() %>%
+    scale(center = FALSE, scale = preds_train$pca$sdev) %>% # scale according to training pcs
+    .[,1:k_preds] %>%
     as_tibble(rownames = 'year')
 
   map(mod$mod, ~add_predictions(preds, ., var = 'amplitude', type = 'response')) %>%

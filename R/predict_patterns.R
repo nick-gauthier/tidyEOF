@@ -36,6 +36,6 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL) {
     left_join(target_patterns$climatology, by = c("x", "y")) %>%
     mutate(SWE = anomaly + swe_mean,
            SWE = if_else(SWE < 0, 0, SWE))%>% # can't have negative swe
-    dplyr::select(-c(swe_mean, swe_sd)) %>%
+    dplyr::select(-c(swe_mean, swe_sd, anomaly)) %>%
     ungroup()
 }

@@ -746,30 +746,54 @@ knitr::knit_exit()
 ## CCA
 
 ```{r}
-t1 <- prism_patterns$amplitudes %>%
-  filter(year <= 2010) %>%
-  spread(PC, amplitude) %>%
-  select(-year) %>%
-  as.matrix() %>%
-  scale()
+cca_fit <- function(obs, preds, newdata = preds, k_obs, k_preds){
+   years <- intersect(preds$year, obs$year)
+  preds <- filter(preds, year %in% years)
+  obs <- filter(obs, year %in% years)
 
-t2 <- cera_patterns$amplitudes %>%
-  filter(year >= 1982) %>% 
-  spread(PC, amplitude) %>%
-  select(-year) %>%
-  as.matrix() %>%
-  scale()
+    obs_patterns <- get_patterns(obs, k = k_obs) 
+  preds_patterns <- get_patterns(preds, k = k_preds)
+  
+  obs_amps <- obs_patterns$amplitudes %>%
+    mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
+   spread(PC, amplitude) %>%
+   select(-year) %>%
+   as.matrix()
+  
+  preds_amps <- preds_patterns$amplitudes %>%
+    mutate(PC = as.numeric(PC)) %>% 
+    spread(PC, amplitude) %>%
+   select(-year) %>%
+    as.matrix() 
+  
+  cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE) # pcs already centered
 
-can_cor <- cancor(t1, t2, xcenter = FALSE, ycenter = FALSE) # pcs already centered
+ new_amps <- left_join(newdata, preds_patterns$climatology, by = c("x", "y")) %>%
+    mutate(SWE = SWE - swe_mean) %>%
+       dplyr::select(-swe_mean, -swe_sd) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+    predict(preds_patterns$pca, .) %>%
+    scale(center = FALSE, scale = preds_patterns$pca$sdev) %>% # this should be from the training pcs
+    .[,1:k_preds]
+  new_years <- unique(newdata$year)
+  
+  (new_amps %*% cca$xcoef %*% diag(cca$cor) %*% solve(cca$ycoef)) %>%
+    `rownames<-`(new_years) %>%
+    as_tibble(rownames = 'year') %>% 
+    gather(PC, amplitude, -year) %>% 
+    mutate(year = as.numeric(year)) %>%
+    reconstruct_field(obs_patterns, .)
+}
+
+# check that the newdata argument is handled the same as not -- right now it isn't, something to do with the scaling?
+# identical(cca_fit(prism_dat, cera_dat, k_preds = 4, k_obs = 4) ,
+#          cca_fit(prism_dat, cera_dat, cera_dat, k_preds = 4, k_obs = 4) %>% filter(year >= 1982) )
+
 ```
 
-```{r}
-can_cor$cor
-```
-```{r}
-corrplot::corrplot(can_cor$xcoef)
-corrplot::corrplot(can_cor$ycoef)
-```
 
 
 ```{r}
@@ -778,7 +802,7 @@ cera_can <- cera_patterns$eofs %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(can_cor$ycoef) %>%
+  `%*%`(cca$ycoef) %>%
     `colnames<-`(paste0('PC', 1:n_modes)) %>%
   as_tibble()
   
@@ -787,7 +811,7 @@ prism_can <- prism_patterns$eofs %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(can_cor$xcoef) %>%
+  `%*%`(cca$xcoef) %>%
   `colnames<-`(paste0('PC', 1:n_modes)) %>%
   as_tibble()
 ```
@@ -830,7 +854,7 @@ cera_can <- cera_patterns$eofs %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(can_cor$ycoef) %>%
+  `%*%`(cca$ycoef) %>%
     `colnames<-`(paste0('PC', 1:n_modes)) %>%
   as_tibble()
 
@@ -841,7 +865,7 @@ prism_can <- prism_patterns$eofs %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(can_cor$xcoef) %>%
+  `%*%`(cca$xcoef) %>%
   `colnames<-`(paste0('PC', 1:n_modes)) %>%
   as_tibble()
 ```
@@ -906,13 +930,17 @@ train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
               spread(year, SWE) %>%
                       select(-x, -y) %>%
                       as.matrix()) # test years
-
-  pmap_dfr(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
+  
+  pmap(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
 }
 
-cv_cca <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+cca.predict(train_pred[[4]], train_obs[[]], test[[5]], 1, 1)
+cv_cca <- expand_grid(k_predictor = 4:9, k_response = 4:9) %>%
   mutate(cv = map2(k_predictor, k_response, ~fit_kfold_cca(.x, .y, preds = cera_dat, obs = prism_dat)))
 
+
+
+testing <-   pmap(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
 ```
 
 it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
