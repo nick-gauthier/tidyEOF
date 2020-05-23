@@ -788,12 +788,90 @@ cca_fit <- function(obs, preds, newdata = preds, k_obs, k_preds){
     reconstruct_field(obs_patterns, .)
 }
 
-# check that the newdata argument is handled the same as not -- right now it isn't, something to do with the scaling?
+# check that the newdata argument is handled the same as not
 # identical(cca_fit(prism_dat, cera_dat, k_preds = 4, k_obs = 4) ,
 #          cca_fit(prism_dat, cera_dat, cera_dat, k_preds = 4, k_obs = 4) %>% filter(year >= 1982) )
 
 ```
 
+
+```{r}
+
+ 
+predict_cca <- function(cca_mod, newdata, preds_patterns, obs_patterns, k_preds) {
+  new_amps <- left_join(newdata, preds_patterns$climatology, by = c("x", "y")) %>%
+    mutate(SWE = SWE - swe_mean) %>%
+    dplyr::select(-swe_mean, -swe_sd) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+    predict(preds_patterns$pca, .) %>%
+    scale(center = FALSE, scale = preds_patterns$pca$sdev) %>% # this should be from the training pcs
+    .[,1:k_preds, drop = FALSE]
+  
+  k <- length(cca_mod$cor)
+
+  new_years <- unique(newdata$year)
+  
+  new_amps %*% 
+      cca_mod$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
+    diag(cca_mod$cor, nrow = k) %*%  # nrow likewise rpevents weired behavior when k = 1
+    solve(cca_mod$ycoef)[1:k,,drop = FALSE] %>%
+    `rownames<-`(new_years) %>%
+    as_tibble(rownames = 'year') %>% 
+    gather(PC, amplitude, -year) %>% 
+    mutate(year = as.numeric(year)) %>%
+    reconstruct_field(obs_patterns, .)
+} 
+
+fit_kfold_cca <- function(k_preds, k_obs, preds, obs){
+  # this should be refactored ...
+  # find the years of overlap between the response and predictor fields
+  years <- intersect(preds$year, obs$year)
+  preds <- filter(preds, year %in% years)
+  obs <- filter(obs, year %in% years)
+  
+  # divide years into 5 contiguous folds
+  n <- length(years)
+  r <- n %% 5
+  fold_times <- rep(n %/% 5, 5)
+  fold_times[1:r] <- fold_times[1:r] + 1
+  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
+  
+  # preprocess the training data for each fold
+  train_obs_patterns <- map(1:5, ~ filter(folds, fold == .) %>%
+                              anti_join(obs, ., by = 'year') %>% # training years
+                              get_patterns(k = k_obs))
+  
+  train_preds_patterns <- map(1:5, ~ filter(folds, fold == .) %>%
+                               anti_join(preds, ., by = 'year') %>% # training years
+                               get_patterns(k = k_preds))
+  
+  train_obs_amps <- map(train_obs_patterns, ~ .$amplitudes %>% 
+                          mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
+                          spread(PC, amplitude) %>%
+                          select(-year) %>%
+                          as.matrix())
+  
+  train_preds_amps <- map(train_preds_patterns, ~ .$amplitudes %>%
+                            mutate(PC = as.numeric(PC)) %>% 
+                            spread(PC, amplitude) %>%
+                            select(-year) %>%
+                            as.matrix() )
+  
+    # preprocess test data for each fold
+  test <- map(1:5, ~ filter(folds, fold == .) %>%
+                semi_join(preds, ., by = 'year')) # test years
+  
+  # train CCA on training data
+  cca <- map2(train_preds_amps, train_obs_amps, cancor, xcenter = FALSE, ycenter = FALSE)
+  
+  # predict CCA on new data
+  pmap_dfr(list(cca, test, train_preds_patterns, train_obs_patterns), predict_cca, k_preds = k_preds) %>% 
+    arrange(x, y, year)
+}
+```
 
 
 ```{r}
@@ -892,55 +970,6 @@ t2 <- cera_dat %>%
 tele.preds <- cca.predict(t2, t1, t2, k.x = 5, k.y = 5)
 1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
 
-fit_kfold_cca <- function(k_preds, k_obs, preds, obs){
-  # this should be refactored ...
-  # find the years of overlap between the response and predictor fields
-  years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-
-  # divide years into 5 contiguous folds
-  n <- length(years)
-  r <- n %% 5
-  fold_times <- rep(n %/% 5, 5)
-  fold_times[1:r] <- fold_times[1:r] + 1
-  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
-  
-# preprocess the training data for each fold
-train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
-                   anti_join(obs, ., by = 'year') %>% # training years
-                   group_by(x,y) %>%
-                   mutate(test = all(SWE == 0)) %>%
-                   filter(test == FALSE) %>%
-                   select(-test) %>%
-                   ungroup() %>%
-                   spread(year, SWE) %>%
-                   select(-x, -y) %>%
-                   as.matrix())
-
-  train_pred <- map(1:5, ~ filter(folds, fold == .) %>%
-                      anti_join(preds, ., by = 'year') %>% # training years
-                      spread(year, SWE) %>%
-                      select(-x, -y) %>%
-                      as.matrix())
-
-  # preprocess test data for each fold
-  test <- map(1:5, ~ filter(folds, fold == .) %>%
-                semi_join(preds, ., by = 'year') %>%
-              spread(year, SWE) %>%
-                      select(-x, -y) %>%
-                      as.matrix()) # test years
-  
-  pmap(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
-}
-
-cca.predict(train_pred[[4]], train_obs[[]], test[[5]], 1, 1)
-cv_cca <- expand_grid(k_predictor = 4:9, k_response = 4:9) %>%
-  mutate(cv = map2(k_predictor, k_response, ~fit_kfold_cca(.x, .y, preds = cera_dat, obs = prism_dat)))
-
-
-
-testing <-   pmap(list(train_pred, train_obs, test), cca.predict, k.x = k_preds, k.y = k_obs)
 ```
 
 it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
@@ -1223,115 +1252,16 @@ test_cv %>%
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
-get the training data
-```{r}
-#exp_test <- tibble(k_predictor = 1:9, k_response = 1:9) %>%
-#  mutate(cera_patterns = map(k_predictor, ~get_patterns(cera_dat, k = .)),
-#         prism_patterns = map(k_response, ~get_patterns(prism_dat, k = .)))
-
- prism_train <- map(1:5, ~ filter(folds, fold == .) %>%
-    anti_join(prism_dat, ., by = 'year') %>% # training years
-    filter(year %in% years) %>% # remove years outside overlapping interval
-    get_patterns(k = 5))
-
-  cera_train <- map(1:5, ~ filter(folds, fold == .) %>%
-              anti_join(cera_dat, ., by = 'year') %>% # training years
-              filter(year %in% years) %>% # remove years outside overlapping interval
-              get_patterns(k = 5))
-```
-  
-  fit models to training data
-```{r}
-mod <- map2(cera_train, prism_train, prep_data) %>%
-  map(fit_model)
-```
-  
-  get test prdictors
-```{r}
- cera_test <- map(1:5, ~ filter(folds, fold == .) %>%
-              semi_join(cera_dat, ., by = 'year') %>% # training years
-              filter(year %in% years))
-
-predictors <- map2(cera_train, cera_test, ~left_join(.y, .x$climatology, by = c("x", "y")) %>%
-  mutate(SWE = SWE - swe_mean) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-  select(-swe_mean, -swe_sd) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
-   predict(.x$pca, .))
-```
-  
-predict the fields
 
 ```{r}
-predict_cv <- function(mod, pred) {
-  pred_scale <- as_tibble(scale(pred), rownames = 'year')
-  
-  map(mod$mod, ~add_predictions(pred_scale, ., var = 'amplitude', type = 'response')) %>%
-    bind_rows(.id = 'PC') %>%
-    dplyr::select(year, PC, amplitude) %>%
-    mutate(year = as.numeric(year))
-}
+cv_cca <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+  mutate(cv = map2(k_predictor, k_response, ~fit_kfold_cca(.x, .y, preds = cera_dat, obs = prism_dat)))
 
-amps_recon <- map2_dfr(mod, predictors, predict_cv) %>%
-  arrange(PC, year)
-```
-
-what's going on here with the negative correlation for the earlier years in the leading pcs? is something happening here? it almost looks liek they're negtively correlated in the first fold
-```{r}
-ggplot(amps_recon, aes(year, amplitude)) +
-  geom_line() +
-  facet_wrap(~PC)
-
-get_patterns(prism_dat, k = 5) %>% .$amplitudes %>% filter(year <= 2010) %>%
-  inner_join(amps_recon, by = c('PC', 'year')) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = amplitude.x), color = 'red') +
-  geom_line(aes(y = amplitude.y)) +
-  facet_wrap(~PC) +
-  geom_vline(xintercept = 1988)
-```
-
-```{r}
-
-t1 <- map2(mod, predictors, predict_cv) %>%
-  map2_dfr(prism_train, ., reconstruct_field) %>%
-  select(-anomaly) %>%
-get_errors
-
-t1 %>%
-  group_by(x,y) %>%
-  get_scores %>%
-  ggplot(aes(x,y)) +
-  geom_raster(aes(fill = mdsa)) +
-  scale_fill_viridis_c() +
-  coord_quickmap()
-
-t1 %>%
-  filter(year < 1985) %>%
-  select(x:SWE_obs) %>%
-  gather(type, value, SWE_recon:SWE_obs) %>%
-  ggplot(aes(x,y, fill = value)) +
-  geom_raster() +
-  scale_fill_viridis_c() +
-  coord_quickmap() +
-  facet_grid(type~year)
-
-
-
-t1 %>%
-  group_by(year) %>%
-  summarise(recon = sum(SWE_recon), obs = sum(SWE_obs)) %>%
-  ggplot(aes(year)) +
-  geom_line(aes(y = obs)) +
-  geom_line(aes(y = recon), color = 'red')
-  
-```
-
-```{r}
-cv_dat <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+cv_gam <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
   mutate(cv = map2(k_predictor, k_response, ~fit_kfold(.x, .y, preds = cera_dat, obs = prism_dat)))
+
+
+cv_dat <- bind_rows(cv_gam, cv_cca, .id = 'type')
 ```
 
 #### Domain averages

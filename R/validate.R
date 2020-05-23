@@ -27,11 +27,11 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
                 semi_join(preds, ., by = 'year')) # test years
 
   # fit model to training data and use to predict new fields
-  pmap_dfr(list(pred_train, obs_train, test), fit_cv)
+  pmap_dfr(list(pred_train, obs_train, test), fit_cv, k_preds = k_preds)
 }
 
 # special predict method for cv that scales predictors (should fold into original predict method in future)
-fit_cv <- function(pred_train, obs_train, test) {
+fit_cv <- function(pred_train, obs_train, test, k_preds) {
 
   mod <- prep_data(pred_train, obs_train) %>%
     fit_model()
@@ -44,8 +44,8 @@ fit_cv <- function(pred_train, obs_train, test) {
     dplyr::select(-x, -y) %>%
     t() %>%
     predict(pred_train$pca, .) %>%
-    scale(center = FALSE, scale = preds_train$pca$sdev) %>% # scale according to training pcs
-    .[,1:k_preds] %>%
+    scale(center = FALSE, scale = pred_train$pca$sdev) %>% # scale according to training pcs
+    .[,1:k_preds, drop = FALSE] %>%
     as_tibble(rownames = 'year')
 
   map(mod$mod, ~add_predictions(preds, ., var = 'amplitude', type = 'response')) %>%
