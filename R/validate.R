@@ -1,4 +1,4 @@
-fit_kfold <- function(k_preds, k_obs, preds, obs){
+prep_kfold <- function(k_preds, k_obs, preds, obs, type = NULL){
   # this should be refactored ...
 
   # find the years of overlap between the response and predictor fields
@@ -14,11 +14,11 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
   folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
 
   # preprocess the training data for each fold
-  obs_train <- map(1:5, ~ filter(folds, fold == .) %>%
+  train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
                      anti_join(obs, ., by = 'year') %>% # training years
                      get_patterns(k = k_obs))
 
-  pred_train <- map(1:5, ~ filter(folds, fold == .) %>%
+  train_preds <- map(1:5, ~ filter(folds, fold == .) %>%
                       anti_join(preds, ., by = 'year') %>% # training years
                       get_patterns(k = k_preds))
 
@@ -26,43 +26,100 @@ fit_kfold <- function(k_preds, k_obs, preds, obs){
   test <- map(1:5, ~ filter(folds, fold == .) %>%
                 semi_join(preds, ., by = 'year')) # test years
 
-  # fit model to training data and use to predict new fields
-  pmap_dfr(list(pred_train, obs_train, test), fit_cv, k_preds = k_preds)
+  tibble(train_obs, train_preds, test)
 }
 
-# special predict method for cv that scales predictors (should fold into original predict method in future)
-fit_cv <- function(pred_train, obs_train, test, k_preds) {
+fit_cv <- function(dat, fun) {
+  pmap_dfr(list(dat$train_preds, dat$train_obs, dat$test), fun) %>%
+    arrange(x, y, year) %>%
+    get_errors()%>%
+    group_by(x,y) %>%
+    filter(median(SWE_obs) > 3) %>%
+    get_scores()
+}
 
-  mod <- prep_data(pred_train, obs_train) %>%
+
+# special predict method for cv that scales predictors (should fold into original predict method in future)
+predict_gam <- function(preds, obs, newdata) {
+
+  k_preds <- unique(preds$amplitudes$PC) %>% length()
+
+  mod <- prep_data(preds, obs) %>%
     fit_model()
 
-  preds <- left_join(test, pred_train$climatology, by = c("x", "y")) %>%
+  new_pcs <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
     mutate(SWE = SWE - swe_mean) %>%
     dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
     dplyr::select(-swe_mean, -swe_sd) %>%
     tidyr::spread(year, SWE) %>%
     dplyr::select(-x, -y) %>%
     t() %>%
-    predict(pred_train$pca, .) %>%
-    scale(center = FALSE, scale = pred_train$pca$sdev) %>% # scale according to training pcs
+    predict(preds$pca, .) %>%
+    scale(center = FALSE, scale = preds$pca$sdev) %>% # scale according to training pcs
     .[,1:k_preds, drop = FALSE] %>%
     as_tibble(rownames = 'year')
 
-  map(mod$mod, ~add_predictions(preds, ., var = 'amplitude', type = 'response')) %>%
+  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
     bind_rows(.id = 'PC') %>%
     dplyr::select(year, PC, amplitude) %>%
     mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs_train, .)  # use obs_train to get training pcs
+    reconstruct_field(obs, .)  # use train_obs to get training pcs
 }
+
+predict_cca <- function(preds, obs, newdata) {
+  obs_amps <- obs$amplitudes %>%
+                          mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
+                          spread(PC, amplitude) %>%
+                          select(-year) %>%
+                          as.matrix()
+  preds_amps <- preds$amplitudes %>%
+                            mutate(PC = as.numeric(PC)) %>%
+                            spread(PC, amplitude) %>%
+                            select(-year) %>%
+                            as.matrix()
+
+  k_preds <- ncol(preds_amps)
+
+  # train CCA on training data
+  cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE)
+
+  # predict CCA on new data
+  new_amps <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
+    mutate(SWE = SWE - swe_mean) %>%
+    dplyr::select(-swe_mean, -swe_sd) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+    predict(preds$pca, .) %>%
+    scale(center = FALSE, scale = preds$pca$sdev) %>% # this should be from the training pcs
+    .[,1:k_preds, drop = FALSE]
+
+  k <- length(cca$cor)
+
+  new_years <- unique(newdata$year)
+
+  new_amps %*%
+    cca$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
+    diag(cca$cor, nrow = k) %*%  # nrow likewise rpevents weired behavior when k = 1
+    solve(cca$ycoef)[1:k,,drop = FALSE] %>%
+    `rownames<-`(new_years) %>%
+    as_tibble(rownames = 'year') %>%
+    gather(PC, amplitude, -year) %>%
+    mutate(year = as.numeric(year)) %>%
+    reconstruct_field(obs, .)
+}
+
+# check that the newdata argument is handled the same as not
+# identical(cca_fit(prism_dat, cera_dat, k_preds = 4, k_obs = 4) ,
+#          cca_fit(prism_dat, cera_dat, cera_dat, k_preds = 4, k_obs = 4) %>% filter(year >= 1982) )
 
 get_errors <- function(x) {
   x %>%
     inner_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    mutate(SWE_recon = if_else(SWE_recon < 0.03, 0.03, SWE_recon), #for the metrics that use logq
-           SWE_obs = if_else(SWE_obs < 0.03, 0.03, SWE_obs),
-           error = SWE_recon - SWE_obs,
+    mutate(error = SWE_recon - SWE_obs,
            relative_error = error / SWE_obs,
-           accuracy_ratio = SWE_recon / SWE_obs,
+           accuracy_ratio = if_else(SWE_recon < 0.03, 0.03, SWE_recon) /  if_else(SWE_obs < 0.03, 0.03, SWE_obs),
            log_q = log(accuracy_ratio))
 }
 
