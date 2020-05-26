@@ -46,5 +46,6 @@ get_climatology <- function(dat) {
   dat %>%
   group_by(x, y) %>%
   summarise(swe_mean = mean(SWE), # make generic (i.e. var rather than swe)
-            swe_sd = sd(SWE))
+            swe_sd = sd(SWE)) %>%
+    ungroup()
 }
