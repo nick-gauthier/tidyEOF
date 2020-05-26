@@ -239,12 +239,12 @@ Run a principal components analysis. Get the eigenvalues, and run some truncatio
 e <- prism_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(4)
+  plot_scree(9)
 
 f <- cera_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(4)
+  plot_scree(7)
 
 e + f
 ```
@@ -746,135 +746,6 @@ knitr::knit_exit()
 ## CCA
 
 ```{r}
-cca_fit <- function(obs, preds, newdata = preds, k_obs, k_preds){
-   years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-
-    obs_patterns <- get_patterns(obs, k = k_obs) 
-  preds_patterns <- get_patterns(preds, k = k_preds)
-  
-  obs_amps <- obs_patterns$amplitudes %>%
-    mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
-   spread(PC, amplitude) %>%
-   select(-year) %>%
-   as.matrix()
-  
-  preds_amps <- preds_patterns$amplitudes %>%
-    mutate(PC = as.numeric(PC)) %>% 
-    spread(PC, amplitude) %>%
-   select(-year) %>%
-    as.matrix() 
-  
-  cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE) # pcs already centered
-
- new_amps <- left_join(newdata, preds_patterns$climatology, by = c("x", "y")) %>%
-    mutate(SWE = SWE - swe_mean) %>%
-       dplyr::select(-swe_mean, -swe_sd) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
-    predict(preds_patterns$pca, .) %>%
-    scale(center = FALSE, scale = preds_patterns$pca$sdev) %>% # this should be from the training pcs
-    .[,1:k_preds]
-  new_years <- unique(newdata$year)
-  
-  (new_amps %*% cca$xcoef %*% diag(cca$cor) %*% solve(cca$ycoef)) %>%
-    `rownames<-`(new_years) %>%
-    as_tibble(rownames = 'year') %>% 
-    gather(PC, amplitude, -year) %>% 
-    mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs_patterns, .)
-}
-
-# check that the newdata argument is handled the same as not
-# identical(cca_fit(prism_dat, cera_dat, k_preds = 4, k_obs = 4) ,
-#          cca_fit(prism_dat, cera_dat, cera_dat, k_preds = 4, k_obs = 4) %>% filter(year >= 1982) )
-
-```
-
-
-```{r}
-
- 
-predict_cca <- function(cca_mod, newdata, preds_patterns, obs_patterns, k_preds) {
-  new_amps <- left_join(newdata, preds_patterns$climatology, by = c("x", "y")) %>%
-    mutate(SWE = SWE - swe_mean) %>%
-    dplyr::select(-swe_mean, -swe_sd) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
-    predict(preds_patterns$pca, .) %>%
-    scale(center = FALSE, scale = preds_patterns$pca$sdev) %>% # this should be from the training pcs
-    .[,1:k_preds, drop = FALSE]
-  
-  k <- length(cca_mod$cor)
-
-  new_years <- unique(newdata$year)
-  
-  new_amps %*% 
-      cca_mod$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
-    diag(cca_mod$cor, nrow = k) %*%  # nrow likewise rpevents weired behavior when k = 1
-    solve(cca_mod$ycoef)[1:k,,drop = FALSE] %>%
-    `rownames<-`(new_years) %>%
-    as_tibble(rownames = 'year') %>% 
-    gather(PC, amplitude, -year) %>% 
-    mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs_patterns, .)
-} 
-
-fit_kfold_cca <- function(k_preds, k_obs, preds, obs){
-  # this should be refactored ...
-  # find the years of overlap between the response and predictor fields
-  years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-  
-  # divide years into 5 contiguous folds
-  n <- length(years)
-  r <- n %% 5
-  fold_times <- rep(n %/% 5, 5)
-  fold_times[1:r] <- fold_times[1:r] + 1
-  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
-  
-  # preprocess the training data for each fold
-  train_obs_patterns <- map(1:5, ~ filter(folds, fold == .) %>%
-                              anti_join(obs, ., by = 'year') %>% # training years
-                              get_patterns(k = k_obs))
-  
-  train_preds_patterns <- map(1:5, ~ filter(folds, fold == .) %>%
-                               anti_join(preds, ., by = 'year') %>% # training years
-                               get_patterns(k = k_preds))
-  
-  train_obs_amps <- map(train_obs_patterns, ~ .$amplitudes %>% 
-                          mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
-                          spread(PC, amplitude) %>%
-                          select(-year) %>%
-                          as.matrix())
-  
-  train_preds_amps <- map(train_preds_patterns, ~ .$amplitudes %>%
-                            mutate(PC = as.numeric(PC)) %>% 
-                            spread(PC, amplitude) %>%
-                            select(-year) %>%
-                            as.matrix() )
-  
-    # preprocess test data for each fold
-  test <- map(1:5, ~ filter(folds, fold == .) %>%
-                semi_join(preds, ., by = 'year')) # test years
-  
-  # train CCA on training data
-  cca <- map2(train_preds_amps, train_obs_amps, cancor, xcenter = FALSE, ycenter = FALSE)
-  
-  # predict CCA on new data
-  pmap_dfr(list(cca, test, train_preds_patterns, train_obs_patterns), predict_cca, k_preds = k_preds) %>% 
-    arrange(x, y, year)
-}
-```
-
-
-```{r}
 cera_can <- cera_patterns$eofs %>%
   select(-value) %>%  # use normalized or unnormalized?
   spread(EOF, weight) %>%
@@ -1245,6 +1116,101 @@ test_cv %>%
 
 ```
 
+## Delta
+
+```{r}
+delta <- function(pred, obs, newdata) {
+  
+  pred_clim <- get_climatology(pred)
+  obs_clim <- get_climatology(obs)
+  
+  newdata %>%
+    left_join(pred_clim, by = c('x', 'y')) %>%
+  mutate(anomaly = SWE / swe_mean) %>%
+    select(x,y, year, anomaly) %>%
+    group_by(year) %>%
+    nest() %>%
+    mutate(mod = map(data, ~ gam(anomaly ~ s(x, y, k = 300, bs = 'gp'), data = .))) %>%
+    select(-data) %>%
+    mutate(data = rep(list(obs_clim), n())) %>%
+    mutate(anomaly = map2(mod, data, predict, type = 'response')) %>%
+    select(-mod) %>%
+    unnest(c(data, anomaly)) %>% 
+    mutate(SWE = swe_mean * if_else(anomaly >=0, anomaly, 0)) %>%
+    select(year, x, y, SWE)
+}
+
+prep_kfold_delta <- function(preds, obs, type = NULL){
+    # find the years of overlap between the response and predictor fields
+  years <- intersect(preds$year, obs$year)
+  preds <- filter(preds, year %in% years)
+  obs <- filter(obs, year %in% years)
+
+  # divide years into 5 contiguous folds
+  n <- length(years)
+  r <- n %% 5
+  fold_times <- rep(n %/% 5, 5)
+  fold_times[1:r] <- fold_times[1:r] + 1
+
+  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
+
+  train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
+                     anti_join(obs, ., by = 'year'))
+
+  train_preds <- map(1:5, ~ filter(folds, fold == .) %>%
+                      anti_join(preds, ., by = 'year'))
+
+  # preprocess test data for each fold
+  test <- map(1:5, ~ filter(folds, fold == .) %>%
+                semi_join(preds, ., by = 'year')) # test years
+
+  tibble(train_obs, train_preds, test)
+}
+
+t2 <- prep_kfold_delta(cera_dat, prism_dat)
+ 
+t3 <- pmap_dfr(list(t2$train_preds, t2$train_obs, t2$test), delta)
+
+t4 <- t3 %>% get_errors() %>%
+    left_join(areas, by = c("x", "y")) %>%
+    group_by(year) %>%
+    summarise(SWE_obs = sum(SWE_obs * area),
+              SWE_recon = sum(SWE_recon * area)) %>%
+    mutate(error = SWE_recon - SWE_obs)
+```
+
+```{r}
+
+t1 <- delta(filter(cera_dat, year >= 1982), filter(prism_dat, year <= 2010), filter(cera_dat, year == 1991))
+
+
+ ggplot(t1) +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_viridis_c(limits = c(0, 3500)) +
+  theme_void() +
+  theme(legend.position = 'bottom')
+ 
+  ggplot(prism_dat %>% filter(year == 1991)) +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_viridis_c(limits = c(0, 3500)) +
+  theme_void() +
+  theme(legend.position = 'bottom')
+  
+  
+  predict_cca(cera_dat %>% filter(year >= 1982)%>% get_patterns(k = 4), prism_dat %>% filter(year <= 2010) %>% get_patterns(k = 4), cera_dat %>% filter(year == 1991)) %>% 
+     ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_viridis_c(limits = c(0, 3500)) +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+
+```
+so what above must change by folds? just the means for each training period? -- but wait, the newdata here is the observations from the test period
+
 # Validation
 
 
@@ -1254,14 +1220,101 @@ Set up a 5 fold cross validation experiment for selecting the truncation level, 
 
 
 ```{r}
-cv_cca <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
-  mutate(cv = map2(k_predictor, k_response, ~fit_kfold_cca(.x, .y, preds = cera_dat, obs = prism_dat)))
+cv_dat2 <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
+  mutate(kfolds = map2(k_predictor, k_response, ~prep_kfold(.x, .y, preds = cera_dat, obs = prism_dat)),
+         gam = map(kfolds, fit_cv, fun = predict_gam),
+         cca = map(kfolds, fit_cv, fun = predict_cca)) %>%
+  select(-kfolds) %>%
+  gather(type, metric, gam:cca) 
 
-cv_gam <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
-  mutate(cv = map2(k_predictor, k_response, ~fit_kfold(.x, .y, preds = cera_dat, obs = prism_dat)))
+saveRDS(cv_dat, 'cv_dat')
+```
+
+```{r}
+cv_dat2%>%
+  gather(type, metric, gam:cca) %>%
+  unnest(metric) %>%
+  ggplot(aes(year, group = interaction(k_predictor, k_response, type)))+
+    geom_line(aes(y = SWE_obs), color = 'red') +
+  geom_line(aes(y = SWE_recon, color = type), alpha = .1) 
+```
+
+```{r}
+cv_dat2 %>%
+  gather(type, metric, gam:cca)%>%
+  mutate(rmse = map_dbl(metric, ~sqrt(mean((.$SWE_recon - .$SWE_obs)^2)))) %>%
+  select(-metric) %>%
+  arrange(rmse)  %>%
+  filter(rmse <= (min(rmse) + sd(rmse))) %>%
+      mutate(test = k_predictor + k_response) %>%
+  arrange(test)
+```
+
+```{r}
+t4 %>%
+  summarise(rmse = sqrt(mean((SWE_recon - SWE_obs)^2)))
+```
 
 
-cv_dat <- bind_rows(cv_gam, cv_cca, .id = 'type')
+```{r}
+cv_dat2 %>%
+  gather(type, metric, gam:cca)%>%
+  mutate(rmse = map_dbl(metric, ~sqrt(mean((.$SWE_recon - .$SWE_obs)^2)))) %>%
+  select(-metric) %>%
+      ggplot(aes(k_predictor, k_response, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  facet_wrap(~type) +
+  scale_x_continuous(breaks = 1:9, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:9, minor_breaks = NULL) +
+  coord_equal() +
+  theme_minimal()
+```
+
+
+
+```{r}
+loadRDS('cv_dat')
+cv_dat %>%
+  gather(type, metric, gam:cca) %>%
+  mutate(rmse = map_dbl(metric, ~mean(.$rmse))) %>%
+  select(-metric) %>%
+  arrange(rmse) %>%
+  filter(rmse < (min(rmse) + sd(rmse))) %>%
+      mutate(test = k_predictor + k_response) %>%
+  arrange(test)
+
+cv_dat %>%
+  gather(type, metric, gam:cca) %>%
+  mutate(rmse = map_dbl(metric, ~mean(.$rmse))) %>%
+  select(-metric) %>%
+    ggplot(aes(k_predictor, k_response, fill = rmse)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  facet_wrap(~type) +
+  scale_x_continuous(breaks = 1:9, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:9, minor_breaks = NULL) +
+  coord_equal() +
+  theme_minimal()
+
+cv_dat %>%
+  gather(type, metric, gam:cca) %>%
+  mutate(srmse = map_dbl(metric, ~sum(.$srmse > 0.7))) %>%
+  select(-metric) %>%
+  arrange(srmse) %>%
+    filter(srmse < (min(srmse) + sd(srmse))) %>%
+    mutate(test = k_predictor + k_response) %>%
+  arrange(test)
+
+cv_dat %>%
+  gather(type, metric, gam:cca) %>%
+  mutate(sspb = map_dbl(metric, ~mean(.$sspb))) %>%
+  select(-metric) %>%
+  arrange(sspb) %>%
+    filter(sspb < (min(sspb) + sd(sspb))) %>%
+  mutate(test = k_predictor + k_response) %>%
+
+cv_dat$gam[[1]]
 ```
 
 #### Domain averages
@@ -1290,7 +1343,7 @@ cv_recons <- cv_dat %>%
   unnest(cv) %>%
  # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
       mutate(covered = pmin(1, SWE / 3) * area) %>% # linear decline below 3mm
-  group_by(k_predictor, k_response, year) %>%
+  group_by(k_predictor, k_response, year, type) %>%
   summarise(SWE = sum(SWE * area), 
             SCA = sum(covered)) %>%
   left_join(wus_stats, by = 'year', suffix = c('_recon', '_obs'))
@@ -1337,11 +1390,13 @@ ggplot(aes(k_predictor, k_response, fill = SCA_rmse)) +
   scale_y_continuous(breaks = 1:9, minor_breaks = NULL) +
   coord_equal() +
   theme_minimal()
+
+(rmse_dat$SWE_rmse %>% sd )+ 17704851
 ```
 
 
 ```{r, fig.asp = .35}
-t1 <- cv_recons %>% filter(k_response == 4, k_predictor == 4) %>%
+t1 <- cv_recons %>% filter(k_response == 6, k_predictor == 8) %>%
   gather(type, value, SWE_recon:SCA_obs) %>%
   separate(type, c('var', 'type')) %>%
   mutate(name = 'Western US')
@@ -1398,7 +1453,7 @@ bind_rows(t1, t2) %>%
 #### Local error
 ```{r}
 scores <- cv_dat %>%
-  mutate(errors = map(cv, ~get_errors(.) %>% group_by(x, y) %>% filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+  mutate(errors = map(cv, ~get_errors(.) %>% group_by(x, y) %>% filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>% # or should it only befiltering by obs?
   ungroup()),
         score_map = map(errors, ~group_by(., x,y) %>% get_scores),
          score_ts = map(errors, ~group_by(., year) %>% get_scores)) %>%
