@@ -57,6 +57,24 @@ cera <- map(1:10,
   crop(bbox)
 ```
 
+```{r}
+cesm_h2osno <- preprocess('~/Downloads/b.e11.BLMTRC5CN.f19_g16.001.clm2.h1.H2OSNO.08500101-18491231.nc',
+                          var = 'H2OSNO',
+                          flip = TRUE,
+                          bbox = bbox)
+
+cesm_h2osno_ext <- preprocess('~/Downloads/b.e11.BLMTRC5CN.f19_g16.001.clm2.h1.H2OSNO.18500101-20051231.nc',
+                          var = 'H2OSNO',
+                          flip = TRUE)
+
+cesm_areas <- area(cesm_h2osno) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  rename(area = layer)
+
+cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
+  brick()
+```
+
 
 ```{r}
 livneh <- preprocess('~/Downloads/LIVNEH/swe.mon.mean.nc', var = 'swe', bbox = bbox, flip = TRUE, regrid = TRUE)
@@ -130,6 +148,18 @@ cera_dat <- cera %>%
   dplyr::select(-layer) %>%
   snow_only()  %>%
   semi_join(cera_mask, by = c('x', 'y'))
+```
+
+
+still need to account for snow fraction of grid cell? and land fraction too?
+
+```{r}
+cesm_dat <- cesm %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
+  rename(SWE = value) %>%
+  select(-layer) %>%
+  left_join(cesm_areas, by = c('x', 'y'))
 ```
 
 ```{r}
