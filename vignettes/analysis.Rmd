@@ -49,7 +49,7 @@ load('../data.Rdata')
  
 First plot March SWE climatology from observations and reanalysis data. We immediately see the mismatch between the two because of the coarse resolution reanalysis. To drive home the point, here's the high-resolution observations, resampled to the reanalysis resolution. For a better comparison, each dataset was reduced to the common range of 1982--2010. The coarse data fail to capture the topographic heterogeneity of the domain, and thus the small-scale variations in elevation and temperature that influence snow accumulation and melt.
 
-```{r, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010. C) Standard deviation of March SWE from PRISM/SNOTEL observations, 1982-2017. B) Standard deviation of March SWE from CERA-20C Reanalysis, 1901-2010."}
+```{r, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
 a <- prism_dat %>%
   get_climatology() %>%
   ggplot() +
@@ -239,14 +239,17 @@ Run a principal components analysis. Get the eigenvalues, and run some truncatio
 e <- prism_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(9)
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
 
 f <- cera_dat %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
-  plot_scree(7)
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
 
-e + f
+e + f + plot_annotation(tag_levels = 'A')
+ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```
 
 ```{r}
@@ -263,6 +266,38 @@ dof_c <- cera_dat %>%
   pull(eigenvalues)
 
 sum(dof_c)^2 / sum(dof_c^2) # from bretheron et al 1999
+```
+
+```{r}
+# prism for the whole period
+ prism_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
+
+# prism for before 2010
+ prism_dat %>% 
+   filter(year <=2010)%>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
+
+ #cera after 1983
+cera_dat %>% 
+  filter(year>=1983) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
+
+#cera whole
+cera_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
 ```
 
 Looks like there are ~4 spatial degrees of freedom in the data
