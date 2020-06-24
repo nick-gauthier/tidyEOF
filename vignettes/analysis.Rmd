@@ -1075,12 +1075,6 @@ t1 <- delta(filter(cera_dat, year >= 1982), filter(prism_dat, year <= 2010), fil
 
 
 
-
-
-
-
-
-
 # Cross-validation
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
@@ -1088,29 +1082,20 @@ Set up a 5 fold cross validation experiment for selecting the truncation level, 
 
 ```{r}
 cv_eot <- prep_eot(cera_dat, prism_dat, 10, 10, 10)
+```
 
-cv_eot_error <- function(rast) {
-  rast %>%
-      setNames(1982:2010) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  mutate(year = parse_number(layer)) %>%
-  mutate_at(c('x', 'y'), round, digits = 5) %>% 
-  rename(SWE = value) %>%
-  dplyr::select(x, y, year, SWE) %>%
-  inner_join(  mutate_at(prism_dat, c('x', 'y'), round, digits = 5) , by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
-    left_join( mutate_at(areas, c('x', 'y'), round, digits = 5), by = c("x", "y")) %>%
-    group_by(year) %>%
-    summarise(SWE_obs = sum(SWE_obs * area),
-              SWE_recon = sum(SWE_recon * area)) %>%
-    mutate(error = SWE_recon - SWE_obs)
-}
-
-eot_errors <- tibble(k = 1:10) %>%
+```{r}
+cv_eot <- tibble(k = 1:10) %>%
   mutate(pred = purrr::map(k, predict_eot, cv = cv_eot),
          error = purrr::map(pred, cv_eot_error)) %>%
   select(k, error) %>%
-  unnest(error)
+  unnest_wider(error)
 ```
+
+```{r}
+write_csv(cv_eot, 'cv_eot.csv')
+```
+
 
 ```{r}
 cv_cca <- expand_grid(kx = 1:10, ky = 1:10, kxy = 1:10) %>%
@@ -1128,9 +1113,13 @@ cv_cca <- read_csv('cv_cca.csv')
 ```
 
 
+
 ```{r}
 cv_cca %>% arrange(rmse)
 cv_cca %>% arrange(-corr)
+
+cv_eot %>% arrange(rmse)
+cv_eot %>% arrange(-corr)
 ```
 
 ```{r}
@@ -1138,10 +1127,15 @@ cv_cca%>%
   ggplot(aes(rmse, corr)) +  geom_point(aes(color = as.factor(kx)), size = 3, alpha = .5) + theme_bw() +
   scale_color_viridis_d() + 
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL)# + geom_hline(yintercept = clim_baseline)
+
+cv_eot %>%
+  ggplot(aes(rmse, corr)) +  geom_point(aes(color = as.factor(k)), size = 3, alpha = .5) + theme_bw() +
+  scale_color_viridis_d() + 
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL)# + geom_hline(yintercept = clim_baseline)
 ```
 
 ```{r}
-cv_cca%>%
+cv_cca  %>%
   ggplot(aes(kxy, rmse)) +  geom_point(aes(color = as.factor(kx)), size = 2, alpha = .5) + theme_bw() +
   scale_color_viridis_d() + 
   geom_line(data = filter(group_by(cv_cca, kxy), rmse == min(rmse))) +
@@ -1172,6 +1166,42 @@ cv_cca %>%
   filter(rmse == min(rmse)) %>%
   ggplot(aes(kxy, rmse)) +
   geom_line()
+
+cv_eot %>%
+  arrange(k) %>%
+  mutate(test = (rmse <= lead(rmse)))
+```
+
+```{r, fig.asp = .4}
+a <- cv_cca %>%
+  group_by(kxy) %>%
+  filter(rmse == min(rmse)) %>%
+  rename(k = kxy) %>%
+  bind_rows(cv_eot, .id = 'Method') %>%
+  mutate(Method = if_else(Method == '1', 'CCA', 'EOT')) %>%
+  ggplot(aes(k, rmse)) +
+  geom_line(aes(group = Method, color = Method), size = 1.2) +
+scale_color_grey() +
+  theme_bw() +
+    scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+    labs(x = 'Coupled patterns', y = 'RMSE (M)') #+ geom_hline(yintercept = clim_baseline)
+
+b <- cv_cca %>%
+  group_by(kxy) %>%
+  filter(corr == max(corr)) %>%
+  rename(k = kxy) %>%
+  bind_rows(cv_eot, .id = 'Method') %>%
+    mutate(Method = if_else(Method == '1', 'CCA', 'EOT')) %>%
+  ggplot(aes(k, corr)) +
+  geom_line(aes(group = Method, color = Method), size = 1.2) +
+scale_color_grey() +
+  theme_bw() +
+    scale_x_continuous(breaks = 1:10, minor_breaks = NULL) + 
+  labs(x = 'Coupled patterns', y = 'Domain-wide correlation') #+ geom_hline(yintercept = clim_baseline)
+
+a + b +plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A')
+
+ggsave('method_comparison.png', height = 2.4, width = 6)
 ```
 
 ```{r}
@@ -1181,14 +1211,18 @@ cv_cca %>%
   ungroup()%>%
   arrange(kxy) %>%
   mutate(test = corr >= lead(corr))
+
+cv_eot %>%
+  arrange(k) %>%
+  mutate(test = corr >= lead(corr))
 ```
 
 
 
 
 ```{r, fig.width=10, fig.asp = 1}
-predict_cca(get_patterns(filter(cera_dat, year >=1982), 5), 
-            get_patterns(filter(prism_dat, year <=2010), 4), 
+predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
+            get_patterns(filter(prism_dat, year <=2 010), 4), 
             filter(cera_dat, year >= 1982),
             k = 4) %>%
   group_by(x,y) %>%

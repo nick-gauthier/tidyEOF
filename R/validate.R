@@ -61,9 +61,12 @@ prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
                        spread(year, SWE) %>%
                        rasterFromXYZ())%>% # test years
     map2(pred_train_rast, ~.x - mean(.y)) # subtract the training predictor mean from the test predictors
+  purrr::map(obs_train_rast, mean)
+
+  eots <- map2(pred_train, obs_train, ~eot(.x, .y, n = k_cca, standardised = FALSE, verbose = FALSE))
 
   # fit model to training data and use to predict new fields
-  list(eot = map2(pred_train, obs_train, ~eot(.x, .y, n = k_cca, standardised = FALSE, verbose = FALSE)), # this hard codes 10 patterns, but could be changed to min(k_preds, k_obs)
+  list(eot = eots, # this hard codes 10 patterns, but could be changed to min(k_preds, k_obs)
        test = test,
        mean = purrr::map(obs_train_rast, mean))
 }
@@ -95,7 +98,32 @@ total_swe_corr <- function(errors) {
 }
 
 
+cv_eot_error <- function(rast) {
+  dat <- rast %>%
+    setNames(1982:2010) %>%
+    as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+    mutate(year = parse_number(layer)) %>%
+    mutate_at(c('x', 'y'), round, digits = 5) %>%
+    rename(SWE = value) %>%
+    dplyr::select(x, y, year, SWE) %>%
+    inner_join(  mutate_at(prism_dat, c('x', 'y'), round, digits = 5) , by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
 
+  rmse_dat<- dat %>%
+    mutate(error = SWE_recon - SWE_obs) %>%
+    summarise(rmse = sqrt(mean(error^2)))%>%
+    pull(rmse)
+
+  corr_dat<- dat %>%
+    left_join( mutate_at(areas, c('x', 'y'), round, digits = 5), by = c("x", "y")) %>%
+    group_by(year) %>%
+    summarise(SWE_obs = sum(SWE_obs * area),
+              SWE_recon = sum(SWE_recon * area)) %>%
+    summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
+    pull(correlation)
+
+  c(rmse = rmse_dat,
+    corr = corr_dat)
+}
 
 
 
