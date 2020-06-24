@@ -1096,17 +1096,46 @@ prep_kfold_delta <- function(preds, obs, type = NULL){
 
   tibble(train_obs, train_preds, test)
 }
+```
 
+```{r}
 t2 <- prep_kfold_delta(cera_dat, prism_dat)
- 
-t3 <- pmap_dfr(list(t2$train_preds, t2$train_obs, t2$test), delta)
 
-t4 <- t3 %>% get_errors() %>%
-    left_join(areas, by = c("x", "y")) %>%
+clim_baseline <- t2 %>%
+  mutate(clim = map(train_obs, get_climatology),
+         year = map(test, ~pull(., year) %>% unique)) %>%
+  select(clim, year) %>%
+  unnest(year) %>%
+  unnest(clim) %>%
+  rename(SWE = swe_mean) %>%
+  get_errors  %>% 
+   left_join(areas, by = c("x", "y")) %>%
     group_by(year) %>%
     summarise(SWE_obs = sum(SWE_obs * area),
               SWE_recon = sum(SWE_recon * area)) %>%
-    mutate(error = SWE_recon - SWE_obs)
+    mutate(error = SWE_recon - SWE_obs) %>% pull(error) %>% `^`(2) %>% mean %>% sqrt
+```
+
+
+```{r}
+t3 <- pmap_dfr(list(t2$train_preds, t2$train_obs, t2$test), delta)
+
+t3 %>% 
+  get_errors() %>%
+   left_join(areas, by = c("x", "y")) %>%
+    group_by(year) %>%
+    summarise(SWE_obs = sum(SWE_obs * area),
+              SWE_recon = sum(SWE_recon * area)) %>%
+    mutate(error = SWE_recon - SWE_obs) %>% pull(error) %>% `^`(2) %>% mean %>% sqrt
+  arrange(error)
+    ggplot(aes(year, error)) +
+  geom_line() + scale_y_continuous(limits = c(-1e8, 1e8))
+   # group_by(year) %>%
+    #summarise(SWE_obs = sum(SWE_obs * area),
+    #          SWE_recon = sum(SWE_recon * area)) %>%
+    #mutate(error = SWE_recon - SWE_obs)
+
+sqrt(mean(t4$error ^ 2))
 ```
 
 ```{r}
