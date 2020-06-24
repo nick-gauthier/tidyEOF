@@ -1556,6 +1556,44 @@ bind_rows(t1, t2) %>%
   theme_bw()
 ```
 
+
+# Reconstruction
+
+```{r}
+recon_20c <- couple_patterns(get_patterns(cera_dat, 4), get_patterns(prism_dat, 6)) %>%
+  predict_patterns(get_patterns(cera_dat, 4)) %>%
+  reconstruct_field(get_patterns(prism_dat, 6), .)
+
+recon_20c2 <-predict_cca(get_patterns(filter(cera_dat, year >=1982), 5), 
+            get_patterns(filter(prism_dat, year <=2010), 4), 
+            cera_dat,
+            k = 4)
+```
+
+```{r}
+left_join(recon_20c, areas, by = c("x", "y")) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area)) %>%
+  ggplot(aes(year, SWE)) +
+  geom_line() +
+      geom_line(data = wus_stats, color = 'red') +
+  labs(x = 'Year') +
+  theme_bw()
+
+left_join(recon_20c2, areas, by = c("x", "y")) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area)) %>%
+  ggplot(aes(year, SWE)) +
+  geom_line() +
+      geom_line(data = wus_stats, color = 'red') +
+  labs(x = 'Year') +
+  theme_bw()
+
+ggsave('20c_recon.png', height = 4, width = 6)
+```
+
+
+
 #### Local error
 ```{r}
 scores <- cv_dat %>%
@@ -1618,6 +1656,7 @@ group_by(metric) %>%
 
 tmp2$plots
 ```
+
 
 # Paleo
 
