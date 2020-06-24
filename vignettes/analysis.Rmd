@@ -916,135 +916,38 @@ cera_rast <- cera_dat %>%
 prism_rast <- prism_dat %>%
   filter(year <= 2010) %>%
   spread(year, SWE) %>%
-  rasterFromXYZ()
+  rasterFromXYZ(res = c(0.08333333, 0.08333334), crs = '+proj=longlat +pm=0 +a=6378137 +rf=298.257222101')
 
 eot1 <- cera_rast %>%
-  anomalize() #%>%
- # denoise(expl.var = 0.9, weighted = TRUE)
+  anomalize() %>%
+  denoise(k = 10, weighted = TRUE)
 
 eot2 <- prism_rast %>%
-  anomalize()# %>% 
-  #denoise(k = 5, weighted = TRUE)
+  anomalize() %>% 
+  denoise(k = 10, weighted = TRUE)
+```
+ok so the new raster doesn't have all the no snow areas. and its cropped to the state boundaries. so just stay in raster land until the end? area weight 
+```{r}
+telecon <- eot(eot1, eot2, n = 10, standardised = FALSE)
 ```
 
 ```{r}
-telecon <- eot(eot1, eot2, n = 4, standardised = FALSE)
-```
-
-
-```{r}
-walk(1:4, ~plot(telecon, y = ., show.bp = TRUE))
+walk(1:10, ~plot(telecon, y = ., show.bp = TRUE))
 ```
 
 ```{r}
-predict(telecon, eot1, n = 4) %>% .[[1]] %>% `+`(mean(prism_rast))%>% plot
+m1 <- purrr::map_dbl(1:10, ~((predict(telecon, eot1, n = .) + mean(prism_rast)) * area(prism_rast))%>% cellStats(sum) %>%
+  `-`(cellStats(prism_rast * area(prism_rast), sum)) %>%
+  `^`(2) %>%
+  mean %>%
+  sqrt)
+
+plot(m1)
 ```
 
-cv
-```{r}
-cera_rast <- cera_dat %>%
-  filter(year >= 1982) %>%
-  spread(year, SWE) %>%
-  rasterFromXYZ() 
-
-prism_rast <- prism_dat %>%
-  filter(year <= 2010) %>%
-  spread(year, SWE) %>%
-  rasterFromXYZ()
-
-eot1 <- cera_rast %>%
-  anomalize()# %>%
-  #denoise(k = 5, weighted = TRUE)
-
-eot2 <- prism_rast %>%
-  anomalize() #%>% 
-  #denoise(k = 5, weighted = TRUE)
-
-telecon <- eot(eot1, eot2, n = 4, standardised = FALSE, verbose = FALSE)
-
-predict(telecon, eot1, n = 4) + mean(prism_rast)
-
-fit_kfold_eot <- function(k_preds, k_obs, preds, obs){
-  # this should be refactored ...
-  # find the years of overlap between the response and predictor fields
-  years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-
-  # divide years into 5 contiguous folds
-  n <- length(years)
-  r <- n %% 5
-  fold_times <- rep(n %/% 5, 5)
-  fold_times[1:r] <- fold_times[1:r] + 1
-  folds <- tibble(year = years, fold = rep(1:5, times = fold_times))
-
-  # preprocess the training data for each fold
-  obs_train_rast <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                     anti_join(obs, ., by = 'year') %>% # training years
-                       spread(year, SWE) %>%
-                      rasterFromXYZ())
-  
-  obs_train <- purrr::map(obs_train_rast, ~ anomalize(.))# %>% denoise(expl.var = 0.9, weighted = TRUE, verbose = FALSE))
-
-  pred_train <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                      anti_join(preds, ., by = 'year') %>% # training years
-                        spread(year, SWE) %>%
-                      rasterFromXYZ() %>%
-                        anomalize) #%>%
-                        #denoise(expl.var = 0.9, weighted = TRUE, verbose = FALSE))
-
-  # preprocess test data for each fold
-  test <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                semi_join(preds, ., by = 'year') %>%
-                  spread(year, SWE) %>%
-                      rasterFromXYZ()) # test years
-
-  # fit model to training data and use to predict new fields
-  list(eot = map2(pred_train, obs_train, ~eot(.x, .y, n = 6, standardised = FALSE, verbose = TRUE)),
-       test = test,
-       mean = purrr::map(obs_train_rast, mean))
-}
-
-cv_eot <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
-  mutate(cv = map2(k_predictor, k_response, ~fit_kfold_eot(.x, .y, preds = cera_dat, obs = prism_dat)))
 
 
 
-cv_eot <- fit_kfold_eot(1,1, preds = cera_dat, obs = prism_dat)
-
-map(cv_eot, predict)
-
-map(cv_eot, ~nXplain(.,.73))
-purrr::map(cv_eot$eot, ~plot(., y = 3, show.bp = TRUE))
-
-cv_eot$test %>% brick %>% plot
-
-cv_eot$mean %>% brick() %>% plot
-
-for(i in 1:6) {
-  eot_pred <- pmap(list(cv_eot$eot, cv_eot$test, cv_eot$mean), ~  predict(..1, ..2, n = i) + ..3) %>%
-  brick
-
-cellStats(sqrt(mean((eot_pred - prism_rast)^2)), mean) %>% print
-}
-
-
-test_cv <- fit_kfold(5, 5, cera_dat, prism_dat)
-
-test_cv %>% get_errors() %>% pull(error) %>% .^2 %>% mean %>% sqrt
-
-(predict(cv_eot$eot[[1]], cv_eot$test[[1]], n = 1) + cv_eot$mean[[1]]) %>% plot
-
-(predict(cv_eot$eot[[1]], cv_eot$test[[1]], n = 3) + cv_eot$mean[[1]]) %>% plot
-(predict(cv_eot$eot[[1]], cv_eot$test[[1]], n = 6) + cv_eot$mean[[1]]) %>% plot
-plot(prism_rast[[1:6]])
-test_cv %>%
-  filter(year <= 1986) %>%
-  select(-anomaly) %>%
-  spread(year, SWE) %>%
-  rasterFromXYZ() %>% plot
-
-```
 
 ## Delta
 
@@ -1168,15 +1071,259 @@ t1 <- delta(filter(cera_dat, year >= 1982), filter(prism_dat, year <= 2010), fil
 
 
 ```
-so what above must change by folds? just the means for each training period? -- but wait, the newdata here is the observations from the test period
-
-# Validation
 
 
-### Cross-validation
+
+
+
+
+
+
+
+
+# Cross-validation
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
+
+```{r}
+cv_eot <- prep_eot(cera_dat, prism_dat, 10, 10, 10)
+
+cv_eot_error <- function(rast) {
+  rast %>%
+      setNames(1982:2010) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = parse_number(layer)) %>%
+  mutate_at(c('x', 'y'), round, digits = 5) %>% 
+  rename(SWE = value) %>%
+  dplyr::select(x, y, year, SWE) %>%
+  inner_join(  mutate_at(prism_dat, c('x', 'y'), round, digits = 5) , by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
+    left_join( mutate_at(areas, c('x', 'y'), round, digits = 5), by = c("x", "y")) %>%
+    group_by(year) %>%
+    summarise(SWE_obs = sum(SWE_obs * area),
+              SWE_recon = sum(SWE_recon * area)) %>%
+    mutate(error = SWE_recon - SWE_obs)
+}
+
+eot_errors <- tibble(k = 1:10) %>%
+  mutate(pred = purrr::map(k, predict_eot, cv = cv_eot),
+         error = purrr::map(pred, cv_eot_error)) %>%
+  select(k, error) %>%
+  unnest(error)
+```
+
+```{r}
+cv_cca <- expand_grid(kx = 1:10, ky = 1:10, kxy = 1:10) %>%
+  filter(kxy <= pmin(kx, ky)) %>%
+  mutate(cv = pmap(list(kx, ky, kxy), ~prep_cca(..1, ..2, preds = cera_dat, obs = prism_dat) %>% fit_cv(fun = predict_cca, k = ..3))) %>%
+  unnest_wider(cv)
+```
+
+```{r}
+write_csv(cv_cca, 'cv_cca.csv')
+```
+
+```{r}
+cv_cca <- read_csv('cv_cca.csv')
+```
+
+
+```{r}
+cv_cca %>% arrange(rmse)
+cv_cca %>% arrange(-corr)
+```
+
+```{r}
+cv_cca%>%
+  ggplot(aes(rmse, corr)) +  geom_point(aes(color = as.factor(kx)), size = 3, alpha = .5) + theme_bw() +
+  scale_color_viridis_d() + 
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL)# + geom_hline(yintercept = clim_baseline)
+```
+
+```{r}
+cv_cca%>%
+  ggplot(aes(kxy, rmse)) +  geom_point(aes(color = as.factor(kx)), size = 2, alpha = .5) + theme_bw() +
+  scale_color_viridis_d() + 
+  geom_line(data = filter(group_by(cv_cca, kxy), rmse == min(rmse))) +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL)# + geom_hline(yintercept = clim_baseline)
+```
+
+
+```{r}
+cv_cca%>%
+  ggplot(aes(kxy, corr)) +  geom_point(aes(color = as.factor(kx)), size = 2, alpha = .5) + 
+  theme_bw() +
+  scale_color_viridis_d() + 
+  geom_line(data = filter(group_by(cv_cca, kxy), corr == max(corr))) +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) #+ geom_hline(yintercept = clim_baseline)
+```
+
+
+```{r}
+cv_cca %>%
+  group_by(kxy) %>%
+  filter(rmse == min(rmse)) %>%
+  ungroup()%>%
+  arrange(kxy) %>%
+  mutate(test = (rmse <= lead(rmse)))
+
+cv_cca %>%
+  group_by(kxy) %>%
+  filter(rmse == min(rmse)) %>%
+  ggplot(aes(kxy, rmse)) +
+  geom_line()
+```
+
+```{r}
+cv_cca %>%
+  group_by(kxy) %>%
+  filter(corr == max(corr)) %>%
+  ungroup()%>%
+  arrange(kxy) %>%
+  mutate(test = corr >= lead(corr))
+```
+
+
+
+
+```{r, fig.width=10, fig.asp = 1}
+predict_cca(get_patterns(filter(cera_dat, year >=1982), 5), 
+            get_patterns(filter(prism_dat, year <=2010), 4), 
+            filter(cera_dat, year >= 1982),
+            k = 4) %>%
+  group_by(x,y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot(aes(x,y, fill = anomaly)) +
+  geom_raster() +
+  facet_wrap(~year) +
+  scale_fill_scico(palette = 'vik', limits = c(-1000, 1000)) +
+  coord_quickmap() +
+  theme_void()
+
+predict_cca(get_patterns(filter(cera_dat, year >=1982), 10), 
+            get_patterns(filter(prism_dat, year <=2010), 9), 
+            filter(cera_dat, year >= 1982),
+            k = 7) %>%
+  group_by(x,y) %>%
+  mutate(anomaly = SWE - mean(SWE)) %>%
+  ggplot(aes(x,y, fill = anomaly)) +
+  geom_raster() +
+  facet_wrap(~year) +
+  scale_fill_scico(palette = 'vik', limits = c(-1000, 1000)) +
+  coord_quickmap() +
+  theme_void()
+```
+
+```{r, fig.width=8}
+a <- cv_cca %>%
+  group_by(kxy, kx) %>%
+  summarise(rmse = min(rmse)) %>%
+    ggplot(aes(kx, kxy)) +
+  geom_tile(aes(fill = rmse)) +
+  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+b <- cv_cca %>%
+  group_by(kxy, ky) %>%
+  summarise(rmse = min(rmse)) %>% 
+    ggplot(aes(ky, kxy)) +
+  geom_tile(aes(fill = rmse)) +
+  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+c <- cv_cca %>%
+  group_by(kx, ky) %>%
+  summarise(rmse = min(rmse)) %>%
+    ggplot(aes(kx, ky)) +
+  geom_tile(aes(fill = rmse)) +
+  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+d <- cv_cca %>%
+  group_by(kxy, kx) %>%
+  summarise(corr = max(corr)) %>%
+    ggplot(aes(kx, kxy)) +
+  geom_tile(aes(fill = corr)) +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+e <- cv_cca %>%
+  group_by(kxy, ky) %>%
+  summarise(corr = max(corr)) %>%
+    ggplot(aes(ky, kxy)) +
+  geom_tile(aes(fill = corr)) +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+f <- cv_cca %>%
+  group_by(kx, ky) %>%
+  summarise(corr = max(corr)) %>%
+    ggplot(aes(kx, ky)) +
+  geom_tile(aes(fill = corr)) +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935)) +
+  theme_minimal() +
+  scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
+  scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
+  coord_fixed()
+
+(a+b +c + plot_layout(guides = 'collect')) / (d + e + f + plot_layout(guides = 'collect')) + plot_annotation(tag_levels = 'A')
+
+ggsave('cca_cv.png', width = 8, height = 4.944)
+```
+
+```{r, fig.width = 10, fig.asp = 1}
+cv_cca %>%
+  ggplot(aes(kxy, rmse)) +
+  geom_point() +
+  facet_grid(kx~ky) +
+  scale_fill_viridis_c(direction = -1) +
+  theme_bw() +
+  geom_hline(yintercept = 25468076, color = 'red', linetype = 2)
+```
+
+```{r}
+cca_test %>%
+  filter(kxy == pmin(kx, ky)) %>%
+  ggplot(aes(kxy, rmse, color = kx+ ky, group = (kx + ky))) + geom_line(alpha = .4) + geom_point() + theme_bw() + geom_hline(yintercept = clim_baseline)
+```
+
+```{r}
+cca_errors %>% group_by(k) %>%
+  summarise(rmse = sqrt(mean(error^2))) %>%
+  #filter(rmse <= min(rmse) + sd(rmse)) %>% arrange(k)
+  ggplot(aes(k, rmse)) + geom_line() +geom_point() + theme_bw() + geom_hline(yintercept = clim_baseline)+ geom_hline(yintercept = 20944883)
+  
+left_join(eot_errors, cca_errors, by = c('k', 'year')) %>%
+  # ggplot(aes(year, group = k, color = k)) +
+  # geom_line(aes(y = SWE_recon.x)) +
+  # geom_line(aes(y = SWE_recon.y)) +
+  # geom_line(aes(y = SWE_obs.x), color = 'red')
+#####
+select(k, year, error.x, error.y) %>%
+  rename(eot = error.x, cca = error.y) %>%
+  gather(type, error, eot:cca) %>%
+  group_by(type, k) %>%
+  summarise(rmse = sqrt(mean(error^2))) %>%
+  #filter(rmse <= min(rmse) + sd(rmse)) %>% arrange(k)
+  ggplot(aes(k, rmse, color = type)) + geom_line() +geom_point() + theme_bw() + geom_hline(yintercept = clim_baseline) +
+  geom_point(data = tibble(k = 1:10, rmse = m1, type = 'eot'))
+```
+8123883,2491917
 
 ```{r}
 cv_dat2 <- expand_grid(k_predictor = 1:9, k_response = 1:9) %>%
