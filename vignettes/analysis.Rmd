@@ -376,7 +376,7 @@ resids <- prism_recon %>%
    left_join(prism_dat, by = c('x', 'y', 'year'), suffix = c('_recon', '_obs')) %>%
     mutate(error = SWE_recon - SWE_obs) %>%
   group_by(x, y) %>%
-  filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
+ # filter(median(SWE_recon) > 3 & median(SWE_obs) > 3) %>%
   ungroup()
 
 resids %>%
@@ -781,42 +781,113 @@ knitr::knit_exit()
 ## CCA
 
 ```{r}
-cera_can <- cera_patterns$eofs %>%
+obs_amps_cca <- prism_dat %>%
+  filter(year <= 2010) %>%
+  get_patterns(k = 4) %>%
+  .$amplitudes %>%
+  mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
+  spread(PC, amplitude) %>%
+  select(-year) %>%
+  as.matrix()
+
+preds_amps_cca <- cera_dat %>%
+  filter(year >=1982) %>%
+  get_patterns(k = 5) %>%
+  .$amplitudes %>%
+  mutate(PC = as.numeric(PC)) %>%
+  spread(PC, amplitude) %>%
+  select(-year) %>%
+  as.matrix()
+
+
+  # train CCA on training data
+  cca <- cancor(preds_amps_cca, obs_amps_cca, xcenter = FALSE, ycenter = FALSE)
+
+  
+  prism_can <- prism_dat %>%
+    filter(year <= 2010) %>%
+  get_patterns(k = 4) %>%
+    .$eofs %>%
   select(-value) %>%  # use normalized or unnormalized?
+    mutate(EOF = str_pad(EOF, 2, 'left', '0')) %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(cca$ycoef) %>%
-    `colnames<-`(paste0('PC', 1:n_modes)) %>%
+  `%*%`(cca$ycoef[,1:4]) %>%
+    `colnames<-`(paste0('PC', 1:4)) %>%
   as_tibble()
   
-prism_can <- prism_patterns$eofs %>%
+cera_can <- cera_dat %>%
+        filter(year >=1982) %>%
+get_patterns(k = 5) %>%
+    .$eofs %>%
   select(-value) %>%
   spread(EOF, weight) %>%
   select(-x, -y) %>%
   as.matrix() %>%
-  `%*%`(cca$xcoef) %>%
-  `colnames<-`(paste0('PC', 1:n_modes)) %>%
+  `%*%`(cca$xcoef[,1:4]) %>%
+  `colnames<-`(paste0('PC', 1:4)) %>%
   as_tibble()
 ```
 
-```{r}
-cera_dat %>%
+```{r fig.width = 8, fig.asp = .7}
+
+a <- preds_amps_cca %*%
+    cca$xcoef[,1:4, drop = FALSE] %>%
+  `colnames<-`(paste0('EOF', 1:4)) %>%
+  as_tibble %>%
+  mutate(year = 1982:2010) %>%
+  gather(eof, amplitude, EOF1:EOF4) %>%
+  full_join(filter(cera_dat, year >= 1982), by = 'year') %>%
+  group_by(x, y, eof) %>%
+  summarise(correlation = -1 * cor(amplitude, SWE)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = correlation)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~eof, nrow = 1) +
+      scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1, 1)) +
+      theme_void()
+  
+
+
+b <- obs_amps_cca %*%
+    cca$ycoef[,1:4, drop = FALSE] %>%
+    `colnames<-`(paste0('EOF', 1:4)) %>%
+  as_tibble %>%
+  mutate(year = 1982:2010) %>%
+  gather(eof, amplitude, EOF1:EOF4) %>%
+  full_join(filter(prism_dat, year <= 2010), by = 'year') %>%
+  group_by(x, y, eof) %>%
+  summarise(correlation = -1 * cor(amplitude, SWE)) %>%
+   ggplot() +
+      geom_raster(aes(x, y, fill = correlation)) +
+      geom_sf(data = states_wus, fill = NA, color = 'black') +
+      facet_wrap(~eof, nrow = 1) +
+      scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1, 1)) +
+      theme_void()
+
+c <- b / a & theme(legend.position = "bottom")
+c + plot_layout(guides = "collect", heights = 1) + plot_annotation(tag_levels = 'A')
+
+ggsave('cca_patterns.png', width = 8, height = 5.6)
+```
+
+```{r, fig.width = 8, fig.asp=.7}
+  d<- cera_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
   select(x, y, column) %>%
   bind_cols(cera_can) %>%
-  gather(pattern, value, starts_with('PC')) %>% 
+  gather(pattern, value, starts_with('PC')) %>%
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 8) +
+  facet_wrap(~pattern, nrow = 1) +
+      scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1, 1) * 6) +
   theme_void()+
-  coord_sf() +
-  ggtitle('Reanalysis CCA')
+  coord_sf()
 
-prism_dat %>%
+e <- prism_dat %>%
   spread(year, SWE) %>%
   mutate(column = 1:n()) %>%
   select(x, y, column) %>%
@@ -825,190 +896,14 @@ prism_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = value)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  facet_wrap(~pattern) +
-      scale_fill_scico(palette = 'broc', direction = -1, limits = c(-1, 1) * 70) +
+  facet_wrap(~pattern, nrow = 1) +
+      scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1, 1) * 70) +
   theme_void()+
-  coord_sf() +
-  ggtitle('Observed CCA')
+  coord_sf()
+
+d / e + plot_layout(heights = 1) + plot_annotation(tag_levels = 'A')
 ```
 
-```{r}
-cera_can <- cera_patterns$eofs %>%
-  select(-value) %>%  # use normalized or unnormalized?
-  spread(EOF, weight) %>%
-  select(-x, -y) %>%
-  as.matrix() %>%
-  `%*%`(cca$ycoef) %>%
-    `colnames<-`(paste0('PC', 1:n_modes)) %>%
-  as_tibble()
-
-cera_patterns$amplitudes  
-
-prism_can <- prism_patterns$eofs %>%
-  select(-value) %>%
-  spread(EOF, weight) %>%
-  select(-x, -y) %>%
-  as.matrix() %>%
-  `%*%`(cca$xcoef) %>%
-  `colnames<-`(paste0('PC', 1:n_modes)) %>%
-  as_tibble()
-```
-
-
-```{r}
-# make belwo into a function
-t1 <- prism_dat %>%
-    group_by(x,y) %>%
-  mutate(test = all(SWE == 0)) %>%
-  filter(test == FALSE) %>%
-  select(-test) %>%
-  ungroup() %>%
-  spread(year, SWE) %>%
-  select(-x, -y) %>%
-  as.matrix()
-
-t2 <- cera_dat %>%
-  filter(year >= 1982) %>% 
-  spread(year, SWE) %>%
-  select(-x, -y) %>%
-  as.matrix()
-
-tele.preds <- cca.predict(t2, t1, t2, k.x = 5, k.y = 5)
-1 - var(as.numeric(tele.preds-t1)) / var(as.numeric(t1))
-
-```
-
-it looks like for some reason the cca.predict function isn't rescaling correctly? or its just meant to work with standardized anomalies?
-
-```{r}
-prism_scaler <- prism_dat %>%
-  group_by(x,y) %>%
-  summarise(avg = mean(SWE), sdev = sd(SWE, na.rm = TRUE))
-```
-
-```{r}
-prism_dat %>%
-  filter(year <= 2010) %>%
-    group_by(x,y) %>%
-  mutate(test = all(SWE == 0)) %>%
-  filter(test == FALSE) %>%
-  select(-test) %>%
-    ungroup() %>%
-  spread(year, SWE) %>%
-  select(x, y) %>%
-  cbind(tele.preds) %>%
-  gather(year, SWE, `1982`:`2010`) %>%
-  left_join(prism_scaler) %>%
-  mutate(SWE = SWE * sdev + avg) %>%
-  filter(year <=1987) %>%
-  ggplot(aes(x,y)) +
-  geom_raster(aes(fill = SWE)) +
-  facet_wrap(~year) +
-  scale_fill_viridis_c() +
-  coord_quickmap()
-```
-
-```{r}
-prism_dat %>%
-  filter(year <=1987) %>%
-  ggplot(aes(x,y)) +
-  geom_raster(aes(fill = SWE)) +
-  facet_wrap(~year) +
-  scale_fill_viridis_c() +
-  coord_quickmap()
-```
-
-
-```{r}
-anomaly_dat <- prism_dat %>%
-  filter( year <= 2010) %>% # important to make sure everything's calculated on the same time scale, may be best to do this further up?
-  group_by(x, y) %>%
-  mutate(swe_mean = mean(SWE),
-         swe_sd = sd(SWE, na.rm = TRUE),
-         anomaly = SWE - swe_mean) %>%
-  ungroup()
-
-tele_dat <- tele.preds %>%
-  as_tibble() %>%
-  bind_cols(t3, .) %>%
-  gather(year, tele_pred, `1982`:`2010`) %>%
-  mutate(year = as.numeric(year)) %>%
-  left_join(anomaly_dat)  %>%
-  mutate(swe_pred = tele_pred * swe_sd + swe_mean,
-         res = swe_pred - SWE) 
-```
-
-```{r, echo = FALSE}
-tele_dat %>%
-  filter(year < 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = tele_pred)) +
-  scale_fill_viridis_c() +
-  facet_wrap(~year) +
-  coord_quickmap()
-
-tele_dat %>%
-  filter(year < 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = anomaly)) +
-  scale_fill_distiller(palette = 'RdBu') +
-  facet_wrap(~year) +
-  coord_quickmap()
-```
-
-```{r, echo = FALSE}
-tele_dat %>%
-  filter(year == 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = swe_mean)) +
-  scale_fill_viridis_c() +
-  facet_wrap(~year) +
-  coord_quickmap()
-
-tele_dat %>%
-  filter(year == 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = swe_sd)) +
-  scale_fill_viridis_c() +
-  facet_wrap(~year) +
-  coord_quickmap()
-```
-
-```{r}
-plot(mean(prism));plot(calc(prism, sd))
-```
-
-```{r}
-tele_dat %>%
-  mutate(test = tele_pred * swe_sd + swe_mean) %>%
-    filter(year == 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = test)) +
-  scale_fill_viridis_c() +
-  facet_wrap(~year) +
-  coord_quickmap()
-
-tele_dat %>%
-  mutate(test = tele_pred * swe_sd + swe_mean) %>%
-    filter(year == 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = SWE)) +
-  scale_fill_viridis_c() +
-  facet_wrap(~year) +
-  coord_quickmap()
-```
-
-```{r}
-tele_dat %>%
-  mutate(swe_pred = tele_pred * swe_sd + swe_mean,
-         error = swe_pred - SWE) %>%
-      filter(year < 1985) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = error)) +
-  scale_fill_distiller(palette = 'RdBu') +
-  facet_wrap(~year) +
-  coord_quickmap()
-```
 
 ## EOT
 
