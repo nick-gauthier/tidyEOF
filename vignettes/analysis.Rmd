@@ -330,6 +330,11 @@ plot_eofs(prism_patterns, 'vik', scaled = TRUE)
 plot_eofs(cera_patterns, 'vik', scaled = TRUE)
 ```
 
+```{r, fig.width = 8, fig.height = 8}
+ get_patterns(prism_dat, k = 4, rotate = TRUE) %>% plot_eofs(scaled = FALSE) + ggtitle('REOFs')
+ggsave('reofs.png',height = 8, width = 8)
+```
+
 ```{r, fig.width = 8, fig.asp = .7}
 prism_patterns$eofs_corr <- prism_patterns$eofs_corr %>% mutate(correlation = if_else(PC == 4, correlation, correlation * -1))
 
@@ -1081,12 +1086,12 @@ Set up a 5 fold cross validation experiment for selecting the truncation level, 
 
 
 ```{r}
-cv_eot <- prep_eot(cera_dat, prism_dat, 10, 10, 10)
+cv_eot_data <- prep_eot(cera_dat, prism_dat, 10, 10, 10)
 ```
 
 ```{r}
 cv_eot <- tibble(k = 1:10) %>%
-  mutate(pred = purrr::map(k, predict_eot, cv = cv_eot),
+  mutate(pred = purrr::map(k, predict_eot, cv = cv_eot_data),
          error = purrr::map(pred, cv_eot_error)) %>%
   select(k, error) %>%
   unnest_wider(error)
@@ -1110,6 +1115,7 @@ write_csv(cv_cca, 'cv_cca.csv')
 
 ```{r}
 cv_cca <- read_csv('cv_cca.csv')
+cv_eot <- read_csv('cv_eot.csv')
 ```
 
 
@@ -1184,7 +1190,7 @@ a <- cv_cca %>%
 scale_color_grey() +
   theme_bw() +
     scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
-    labs(x = 'Coupled patterns', y = 'RMSE (M)') #+ geom_hline(yintercept = clim_baseline)
+    labs(x = 'Coupled patterns', y = 'RMSE (Ml)')+geom_line(data = cv_eot20) #+ geom_hline(yintercept = clim_baseline)
 
 b <- cv_cca %>%
   group_by(kxy) %>%
@@ -1197,12 +1203,13 @@ b <- cv_cca %>%
 scale_color_grey() +
   theme_bw() +
     scale_x_continuous(breaks = 1:10, minor_breaks = NULL) + 
-  labs(x = 'Coupled patterns', y = 'Domain-wide correlation') #+ geom_hline(yintercept = clim_baseline)
+  labs(x = 'Coupled patterns', y = 'Domain-wide correlation')+geom_line(data = cv_eot20) #+ geom_hline(yintercept = clim_baseline)
 
 a + b +plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A')
 
 ggsave('method_comparison.png', height = 2.4, width = 6)
 ```
+
 
 ```{r}
 cv_cca %>%
@@ -1222,7 +1229,7 @@ cv_eot %>%
 
 ```{r, fig.width=10, fig.asp = 1}
 predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
-            get_patterns(filter(prism_dat, year <=2 010), 4), 
+            get_patterns(filter(prism_dat, year <= 2010), 4), 
             filter(cera_dat, year >= 1982),
             k = 4) %>%
   group_by(x,y) %>%
@@ -1605,12 +1612,35 @@ recon_20c2 <-predict_cca(get_patterns(filter(cera_dat, year >=1982), 5),
 ```
 
 ```{r}
+cera_areas <- raster::area(cera) %>%
+  as.data.frame(xy = TRUE)
+
+cera_baseline <- cera_dat%>%
+  left_join(cera_areas) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE* layer))
+```
+
+```{r}
+delta_baseline <- delta(pred = filter(cera_dat, year >= 1982),
+      obs = filter(prism_dat, year <= 2010),
+      newdata = cera_dat)
+
+delta_baseline2 <- left_join(delta_baseline, areas, by = c("x", "y")) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area))
+```
+
+
+```{r}
 left_join(recon_20c, areas, by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area)) %>%
   ggplot(aes(year, SWE)) +
   geom_line() +
       geom_line(data = wus_stats, color = 'red') +
+        geom_line(data = cera_baseline, color = 'grey') +
+  #geom_line(data = mutate(delta_baseline2, SWE = if_else(SWE > 500000000, 500000000, SWE)), color = 'grey') +
   labs(x = 'Year') +
   theme_bw()
 

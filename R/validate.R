@@ -61,14 +61,15 @@ prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
                        spread(year, SWE) %>%
                        rasterFromXYZ())%>% # test years
     map2(pred_train_rast, ~.x - mean(.y)) # subtract the training predictor mean from the test predictors
-  purrr::map(obs_train_rast, mean)
+
+  means <- purrr::map(obs_train_rast, mean)
 
   eots <- map2(pred_train, obs_train, ~eot(.x, .y, n = k_cca, standardised = FALSE, verbose = FALSE))
 
   # fit model to training data and use to predict new fields
   list(eot = eots, # this hard codes 10 patterns, but could be changed to min(k_preds, k_obs)
        test = test,
-       mean = purrr::map(obs_train_rast, mean))
+       mean = means)
 }
 
 predict_eot <- function(cv, k) {
