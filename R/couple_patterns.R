@@ -40,6 +40,7 @@ prep_data <- function(patterns.x, patterns.y) {
   inner_join(predictands, predictors, by = 'year')
 }
 
+# this is a holdover from the gam only implementation, needs to be more general
 fit_model <- function(data_in) {
   gam_formula <- data_in %>%
     # this should be more flexible below, checking for innapropriate predictors
@@ -60,4 +61,20 @@ fit_model <- function(data_in) {
       data = map2(data, mod, add_predictions),
       data = map2(data, mod, add_residuals)
     )
+}
+
+fit_pcr <- function(data_in) {
+  lm_formula <- data_in %>%
+    # this should be more flexible below, checking for inapropriate predictors
+    dplyr::select(-PC, -amplitude, -year) %>%
+    names() %>%
+    paste(collapse = ' + ') %>%
+    paste('amplitude ~ ', .) %>%
+    as.formula
+
+  data_in %>%
+    group_by(PC) %>%
+    nest() %>%
+    mutate(mod = map(data, ~ eval(getCall(dredge(lm(lm_formula, data = ., na.action = "na.fail")), 1)))) %>%
+    ungroup()
 }

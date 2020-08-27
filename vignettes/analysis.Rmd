@@ -308,7 +308,7 @@ So let's stick with the 4 and 4 solution, and investigate those patterns more.
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
-n_modes <- 5
+n_modes <- 8
 ```
 
 ```{r}
@@ -592,6 +592,7 @@ gam_formula <-  prep_data(cera_patterns, prism_patterns)  %>%
     paste(collapse = ' + ') %>%
     paste('amplitude ~ ', .) %>%
     as.formula
+
 glm_formula <- prep_data(cera_patterns, prism_patterns)  %>%
     # this should be more flexible below, checking for innapropriate predictors
     dplyr::select(-PC, -amplitude, -year) %>%
@@ -600,6 +601,7 @@ glm_formula <- prep_data(cera_patterns, prism_patterns)  %>%
     paste('amplitude ~ ', .) %>%
     as.formula
 
+# prep data, nest by target pc
 test <- prep_data(cera_patterns, prism_patterns) %>%
    group_by(PC) %>%
     nest()# %>%
@@ -608,14 +610,12 @@ testdat <- test[[1,2]][[1]]
 glm(glm_formula, data = testdat)
 
 t1 <- lm(glm_formula, data = testdat, na.action = "na.fail")
-
-test_gam <- gam(gam_formula, method = 'REML',select = TRUE, data = testdat, na.action = "na.fail")
-test_gam2 <- gam(gam_formula, data = testdat, na.action = "na.fail")
-
 t2 <- dredge(t1)
 summary(get.models(t2, 1)[[1]])
 t2
 
+test_gam <- gam(gam_formula, method = 'REML',select = TRUE, data = testdat, na.action = "na.fail")
+test_gam2 <- gam(gam_formula, data = testdat, na.action = "na.fail")
 t3 <- dredge(test_gam2)
 t3
 summary(get.models(t3, 1)[[1]])
@@ -628,12 +628,6 @@ t4 <- glmnet(testdat %>%
 plot(t4)
 coef(t4, s = .1);coef(t4, s = .05)
 
-# this is unstable
-t5 <- cv.glmnet(testdat %>%
-  select(PC1:PC9) %>% 
-  as.matrix(), pull(testdat, amplitude), standardize = FALSE, nfolds = 5)
-plot(t5)
-coef(t5, s = "lambda.1se")
 
 # this isnt!
 t6 <- cv.glmnet(testdat %>%
@@ -658,6 +652,36 @@ sqrt(mean(res$residuals^2))
 
 t7$mod1[[1]] %>% plot
 t7$mod2[[1]] %>% plot
+
+
+
+prep_data(cera_patterns, prism_patterns) %>%
+   group_by(PC) %>%
+    nest() %>%
+mutate(mod = map(data, ~ eval(getCall(dredge(lm(glm_formula, data = ., na.action = "na.fail")), 1))),
+       preds = map2(mod, data, predict)) %>%
+         select(-mod) %>%
+    unnest(cols = c(data, preds)) %>%
+  select(PC, year, amplitude, preds)
+```
+
+
+```{r}
+fit_pcr <- function(data_in) {
+  lm_formula <- data_in %>%
+    # this should be more flexible below, checking for inapropriate predictors
+    dplyr::select(-PC, -amplitude, -year) %>%
+    names() %>%
+    paste(collapse = ' + ') %>%
+    paste('amplitude ~ ', .) %>%
+    as.formula
+  
+  data_in %>%
+    group_by(PC) %>%
+    nest() %>%
+    mutate(mod = map(data, ~ eval(getCall(dredge(lm(lm_formula, data = ., na.action = "na.fail")), 1)))) %>%
+    ungroup()
+}
 ```
 
 
@@ -725,6 +749,7 @@ ggplot(gam_score_map ) +
       scale_fill_viridis_d() +
       theme_void()
 ```
+
 ```{r}
 ggplot(gam_score_map ) +
       geom_raster(aes(x, y, fill = srmse)) +
@@ -804,10 +829,8 @@ preds_amps_cca <- cera_dat %>%
   select(-year) %>%
   as.matrix()
 
-
   # train CCA on training data
   cca <- cancor(preds_amps_cca, obs_amps_cca, xcenter = FALSE, ycenter = FALSE)
-
   
   prism_can <- prism_dat %>%
     filter(year <= 2010) %>%
@@ -823,7 +846,7 @@ preds_amps_cca <- cera_dat %>%
   as_tibble()
   
 cera_can <- cera_dat %>%
-        filter(year >=1982) %>%
+        filter(year >= 1982) %>%
 get_patterns(k = 5) %>%
     .$eofs %>%
   select(-value) %>%
@@ -852,8 +875,6 @@ a <- preds_amps_cca %*%
       facet_wrap(~eof, nrow = 1) +
       scale_fill_scico(palette = 'vik', direction = -1, limits = c(-1, 1)) +
       theme_void()
-  
-
 
 b <- obs_amps_cca %*%
     cca$ycoef[,1:4, drop = FALSE] %>%
@@ -1108,6 +1129,27 @@ cv_cca <- expand_grid(kx = 1:10, ky = 1:10, kxy = 1:10) %>%
   mutate(cv = pmap(list(kx, ky, kxy), ~prep_cca(..1, ..2, preds = cera_dat, obs = prism_dat) %>% fit_cv(fun = predict_cca, k = ..3))) %>%
   unnest_wider(cv)
 ```
+
+```{r}
+# does this work for gams too?
+cv_pcr <- expand_grid(kx = 1:10, ky = 1:10) %>%
+  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera_dat, obs = prism_dat) %>% fit_cv(fun = predict_pcr, k = .y))) %>%
+  unnest_wider(cv)
+```
+
+```{r}
+# does this work for gams too?
+cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
+  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera_dat, obs = prism_dat) %>% fit_cv(fun = predict_gam, k = .y))) %>%
+  unnest_wider(cv)
+```
+
+```{r}
+cv_pcr %>%
+  arrange(rmse)
+cv_pcr %>% arrange(-corr)
+```
+
 
 ```{r}
 write_csv(cv_cca, 'cv_cca.csv')

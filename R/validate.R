@@ -129,8 +129,35 @@ cv_eot_error <- function(rast) {
 
 
 # special predict method for cv that scales predictors (should fold into original predict method in future)
-predict_gam <- function(preds, obs, newdata) {
+predict_gam <- function(preds, obs, newdata, k) {
 
+  k_preds <- unique(preds$amplitudes$PC) %>% length()
+
+  mod <- prep_data(preds, obs) %>%
+    fit_model()
+
+  new_pcs <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
+    mutate(SWE = SWE - swe_mean) %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
+    dplyr::select(-swe_mean, -swe_sd) %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+    predict(preds$pca, .) %>%
+    scale(center = FALSE, scale = preds$pca$sdev) %>% # scale according to training pcs
+    .[,1:k_preds, drop = FALSE] %>%
+    as_tibble(rownames = 'year')
+
+  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
+    bind_rows(.id = 'PC') %>%
+    dplyr::select(year, PC, amplitude) %>%
+    mutate(year = as.numeric(year)) %>%
+    reconstruct_field(obs, .)  # use train_obs to get training pcs
+}
+
+# same as above but for pcr
+predict_pcr <- function(preds, obs, newdata, k) {
+# k is just here as a placeholder so the pmap command in fit_cv will run, but it doesn't have to be and should be removed
   k_preds <- unique(preds$amplitudes$PC) %>% length()
 
   mod <- prep_data(preds, obs) %>%
