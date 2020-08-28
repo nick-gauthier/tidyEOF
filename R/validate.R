@@ -83,7 +83,7 @@ fit_cv <- function(dat, fun, k) {
     arrange(x, y, year) %>%
     get_errors()
 
-  c(rmse = summarise(errors, rmse = sqrt(mean(error^2))) %>% pull(rmse),
+  c(rmse = summarise(errors, rmse = sqrt(mean(error^2))) %>% pull(rmse), # a na.rm =TRUE could go with mean, but best not to now
     corr = total_swe_corr(errors))
 }
 
@@ -92,8 +92,8 @@ total_swe_corr <- function(errors) {
   errors %>%
     left_join(areas, by = c("x", "y")) %>%
     group_by(year) %>%
-    summarise(SWE_obs = sum(SWE_obs * area),
-              SWE_recon = sum(SWE_recon * area)) %>%
+    summarise(SWE_obs = sum(SWE_obs * area, na.rm = TRUE),
+              SWE_recon = sum(SWE_recon * area, na.rm = TRUE)) %>%
     summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
     pull(correlation)
 }
@@ -161,7 +161,7 @@ predict_pcr <- function(preds, obs, newdata, k) {
   k_preds <- unique(preds$amplitudes$PC) %>% length()
 
   mod <- prep_data(preds, obs) %>%
-    fit_model()
+    fit_pcr()
 
   new_pcs <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
     mutate(SWE = SWE - swe_mean) %>%

@@ -983,18 +983,19 @@ delta <- function(pred, obs, newdata) {
   pred_clim <- get_climatology(pred)
   obs_clim <- get_climatology(obs)
   
-  newdata %>%
-    left_join(pred_clim, by = c('x', 'y')) %>%
+  newdata %>% # change back to newdata
+    left_join(pred_clim, by = c('x', 'y')) %>% # should check that this join works
   mutate(anomaly = SWE / swe_mean) %>%
     select(x,y, year, anomaly) %>%
     group_by(year) %>%
     nest() %>%
-    mutate(mod = map(data, ~ gam(anomaly ~ s(x, y, k = 300, bs = 'gp'), data = .))) %>%
+    mutate(anomaly = map(data, ~ metR::Interpolate(anomaly ~ x + y, x.out = obs_clim$x, y.out = obs_clim$y, grid = FALSE, data = .)$anomaly)) %>%#gam(anomaly ~ s(x, y, k = 300, bs = 'gp'), data = .))) %>%
     select(-data) %>%
-    mutate(data = rep(list(obs_clim), n())) %>%
-    mutate(anomaly = map2(mod, data, predict, type = 'response')) %>%
-    select(-mod) %>%
+   mutate(data = rep(list(obs_clim), n())) %>%
+  #  mutate(anomaly = map2(mod, data, predict, type = 'response')) %>%
+ #   select(-mod) %>%
     unnest(c(data, anomaly)) %>% 
+    ungroup() %>%
     mutate(SWE = swe_mean * if_else(anomaly >=0, anomaly, 0)) %>%
     select(year, x, y, SWE)
 }
@@ -1025,10 +1026,11 @@ prep_kfold_delta <- function(preds, obs, type = NULL){
 
   tibble(train_obs, train_preds, test)
 }
+# this is just prep_cca without the patterns ... redundant?
 ```
 
 ```{r}
-t2 <- prep_kfold_delta(cera_dat, prism_dat)
+t2 <- prep_kfold_delta(cera_dat, prism_dat) # prep_cca would work here too
 
 clim_baseline <- t2 %>%
   mutate(clim = map(train_obs, get_climatology),
@@ -1047,24 +1049,12 @@ clim_baseline <- t2 %>%
 
 
 ```{r}
-t3 <- pmap_dfr(list(t2$train_preds, t2$train_obs, t2$test), delta)
+t3 <- pmap_dfr(list(t2$train_preds, t2$train_obs, t2$test), delta) %>% 
+  arrange(x, y, year) %>%
+    get_errors()
 
-t3 %>% 
-  get_errors() %>%
-   left_join(areas, by = c("x", "y")) %>%
-    group_by(year) %>%
-    summarise(SWE_obs = sum(SWE_obs * area),
-              SWE_recon = sum(SWE_recon * area)) %>%
-    mutate(error = SWE_recon - SWE_obs) %>% pull(error) %>% `^`(2) %>% mean %>% sqrt
-  arrange(error)
-    ggplot(aes(year, error)) +
-  geom_line() + scale_y_continuous(limits = c(-1e8, 1e8))
-   # group_by(year) %>%
-    #summarise(SWE_obs = sum(SWE_obs * area),
-    #          SWE_recon = sum(SWE_recon * area)) %>%
-    #mutate(error = SWE_recon - SWE_obs)
-
-sqrt(mean(t4$error ^ 2))
+  c(rmse = summarise(t3, rmse = sqrt(mean(error^2, na.rm = TRUE))) %>% pull(rmse),
+    corr = total_swe_corr(t3))
 ```
 
 ```{r}
