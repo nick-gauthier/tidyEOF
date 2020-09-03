@@ -370,7 +370,7 @@ library(patchwork)
 ggsave('snow_teleconnections.png', width = 10.5, height = 6)
 ```
 
-```{r, fig.width = 6.5}
+```{r, fig.width = 7, fig.height = 6}
 swe_corr_prism <-prism_dat %>%
   group_by(x,y) %>%
   nest %>%
@@ -386,6 +386,19 @@ swe_corr_cera <-cera_dat %>%
   group_by(x,y) %>%
   nest %>%
   mutate(corrs = map(data,  ~inner_join(., cera_patterns$amplitudes %>% spread(PC, amplitude, sep =''), by = 'year') %>%
+    summarise(PC1 = cor(SWE, PC1),
+              PC2 = cor(SWE, PC2),
+              PC3 = cor(SWE, PC3),
+              PC4 = cor(SWE, PC4)))) %>%
+  select(-data) %>%
+  unnest(corrs)
+
+cesm_patterns <- get_patterns(cesm_dat %>% select(-area) %>% filter(year > 1900,x < max(x), y > min(y)), k = n_modes)
+swe_corr_cesm <- cesm_dat %>%
+  filter(year > 1900,x < max(x), y > min(y)) %>%
+  group_by(x,y) %>%
+  nest %>%
+  mutate(corrs = map(data,  ~inner_join(., cesm_patterns$amplitudes %>% spread(PC, amplitude, sep =''), by = 'year') %>%
     summarise(PC1 = cor(SWE, PC1),
               PC2 = cor(SWE, PC2),
               PC3 = cor(SWE, PC3),
@@ -416,13 +429,26 @@ scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation') +
     labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-a / b + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
-ggsave('eofs.png', height = 5, width = 7)
+c <- swe_corr_cesm %>%
+  remove_missing() %>%
+  mutate(PC3 = PC3 * -1) %>% # the signs are arbitrary, so adjust the cera signs so the colors match prism
+  gather(PC, value, PC1:PC4) %>%
+ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+        geom_sf(data = states_wus, fill = NA, color = 'black') +
+ #   geom_point(data = swe_sig_pts, aes(x,y), shape = '.', alpha = .2) +
+  facet_wrap(~PC, nrow = 1) +
+scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation') +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+
+(a / b / c) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
+ggsave('eofs_cesm.png', height = 6, width = 7)
 ```
 
 ```{r}
-prism_patterns$amplitudes %>% filter(PC == '3') %>%
-  left_join(cera_patterns$amplitudes %>% filter(PC == '2'), by = c('year')) %>% summarise(cor(amplitude.x, amplitude.y, use = 'complete.obs'))
+cera_patterns$amplitudes %>% filter(PC == '2') %>%
+  left_join(cesm_patterns$amplitudes %>% filter(PC == '2'), by = c('year')) %>% summarise(cor(amplitude.x, amplitude.y, use = 'complete.obs'))
 ```
 
 
