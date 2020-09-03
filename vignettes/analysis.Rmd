@@ -159,9 +159,7 @@ a <- prism_dat %>%
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
-  theme_void() +
-  theme(legend.position = 'bottom') +
-      ggtitle("Mean March Snow Water Equivalent", "Observed")
+  theme_void()
 
 b <- cera_dat %>%
   get_climatology() %>%
@@ -169,11 +167,9 @@ b <- cera_dat %>%
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE (mm)') +
-  theme_void() +
-    ggtitle("", "Simulated") +
-  theme(legend.position = 'bottom')
+  theme_void()
 
-a + b + plot_annotation(tag_levels = 'A')
+(a + b) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
 ggsave('swe_comparison.png', width = 7, height = .61*7)
 ```
 
@@ -308,7 +304,7 @@ So let's stick with the 4 and 4 solution, and investigate those patterns more.
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
-n_modes <- 8
+n_modes <- 4
 ```
 
 ```{r}
@@ -1077,15 +1073,13 @@ t1 <- delta(filter(cera_dat, year >= 1982), filter(prism_dat, year <= 2010), fil
   theme(legend.position = 'bottom')
   
   
-  predict_cca(cera_dat %>% filter(year >= 1982)%>% get_patterns(k = 4), prism_dat %>% filter(year <= 2010) %>% get_patterns(k = 4), cera_dat %>% filter(year == 1991)) %>% 
+  predict_cca(cera_dat %>% filter(year >= 1982)%>% get_patterns(k = 4), prism_dat %>% filter(year <= 2010) %>% get_patterns(k = 4), cera_dat %>% filter(year == 1991), k = 4) %>% 
      ggplot() +
   geom_raster(aes(x, y, fill = SWE)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_viridis_c(limits = c(0, 3500)) +
   theme_void() +
   theme(legend.position = 'bottom')
-
-
 ```
 
 
@@ -1121,6 +1115,7 @@ cv_cca <- expand_grid(kx = 1:10, ky = 1:10, kxy = 1:10) %>%
 ```
 
 ```{r}
+library(MuMIn)
 # does this work for gams too?
 cv_pcr <- expand_grid(kx = 1:10, ky = 1:10) %>%
   mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera_dat, obs = prism_dat) %>% fit_cv(fun = predict_pcr, k = .y))) %>%
@@ -1135,11 +1130,20 @@ cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
 ```
 
 ```{r}
+cv_gam %>%
+  arrange(rmse)
+cv_gam %>% arrange(-corr)
+```
+
+```{r}
 cv_pcr %>%
   arrange(rmse)
 cv_pcr %>% arrange(-corr)
 ```
 
+```{r}
+write_csv(cv_pcr, 'cv_pcr.csv');write_csv(cv_gam, 'cv_gam.csv')
+```
 
 ```{r}
 write_csv(cv_cca, 'cv_cca.csv')
