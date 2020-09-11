@@ -48,7 +48,8 @@ load('../data.Rdata')
 cesm_dat <- read_csv('../cesm_dat.csv') %>%
   select(-area)
 
-
+load('../cera2.Rdata')
+cera_dat <- cera_dat2
 ```
  
 # Snowpack in the western US
@@ -70,7 +71,7 @@ b <- cera_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 230)) +
+   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void()
 
 c <- cesm_dat %>%
@@ -79,12 +80,13 @@ c <- cesm_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 230)) +
+   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void() 
 
 (a + (b / c + plot_layout(guides = 'collect') )) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
 ```
-```{r fig.height=4, fig.width = 5}
+
+```{r fig.width = 7, fig.asp = .7}
 a <- prism_dat %>%
   get_climatology() %>%
   ggplot() +
@@ -99,7 +101,7 @@ b <- cera_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 230)) +
+   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void()
 
 c <- cesm_dat %>%
@@ -108,85 +110,14 @@ c <- cesm_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 230)) +
+   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void() 
 
 (a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
 
-ggsave('swe_comparison.png', width = 5, height = 4)
+ggsave('swe_comparison.png', width = 7, height = .7 * 7)
 ```
 
-
-When were the max and min SWE years?
-```{r}
-prism_dat %>%
-  group_by(x,y) %>%
-  filter(SWE == max(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = year)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_viridis_c() +
-  theme_void() +
-  theme(legend.position = 'bottom')
-
-prism_dat %>%
-  group_by(x,y) %>%
-  filter(SWE == min(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = year)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-     scale_fill_viridis_c() +
-  theme_void() +
-  theme(legend.position = 'bottom')
-```
-
-Where are the snowy pixels?
-```{r}
-prism_dat %>%
-  group_by(x,y) %>%
-  summarise(median_swe = median(SWE)) %>%
-  ggplot() +
-    geom_raster(aes(x, y, fill = median_swe > 3)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_viridis_d() +
-  theme_void() +
-  theme(legend.position = 'bottom')
-```
-
-
-```{r}
-prism_dat %>%
-  ggplot(aes((SWE))) +
-  geom_histogram()
-
-prism_dat %>%
-  group_by(x, y) %>%
-  summarise(kurt =  e1071::kurtosis(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = kurt > 3)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  theme(legend.position = 'bottom')
-
-prism_dat %>%
-  group_by(x, y) %>%
-  summarise(skew =  e1071::skewness(SWE)) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = skew)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-scale_fill_viridis_c() +
-  theme_void() +
-  theme(legend.position = 'bottom')
-  
-prism_dat %>%
-  group_by(x, y) %>%
-  summarise(p = shapiro.test(log(SWE + 1))$p) %>%
-  ggplot() +
-    geom_raster(aes(x, y, fill = p < 0.05)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  theme_void() +
-  scale_fill_viridis_d() 
-```
 
 
 Next we'll look at how SWE has varied over time and space.
@@ -259,33 +190,17 @@ f <- cera_dat %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
+                      
+g <- cesm_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
 
-e + f + plot_annotation(tag_levels = 'A')
+e + f + g + plot_annotation(tag_levels = 'A')
 ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```
 
-```{r}
-dof_p <- prism_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>%
-  pull(eigenvalues)
-
-sum(dof_p)^2 / sum(dof_p^2) # from bretheron et al 1999
-
-dof_c <- cera_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>%
-  pull(eigenvalues)
-
-sum(dof_c)^2 / sum(dof_c^2) # from bretheron et al 1999
-
-dof_l <- cesm_dat %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>%
-  pull(eigenvalues)
-
-sum(dof_l)^2 / sum(dof_l^2) # from bretheron et al 1999
-```
 
 ```{r}
 # prism for the whole period
@@ -312,7 +227,7 @@ cera_dat %>%
   scale_color_brewer(palette = 'Spectral')
 
 #cera whole
-cera_dat %>% 
+cera_dat2 %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
@@ -1726,18 +1641,18 @@ delta_baseline_mult2 <- left_join(mutate(delta_mult_dat2, x = round(x,5), y = ro
 ```
 
 
-```{r}
+```{r fig.width=6.5}
 left_join(recon_20c_time, areas, by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area)) %>%
   ggplot(aes(year, SWE)) +
+    geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
   geom_line(size = 1.1, aes(color = 'black')) +
   geom_line(data = wus_stats, aes(color = 'red'), size = 1.1, alpha = .7) +
-  geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
  #geom_line(data = delta_baseline, color = 'green') +
   # geom_line(data = delta_baseline_mult, color = 'blue') +
  #  geom_line(data = delta_baseline_mult2, color = 'orange') +
-#scale_x_continuous(limits = c(1982, 2010)) +
+#scale_x_continuous(limits = c(1930, 2010)) +
   scale_color_identity(name = NULL,
                           breaks = c("red", "grey", "black"),
                           labels = c("Observations", 'Reanalysis', 'Downscaled Reanalysis'),
@@ -1745,7 +1660,8 @@ left_join(recon_20c_time, areas, by = c("x", "y")) %>%
   labs(x = 'Year', y = 'Total SWE (Ml)') +
   theme_bw() +
   theme(legend.position = 'bottom')
-ggsave('20c_recon.png', height = 4, width = 6)
+
+ggsave('20c_recon.png', height = .6 * 6.5, width = 6.5)
 ```
 
 ```{r fig.width = 6.5, fig.asp = .5}
@@ -1755,6 +1671,7 @@ a <- cera_dat %>%
       mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
+    remove_missing() %>% # shouldn't be necessary, but for division by sd
   ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
     geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -1767,6 +1684,7 @@ b <- recon_20c_space %>%
       mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
+      remove_missing() %>% # shouldn't be necessary, but for division by sd
 ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
     geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -1779,6 +1697,7 @@ c <- prism_dat %>%
       mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
+      remove_missing() %>% # shouldn't be necessary, but for division by sd
   ggplot()+
   geom_raster(aes(x, y, fill = anomaly)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -1789,85 +1708,6 @@ a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') 
 
 ggsave('anomalies_1997.png', height = 3.25, width = 6.5)
 ```
-
-```{r}
-raster::resample(cera[[99]] / mean(cera[[82:110]]) , prism) %>% plot
-raster::resample((cera[[99]] / mean(cera[[82:110]]))  , prism) %>% plot
-  
-
-filter(year >= 1982) %>%
-    group_by(x,y) %>%
-  mutate(SWE = (SWE - mean(SWE))/sd(SWE)) %>%
-  ungroup() %>%
-  filter(year == 1999) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = SWE)) +
-  coord_quickmap() +
-  scale_fill_viridis_c(limits =c(-5,5))
-```
-
-```{r}
-cera[cera < 0.001] <- 0
-
-delta_mult <- raster::resample(cera / mean(cera[[82:110]]) , prism) * mean(prism)
-delta_mult2 <- raster::resample(cera / mean(cera) , prism) * mean(prism)
-
-delta_add <- raster::resample(cera - mean(cera[[82:110]]) , prism) + mean(prism)
-
-delta_add_dat <- delta_add %>% setNames(1901:2010) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  rename(year = layer, SWE = value) %>%
-  mutate(year = parse_number(year))
-
-delta_mult_dat <- delta_mult %>% setNames(1901:2010) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  rename(year = layer, SWE = value) %>%
-  mutate(year = parse_number(year))
-
-delta_mult_dat2 <- delta_mult2 %>% setNames(1901:2010) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  rename(year = layer, SWE = value) %>%
-  mutate(year = parse_number(year))
-```
-
-```{r}
-delta_mult_dat %>%
-  filter(year >= 1982) %>%
-  group_by(x,y) %>%
-  mutate(SWE = (SWE - mean(SWE))) %>%
-  ungroup() %>%
-  filter(year == 1999) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = SWE)) +
-  coord_quickmap() +
-  scale_fill_viridis_c()
-  scale_fill_viridis_c(limits =c(-5,5))
-```
-
-```{r}
-delta_add_dat %>%
-  filter(year >= 1982) %>%
-  group_by(x,y) %>%
-  summarise(SWE = sd(SWE)) %>%
-  ungroup() %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = SWE)) +
-  coord_quickmap() +
-  scale_fill_viridis_c()
-  scale_fill_viridis_c(limits =c(-5,5))
-```
-```{r}
-delta_mult_dat %>%
-  filter(year >= 1982) %>%
-  group_by(x,y) %>%
-  summarise(SWE = sd(SWE)) %>%
-  ungroup() %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = SWE)) +
-  coord_quickmap() +
-  scale_fill_viridis_c()
-```
-
 
 #### Local error
 ```{r}
@@ -1994,4 +1834,105 @@ mean(prism) - prism
 tele.preds %>%
   as.tibble() %>%
   bind_cols(t3, .)
+```
+
+
+# additional analyses
+
+
+When were the max and min SWE years?
+```{r}
+prism_dat %>%
+  group_by(x,y) %>%
+  filter(SWE == max(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = year)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+prism_dat %>%
+  group_by(x,y) %>%
+  filter(SWE == min(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = year)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+     scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+```
+
+Where are the snowy pixels?
+```{r}
+prism_dat %>%
+  group_by(x,y) %>%
+  summarise(median_swe = median(SWE)) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = median_swe > 3)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_viridis_d() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+```
+
+
+```{r}
+prism_dat %>%
+  ggplot(aes((SWE))) +
+  geom_histogram()
+
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(kurt =  e1071::kurtosis(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = kurt > 3)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(skew =  e1071::skewness(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = skew)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+scale_fill_viridis_c() +
+  theme_void() +
+  theme(legend.position = 'bottom')
+  
+prism_dat %>%
+  group_by(x, y) %>%
+  summarise(p = shapiro.test(log(SWE + 1))$p) %>%
+  ggplot() +
+    geom_raster(aes(x, y, fill = p < 0.05)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  theme_void() +
+  scale_fill_viridis_d() 
+```
+
+spatial degrees of freedom
+
+
+```{r}
+dof_p <- prism_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>%
+  pull(eigenvalues)
+
+sum(dof_p)^2 / sum(dof_p^2) # from bretheron et al 1999
+
+dof_c <- cera_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>%
+  pull(eigenvalues)
+
+sum(dof_c)^2 / sum(dof_c^2) # from bretheron et al 1999
+
+dof_l <- cesm_dat %>% 
+  get_pcs() %>%
+  get_eigenvalues() %>%
+  pull(eigenvalues)
+
+sum(dof_l)^2 / sum(dof_l^2) # from bretheron et al 1999
 ```
