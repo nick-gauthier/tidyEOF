@@ -34,7 +34,7 @@ preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, daily = FALSE
   raster::subset(maps, indices) %>%
     {if(flip) rotate(.) else .} %>%
     crop(bbox) %>%
-    {if(daily) mean(.) else .} %>%
+    {if(daily) mean(.) else .} %>% # if a file is one year of daily values
     {if(regrid) aggregate(., fact = 2) else .} # resample to lower res to speed up analysis
 }
 ```
@@ -50,24 +50,25 @@ prism <- list.files('../data', pattern = 'SWE_Depth', full.names = TRUE) %>%
 ```{r, warning = FALSE}
 # this averages over the full ensemble
 cera <- map(1:10,
-            ~ (brick('../data/CERA-20C_snow.nc', varname = 'rsn', level = .) *
-                 brick('../data/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
+            ~ (brick('../data/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
   reduce(`+`) %>%
   `/`(10) %>%
-  crop(bbox)
+  crop(bbox) %>%
+  `*`(1000) # convert to mm
 ```
 
-```{r}
-cesm_h2osno <- preprocess('~/Downloads/b.e11.BLMTRC5CN.f19_g16.001.clm2.h1.H2OSNO.08500101-18491231.nc',
+```{r warning=FALSE}
+cesm_h2osno <- preprocess('../data/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSNO.085001-184912.nc',
                           var = 'H2OSNO',
                           flip = TRUE,
                           bbox = bbox)
 
-cesm_h2osno_ext <- preprocess('~/Downloads/b.e11.BLMTRC5CN.f19_g16.001.clm2.h1.H2OSNO.18500101-20051231.nc',
+cesm_h2osno_ext <- preprocess('../data/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSNO.185001-200512.nc',
                           var = 'H2OSNO',
-                          flip = TRUE)
+                          flip = TRUE,
+                          bbox = bbox)
 
-cesm_areas <- area(cesm_h2osno) %>%
+cesm_areas <- raster::area(cesm_h2osno) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE) %>%
   rename(area = layer)
 
@@ -184,5 +185,34 @@ terraclim_dat <- terraclim %>%
 
 
 ```{r}
-save(prism_dat, cera_dat, areas, mountains_mask, states_wus, file = '../data.Rdata')
+save(prism_dat, cera_dat, cesm_dat, areas, mountains_mask, states_wus, file = '../data.Rdata')
+save(cera_dat, file  = '../cera2.Rdata')
+```
+
+## Bilinear interpolation
+
+
+```{r}
+raster::resample(cera[[99]] / mean(cera[[82:110]]) , prism) %>% plot
+raster::resample((cera[[99]] / mean(cera[[82:110]]))  , prism) %>% plot
+  
+
+filter(year >= 1982) %>%
+    group_by(x,y) %>%
+  mutate(SWE = (SWE - mean(SWE))/sd(SWE)) %>%
+  ungroup() %>%
+  filter(year == 1999) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = SWE)) +
+  coord_quickmap() +
+  scale_fill_viridis_c(limits =c(-5,5))
+```
+
+```{r}
+cera[cera < 0.001] <- 0
+
+delta_mult <- raster::resample(cera / mean(cera[[82:110]]) , prism) * mean(prism)
+delta_mult2 <- raster::resample(cera / mean(cera) , prism) * mean(prism)
+
+delta_add <- raster::resample(cera - mean(cera[[82:110]]) , prism) + mean(prism)
 ```

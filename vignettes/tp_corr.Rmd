@@ -393,7 +393,7 @@ swe_corr_cera <-cera_dat %>%
   select(-data) %>%
   unnest(corrs)
 
-cesm_patterns <- get_patterns(cesm_dat %>% select(-area) %>% filter(year > 1900,x < max(x), y > min(y)), k = n_modes)
+cesm_patterns <- get_patterns(cesm_dat %>% filter(year > 1900,x < max(x), y > min(y)), k = n_modes)
 swe_corr_cesm <- cesm_dat %>%
   filter(year > 1900,x < max(x), y > min(y)) %>%
   group_by(x,y) %>%
@@ -418,7 +418,7 @@ scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation') +
   theme_void()
 
 b <- swe_corr_cera %>%
-  mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC3 = PC3 * -1) %>% # the signs are arbitrary, so adjust the cera signs so the colors match prism
+  mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC4 = PC4 * -1) %>% # the signs are arbitrary, so adjust the cera signs so the colors match prism
   gather(PC, value, PC1:PC4) %>%
 ggplot() +
   geom_raster(aes(x, y, fill = value)) +
@@ -447,8 +447,8 @@ ggsave('eofs_cesm.png', height = 6, width = 7)
 ```
 
 ```{r}
-cera_patterns$amplitudes %>% filter(PC == '2') %>%
-  left_join(cesm_patterns$amplitudes %>% filter(PC == '2'), by = c('year')) %>% summarise(cor(amplitude.x, amplitude.y, use = 'complete.obs'))
+cera_patterns$amplitudes %>% filter(PC == '4') %>%
+  left_join(prism_patterns$amplitudes %>% filter(PC == '4'), by = c('year')) %>% summarise(cor(amplitude.x, amplitude.y, use = 'complete.obs'))
 ```
 
 
