@@ -10,6 +10,16 @@ output: html_document
 library(raster) # processing raster data
 library(tidyverse) # data manipulation and visualization
 library(sf)
+
+# download state boundary files for cropping and plotting
+state_names <- c('arizona', 'new mexico', 'colorado', 
+                 'california', 'utah', 'nevada', 
+                 'oregon', 'washington', 'idaho',
+                 'wyoming', 'montana')
+
+states_wus <- maps::map('state', regions = state_names, 
+                    fill = TRUE, plot = FALSE) %>% 
+  st_as_sf()
 ```
 
 ## Geographic Data
@@ -43,17 +53,19 @@ preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, daily = FALSE
 prism <- list.files('../data', pattern = 'SWE_Depth', full.names = TRUE) %>%
   map(preprocess, var = 'SWE', bbox = bbox, regrid = TRUE, daily = TRUE) %>%
   brick() %>%
+  mask(., all(near(., 0)), maskvalue = 1) %>% # mask pixels that never receive snow
+  mask(states_wus) %>% # crop to state boundaries
   setNames(1982:2017)
 ```
 
-
 ```{r, warning = FALSE}
-# this averages over the full ensemble
-cera <- map(1:10,
-            ~ (brick('../data/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
+cera <- map(1:10, ~ (brick('../data/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
+  # this averages over the full ensemble
   reduce(`+`) %>%
   `/`(10) %>%
   crop(bbox) %>%
+  mask(., all(near(., 0)), maskvalue = 1) %>%
+  mask(states_wus) %>%
   `*`(1000) # convert to mm
 ```
 
@@ -68,38 +80,31 @@ cesm_h2osno_ext <- preprocess('../data/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSN
                           flip = TRUE,
                           bbox = bbox)
 
-cesm_areas <- raster::area(cesm_h2osno) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
-  rename(area = layer)
-
 cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
-  brick()
+  brick() %>%
+  resample(cera) %>%
+  mask(mean(cera))
 ```
-
 
 ```{r}
 ccsm <- preprocess('../../snow-wna/data/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
+                   var = 'snw',
+                   flip = TRUE,
+                   bbox = bbox) %>%
+  resample(cera) %>%
+  mask(mean(cera))
 ```
 
 ```{r}
-common <- brick(c(raster::resample(cesm[[951:1051]], cera), cera))
+plot(mean(prism));plot(mean(cera));plot(mean(cesm));plot(mean(ccsm))
 ```
-
-## supplemental data
+supplemental data
 ```{r}
-# download state boundary files for cropping and plotting
-state_names <- c('arizona', 'new mexico', 'colorado', 
-                 'california', 'utah', 'nevada', 
-                 'oregon', 'washington', 'idaho',
-                 'wyoming', 'montana')
+areas_prism <- area(prism) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE) %>%
+  rename(area = layer)
 
-states_wus <- maps::map('state', regions = state_names, 
-                    fill = TRUE, plot = FALSE) %>% st_as_sf
-
-prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
-cera_mask <- cera[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
-
-areas <- area(prism) %>%
+areas_cera <- area(cera) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE) %>%
   rename(area = layer)
 
@@ -116,17 +121,6 @@ mountains_mask <- mountains %>%
 ```
 
 
-## Preprocessing
-```{r}
-snow_only <- function(dat){
-  dat %>%
-    group_by(x, y) %>%
-    mutate(test = all(near(SWE, 0) | is.na(SWE))) %>%
-    filter(test == FALSE) %>%
-    ungroup() %>%
-    dplyr::select(-test)
-}
-```
 
 Turn the raster bricks into data frames and join.
 ```{r}
@@ -134,9 +128,7 @@ prism_dat <- prism %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = round(parse_number(layer))) %>%
   rename(SWE = value) %>%
-  dplyr::select(-layer) %>%
-  snow_only() %>%
-  semi_join(prism_mask, by = c('x', 'y'))
+  dplyr::select(-layer)
 ```
 
 ```{r}
@@ -144,9 +136,7 @@ cera_dat <- cera %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = round(parse_number(layer))) %>%
   rename(SWE = value) %>%
-  dplyr::select(-layer) %>%
-  snow_only()  %>%
-  semi_join(cera_mask, by = c('x', 'y'))
+  dplyr::select(-layer)
 ```
 
 
@@ -157,42 +147,27 @@ cesm_dat <- cesm %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
   rename(SWE = value) %>%
-  select(-layer) %>%
-  left_join(cesm_areas, by = c('x', 'y'))
+  select(-layer)
 ```
 
 ```{r}
-common_dat <- common %>%
+ccsm_dat <- ccsm %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
   rename(SWE = value) %>%
-  select(-layer) %>%
-  snow_only()  %>%
-  semi_join(cera_mask, by = c('x', 'y'))
+  select(-layer)
 ```
 
 ```{r}
-cera_lowres_dat <- cera_lowres %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
-  rename(SWE = value) %>%
-  select(-layer) %>%
-  snow_only()
-
-```
-
-
-```{r}
-save(prism_dat, cera_dat, cesm_dat, areas, mountains_mask, states_wus, file = '../data.Rdata')
-save(cera_dat, file  = '../cera2.Rdata')
+save(prism_dat, cera_dat, cesm_dat, ccsm_dat, areas_prism, areas_cera, states_wus, file = '../data.Rdata')
 ```
 
 ## Bilinear interpolation
 
 
 ```{r}
-raster::resample(cera[[99]] / mean(cera[[82:110]]) , prism) %>% plot
-raster::resample((cera[[99]] / mean(cera[[82:110]]))  , prism) %>% plot
+raster::resample(cera[[99]] / mean(cera[[82:110]]), prism) %>% plot
+raster::resample((cera[[99]] / mean(cera[[82:110]])), prism) %>% plot
   
 
 filter(year >= 1982) %>%
@@ -203,7 +178,7 @@ filter(year >= 1982) %>%
   ggplot(aes(x, y)) +
   geom_raster(aes(fill = SWE)) +
   coord_quickmap() +
-  scale_fill_viridis_c(limits =c(-5,5))
+  scale_fill_viridis_c(limits = c(-5,5))
 ```
 
 ```{r}
