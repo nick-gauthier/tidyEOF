@@ -78,11 +78,11 @@ cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
 
 
 ```{r}
-livneh <- preprocess('~/Downloads/LIVNEH/swe.mon.mean.nc', var = 'swe', bbox = bbox, flip = TRUE, regrid = TRUE)
+ccsm <- preprocess('../../snow-wna/data/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
 ```
 
 ```{r}
-terraclim <- brick('~/Downloads/agg_terraclimate_swe_1958_CurrentYear_GLOBE.nc', varname = 'swe')
+common <- brick(c(raster::resample(cesm[[951:1051]], cera), cera))
 ```
 
 ## supplemental data
@@ -98,8 +98,6 @@ states_wus <- maps::map('state', regions = state_names,
 
 prism_mask <- prism[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 cera_mask <- cera[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
-livneh_mask <- livneh[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
-terraclim_mask <- terraclim[[1]] %>% mask(states_wus) %>% as.data.frame(na.rm = TRUE, xy = TRUE) %>% .[,1:2]
 
 areas <- area(prism) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE) %>%
@@ -164,23 +162,23 @@ cesm_dat <- cesm %>%
 ```
 
 ```{r}
-livneh_dat <- livneh %>%
+common_dat <- common %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  mutate(year = round(parse_number(layer))) %>%
+  mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
   rename(SWE = value) %>%
-  dplyr::select(-layer) %>%
+  select(-layer) %>%
   snow_only()  %>%
-  semi_join(livneh_mask, by = c('x', 'y'))
+  semi_join(cera_mask, by = c('x', 'y'))
 ```
 
 ```{r}
-terraclim_dat <- terraclim %>%
+cera_lowres_dat <- cera_lowres %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  mutate(year = lubridate::year(Z)) %>%
+  mutate(year = str_sub(layer, 2) %>% parse_number() %>% round) %>%
   rename(SWE = value) %>%
-  dplyr::select(-Z) %>%
-  snow_only() %>%
-  semi_join(terraclim_mask, by = c('x', 'y'))
+  select(-layer) %>%
+  snow_only()
+
 ```
 
 
