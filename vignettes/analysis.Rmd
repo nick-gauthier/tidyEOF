@@ -23,12 +23,9 @@ Import the packages required for this analysis.
 
 ```{r setup}
 knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
-# temporary fix until broom fixes tidy.prcomp
-#devtools::install_version("broom", version = "0.5.6", repos = "http://cran.us.r-project.org")
 
 # analysis
 library(remote) # empirical orthogonal teleconnections
-library(telefit) # cca
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
 library(modelr)
@@ -40,23 +37,17 @@ library(magick) # for multi-panel animations
 library(scico) # color palettes
 library(patchwork)
 
-
 # this package
 devtools::load_all()
 
 load('../data.Rdata')
-cesm_dat <- read_csv('../cesm_dat.csv') %>%
-  select(-area)
-
-load('../cera2.Rdata')
-cera_dat <- cera_dat2
 ```
  
 # Snowpack in the western US
  
 First plot March SWE climatology from observations and reanalysis data. We immediately see the mismatch between the two because of the coarse resolution reanalysis. To drive home the point, here's the high-resolution observations, resampled to the reanalysis resolution. For a better comparison, each dataset was reduced to the common range of 1982--2010. The coarse data fail to capture the topographic heterogeneity of the domain, and thus the small-scale variations in elevation and temperature that influence snow accumulation and melt.
 
-```{r, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
+```{r, fig.width = 7, fig.asp = .7, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
 a <- prism_dat %>%
   get_climatology() %>%
   ggplot() +
@@ -83,42 +74,22 @@ c <- cesm_dat %>%
    scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void() 
 
-(a + (b / c + plot_layout(guides = 'collect') )) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
+(a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) +  plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')& theme(legend.position = 'bottom')
 ```
-
-```{r fig.width = 7, fig.asp = .7}
-a <- prism_dat %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)') +
-  theme_void()
-
-b <- cera_dat %>%
-  filter(year > 1980) %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 330)) +
-  theme_void()
-
-c <- cesm_dat %>%
-  filter(year > 1980) %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 330)) +
-  theme_void() 
-
-(a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
-
+```{r}
 ggsave('swe_comparison.png', width = 7, height = .7 * 7)
 ```
 
-
+```{r}
+ ccsm_dat %>%
+  filter(year > 1980) %>%
+  get_climatology() %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = swe_mean)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 320)) +
+  theme_void() 
+```
 
 Next we'll look at how SWE has varied over time and space.
 
