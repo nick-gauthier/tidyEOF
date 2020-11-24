@@ -20,6 +20,8 @@ state_names <- c('arizona', 'new mexico', 'colorado',
 states_wus <- maps::map('state', regions = state_names, 
                     fill = TRUE, plot = FALSE) %>% 
   st_as_sf()
+
+world <- maps::map('world',wrap=c(0,360),fill = TRUE, plot = FALSE)
 ```
 
 ## Geographic Data
@@ -82,29 +84,119 @@ cesm_h2osno_ext <- preprocess('../data/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSN
 
 cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
   brick() %>%
-  resample(cera) %>%
+  raster::resample(cera) %>%
   mask(mean(cera))
+
+# fix edge effects from resampling
+cesm[cesm < 0] <- 0
 ```
 
 ```{r}
-ccsm <- preprocess('../../snow-wna/data/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
+ccsm_lm <- preprocess('../../snow-wna/data/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
                    var = 'snw',
                    flip = TRUE,
-                   bbox = bbox) %>%
-  resample(cera) %>%
+                   bbox = bbox)
+
+ccsm_ext <- preprocess('~/Downloads/snw_LImon_CCSM4_historical_r1i2p1_185001-200512.nc',
+                   var = 'snw',
+                   flip = TRUE,
+                   bbox = bbox)[[-1]] # the datasets overlap in year 1850 
+
+ccsm <- c(ccsm_lm, ccsm_ext) %>%
+  brick() %>%
+  raster::resample(cera) %>%
   mask(mean(cera))
+
+# fix edge effects from resampling
+ccsm[ccsm < 0] <- 0
 ```
+
 
 ```{r}
 plot(mean(prism));plot(mean(cera));plot(mean(cesm));plot(mean(ccsm))
 ```
+
+climate data for teleconnection analysis
+
+```{r}
+ppt <- list.files('~/Downloads/PRISM/PRISM_ppt_stable_4kmM3_198101_201904_bil', full.names = TRUE, pattern = '.bil$') %>%
+  map(~raster(.) %>% crop(bbox)) %>%
+  brick %>%
+  aggregate(fact = 2) %>%
+  crop(states_wus)
+
+ppt2 <- names(ppt) %>% str_split('_') %>% map_chr(~.[[5]]) %>% setNames(ppt, .)
+
+tmean <- list.files('~/Downloads/PRISM/PRISM_tmean_stable_4kmM3_198101_201904_bil', full.names = TRUE, pattern = '.bil$') %>%
+  map(~raster(.) %>% crop(bbox)) %>%
+  brick %>%
+  aggregate(fact = 2) %>%
+  crop(states_wus)
+
+tmean2 <- names(tmean) %>% str_split('_') %>% map_chr(~.[[5]]) %>% setNames(tmean, .)
+
+ppt_dat <- ppt2 %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(time = parse_number(layer)) %>%
+  separate(time, into = c('year', 'month'), sep = -2, convert = TRUE) %>%
+  select(-layer) %>%
+  filter(month %in% c(1,2,3)) %>%
+  group_by(x, y, year) %>%
+  summarise(value = sum(value, na.rm = TRUE)) %>% # diff from temp
+  ungroup()
+
+tmean_dat <- tmean2 %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(time = parse_number(layer)) %>%
+  separate(time, into = c('year', 'month'), sep = -2, convert = TRUE) %>%
+  select(-layer) %>%
+  filter(month %in% c(1,2,3)) %>%
+  group_by(x, y, year) %>%
+  summarise(value = mean(value, na.rm = TRUE)) %>% # diff from precip
+  ungroup()
+
+sst_mean <- mean(brick('~/gdrive/Projects/snow-wna/data/sst.mon.ltm.1981-2010.nc', varname = 'sst')[[1:3]])
+
+sst_brick <- brick('~/gdrive/Projects/snow-wna/data/sst.mnmean.nc', varname = 'sst')
+
+time_sst <- getZ(sst_brick)
+id <- which(time_sst >= as.Date('1982-01-01') & time_sst <= as.Date('2017-03-01') & str_detect(time_sst, c('-01-', '-02-', '-03-')))
+
+sst_jfm <- subset(sst_brick, id) %>%
+  stackApply(rep(1:36, each = 3), 'mean') %>% 
+  `-`(sst_mean) %>% # is this necessary?
+  crop(extent(c(-1, 359, -75, 75))) %>%
+  disaggregate(fact = 2, method = 'bilinear') %>%
+  setNames(1982:2017) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = parse_number(layer)) %>%
+  select(-layer)
+
+geop_jfm <- brick('../data/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
+   stackApply(rep(1:36, each = 3), 'mean') %>%
+    `-`(., mean(.)) %>% # is this necessary?
+  aggregate(fact = 4, method = 'bilinear') %>%
+  setNames(1982:2017) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = parse_number(layer)) %>%
+  select(-layer) 
+
+sst_jfm %>% filter(year == 1985) %>%
+  ggplot(aes(x, y, fill = value)) + geom_raster() + coord_quickmap()
+```
+
+
 supplemental data
+```{r}
+landfrac <- raster('../data/_grib2netcdf-webmars-public-svc-blue-003-6fe5cac1a363ec1525f54343b6cc9fd8-tyqPrq.nc')
+```
+
 ```{r}
 areas_prism <- area(prism) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE) %>%
   rename(area = layer)
 
-areas_cera <- area(cera) %>%
+areas_cera <- (landfrac *  raster::area(cera)) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE) %>%
   rename(area = layer)
 
@@ -140,8 +232,6 @@ cera_dat <- cera %>%
 ```
 
 
-still need to account for snow fraction of grid cell? and land fraction too?
-
 ```{r}
 cesm_dat <- cesm %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
@@ -159,7 +249,7 @@ ccsm_dat <- ccsm %>%
 ```
 
 ```{r}
-save(prism_dat, cera_dat, cesm_dat, ccsm_dat, areas_prism, areas_cera, states_wus, file = '../data.Rdata')
+save(prism_dat, cera_dat, cesm_dat, ccsm_dat, areas_prism, areas_cera, states_wus, world, file = '../data.Rdata')
 ```
 
 ## Bilinear interpolation
@@ -189,3 +279,6 @@ delta_mult2 <- raster::resample(cera / mean(cera) , prism) * mean(prism)
 
 delta_add <- raster::resample(cera - mean(cera[[82:110]]) , prism) + mean(prism)
 ```
+
+
+

@@ -16,7 +16,7 @@ get_eofs <- function(dat, pca, k, eigenvalues, rotate) {
     broom::tidy(matrix = 'variables') %>%
     filter(PC <= k) %>%
     left_join(eigenvalues[1:2], by = 'PC') %>%
-    mutate(weight = value * std.dev, # scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (hannachi et al 2007)
+    mutate(weight = value * std.dev, # scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)
            EOF = as.character(PC),
            column = as.character(column)) %>%
     dplyr::select(-c(std.dev, PC))
