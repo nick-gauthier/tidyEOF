@@ -1,1 +1,1 @@
-patterncouplr
+An R package for conducting empirical orthogonal function (EOF) analysis in the tidyverse framework. Functions to isolate modes of variability from spatiotemporal data, run various diagnostics, and use these patterns for spatial downscaling.
