@@ -262,3 +262,11 @@ get_scores <- function(x) {
     ungroup() %>%
     dplyr::select(-xbar, -sd, -mse_clim)
 }
+
+# for calculating domain wide totals
+get_areas <- function(dat, areas){
+  dat %>%
+    left_join(areas) %>%
+    group_by(year) %>%
+    summarise(SWE = sum(SWE * area))
+}

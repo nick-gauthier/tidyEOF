@@ -34,7 +34,8 @@ library(MuMIn)
 # plotting
 library(sf) # shapefiles and plotting
 library(scico) # color palettes
-library(patchwork)
+library(patchwork) # multi-panel plots
+library(ggridges) # ridge plots
 
 # this package
 devtools::load_all()
@@ -161,7 +162,7 @@ plot_eofs(ccsm_patterns, scaled = FALSE)
 ```
 
 Visualize the leading EOFs as correlation coefficients.
-```{r, fig.width = 7, fig.height = 6}
+```{r, fig.width = 7, fig.asp = .875}
 swe_corr_prism <- prism_dat %>%
   rename(value = SWE) %>%
   get_corrs(prism_patterns)
@@ -170,11 +171,9 @@ swe_corr_cera <- cera_dat %>%
   rename(value = SWE) %>%
   get_corrs(cera_patterns)
 
-cesm_patterns <- get_patterns(cesm_dat %>% filter(year > 1900,x < max(x), y > min(y)), k = n_modes)
-swe_corr_cesm <- cesm_dat %>%
-  filter(year > 1900,x < max(x), y > min(y)) %>% # is min/max check still necessary
+swe_corr_ccsm <- ccsm_dat %>%
   rename(value = SWE) %>%
-  get_corrs(cesm_patterns)
+  get_corrs(ccsm_patterns)
 
 a <- swe_corr_prism %>%
   gather(PC, value, PC1:PC4) %>%
@@ -197,9 +196,11 @@ scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation') +
     labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-c <- swe_corr_cesm %>%
+c <- swe_corr_ccsm %>%
   remove_missing() %>%
-  mutate(PC3 = PC3 * -1) %>% # the signs are arbitrary, so adjust the cera signs so the colors match prism
+  mutate(PC1 = PC1 * -1,
+         PC2 = PC2 * -1,
+         PC3 = PC3 * -1) %>% # the signs are arbitrary, so adjust the cera signs so the colors match prism
   gather(PC, value, PC1:PC4) %>%
 ggplot() +
   geom_raster(aes(x, y, fill = value)) +
@@ -210,7 +211,10 @@ scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation') +
   theme_void()
 
 (a / b / c) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
-ggsave('eofs_cesm.png', height = 6, width = 7)
+```
+
+```{r}
+ggsave('eofs.png', height = 6, width = 7, dpi = 600)
 ```
 
 
@@ -233,7 +237,7 @@ tmean_sig_pts <- get_fdr(tmean_dat, prism_patterns)
 ```
 
 Plot the results.
-```{r fig.width = 10.5, fig.height = 6}
+```{r fig.width = 10.5, fig.asp = .571}
 a <- ppt_corr %>%
   gather(PC, value, PC1:PC4) %>%
   ggplot() +
@@ -288,7 +292,7 @@ d <- sst_corr %>%
 
 
 ```{r}
-ggsave('snow_teleconnections.png', width = 10.5, height = 6, dpi = 600)
+ggsave('snow_teleconnections2.png', width = 10.5, height = 6, dpi = 600)
 ```
 
 # Coupled Pattern Analysis
@@ -552,18 +556,11 @@ recon_20c_space <-predict_cca(get_patterns(filter(cera_dat, year >= 1982), 10),
 ```
 
 ```{r}
-get_areas <- function(dat, areas){
-  dat %>%
-    left_join(areas) %>%
-    group_by(year) %>%
-    summarise(SWE = sum(SWE * area))
-}
-
 wus_stats <- get_areas(prism_dat, areas_prism)
 
 cera_baseline <- get_areas(cera_dat, areas_cera)
 
-recon_series <-get_areas(recon_20c_time, areas_prism)
+recon_series <- get_areas(recon_20c_time, areas_prism)
 
 ccsm_series <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
             get_patterns(filter(prism_dat, year <= 2010), 4), 
@@ -571,66 +568,8 @@ ccsm_series <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5),
             k = 4) %>%
   get_areas(areas_prism)
 
-cesm_series <- predict_cca(get_patterns(filter(cera_dat, year >=1982) %>% semi_join(get_climatology(cesm_dat)), 5), 
-            get_patterns(filter(prism_dat, year <= 2010), 4), 
-            filter(cesm_dat, year > 1700),
-            k = 4) %>%
-  get_areas(areas_prism)
-
 ccsm_series_raw <- get_areas(ccsm_dat, areas_cera) %>% filter(year > 1700)
-
-cesm_series_raw <- get_areas(cesm_dat, areas_cera)
 ```
-
-```{r}
-bind_rows('obs' = wus_stats %>% filter(year < 2005), 
-          #'cera' = cera_baseline,
-          'recon' = recon_series,
-          'ccsm' = ccsm_series, .id = 'type') %>%
-  ggplot(aes(SWE, fill = type)) +
-  geom_density(alpha = .5)
-```
-
-
-```{r}
-  ggplot(recon_series, aes(year, SWE)) +
-  #  geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
-  geom_line(size = 1.1, aes(color = 'black')) +
-  geom_line(data = wus_stats, aes(color = 'red'), size = 1.1, alpha = .7) +
-    geom_line(data = ccsm_series, aes(color = 'orange'), size = 1.1, alpha = .7) +
-    #geom_line(data = filter(cesm_series, year > 1840), aes(color = 'purple'), size = 1.1, alpha = .7) +
-      geom_line(data = ccsm_series_raw, aes(color = 'blue'), size = 1.1, alpha = .7) +
-    #geom_line(data = filter(cesm_series_raw, year > 1840), aes(color = 'green'), size = 1.1, alpha = .7) +
-  scale_color_identity(name = NULL,
-                          breaks = c("red", "grey", "black"),
-                          labels = c("Observations", 'Reanalysis', 'Downscaled Reanalysis'),
-                          guide = "legend") +
-  labs(x = 'Year', y = 'Total SWE (Ml)') +
-  theme_bw() +
-  theme(legend.position = 'bottom')
-```
-```{r, fig.width = 6, fig.height = 4}
-library(ggridges)
-
-bind_rows('ccsm_recon' = ccsm_series,
-          'ccsm_raw' = ccsm_series_raw, .id = 'type') %>%
-  filter(year < 2000) %>%
-  mutate(period = floor(year / 50) * 50) %>%
-  ggplot(aes(SWE * 1.0E-6, fct_rev(as_factor(period)))) +
-  geom_density_ridges(alpha = .8, aes(group = interaction(period, type), fill = type)) +
-  scale_fill_manual(name = NULL,
-                          values = c('lightgrey', "darkgrey"),
-                          labels = c("Raw CCSM4", 'Downscaled CCSM4'),
-                         guide = "legend") +
-  geom_vline(xintercept= mean(wus_stats$SWE) * 1.0E-6, linetype = 2) +
-  ggridges::theme_ridges(grid = FALSE, center_axis_labels = TRUE) +
-  labs(x = 'Total SWE (TL)', y = 'Period')
-```
-```{r}
-ggsave('ccsm4_comparison.png', height = 4, width = 6, dpi = 600)
-```
-
-
 
 ```{r fig.width=6.5}
 recon_series %>%
@@ -650,40 +589,62 @@ recon_series %>%
 ggsave('20c_recon.png', height = .6 * 6.5, width = 6.5, dpi = 600)
 ```
 
+
+```{r, fig.width = 6, fig.height = 4}
+bind_rows('ccsm_recon' = ccsm_series,
+          'ccsm_raw' = ccsm_series_raw, .id = 'type') %>%
+  filter(year < 2000) %>%
+  mutate(period = floor(year / 50) * 50) %>%
+  ggplot(aes(SWE * 1.0E-6, fct_rev(as_factor(period)))) +
+  geom_density_ridges(alpha = .8, aes(group = interaction(period, type), fill = type)) +
+  scale_fill_manual(name = NULL,
+                          values = c('lightgrey', "darkgrey"),
+                          labels = c("Raw CCSM4", 'Downscaled CCSM4'),
+                         guide = "legend") +
+  geom_vline(xintercept= mean(wus_stats$SWE) * 1.0E-6, linetype = 2) +
+  ggridges::theme_ridges(grid = FALSE, center_axis_labels = TRUE) +
+  labs(x = 'Total SWE (TL)', y = 'Period')
+```
+
+```{r}
+ggsave('ccsm4_comparison.png', height = 4, width = 6, dpi = 600)
+```
+
+
 ```{r fig.width = 6.5, fig.asp = .5}
 a <- cera_dat %>%
   filter(between(year, 1982, 2010)) %>%
   group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
+  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
-    remove_missing() %>% # shouldn't be necessary, but for division by sd
+  remove_missing() %>% # shouldn't be necessary, but for division by sd
   ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'vik', direction = -1, limits = c(-6,6), name =  'Standard deviations') +
   theme_void()
 
 b <- recon_20c_space %>%
   filter(between(year, 1982, 2010)) %>%
   group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
+  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
-      remove_missing() %>% # shouldn't be necessary, but for division by sd
-ggplot() +
+  remove_missing() %>% # shouldn't be necessary, but for division by sd
+  ggplot() +
   geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'vik', direction = -1, limits = c(-6, 6), name =  'Standard deviations') +
   theme_void()
 
 c <- prism_dat %>%
   filter(between(year, 1982, 2010)) %>%
   group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
+  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
   ungroup() %>%
   filter(year == 1997) %>%
-      remove_missing() %>% # shouldn't be necessary, but for division by sd
+  remove_missing() %>% # shouldn't be necessary, but for division by sd
   ggplot()+
   geom_raster(aes(x, y, fill = anomaly)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
@@ -691,51 +652,6 @@ c <- prism_dat %>%
   theme_void()
 
 a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
-
-ggsave('anomalies_1997.png', height = 3.25, width = 6.5, dpi = 600)
 ```
-
-```{r fig.width = 6.5, fig.asp = .5}
-a <- cera_dat %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))) %>%
-  ungroup() %>%
-  filter(year == 1997) %>%
-    remove_missing() %>% # shouldn't be necessary, but for division by sd
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
-  theme_void()
-
-b <- recon_20c_space %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))) %>%
-  ungroup() %>%
-  filter(year == 1997) %>%
-      remove_missing() %>% # shouldn't be necessary, but for division by sd
-ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
-    geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
-  theme_void()
-
-c <- prism_dat %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-      mutate(anomaly = (SWE - mean(SWE))) %>%
-  ungroup() %>%
-  filter(year == 1997) %>% 
-      remove_missing() %>% # shouldn't be necessary, but for division by sd
-  ggplot()+
-  geom_raster(aes(x, y, fill = anomaly)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
-  theme_void()
-
-a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
-
-ggsave('anomalies_1997_unstandardized.png', height = 3.25, width = 6.5, dpi = 600)
+ggsave('anomalies_1997.png', height = 3.25, width = 6.5, dpi = 600)
 ```

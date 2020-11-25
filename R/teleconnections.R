@@ -30,7 +30,7 @@ get_fdr <- function(dat, patterns, fdr = 0.1) { # could combine with above
   dat %>%
     group_by(x,y) %>%
     nest %>%
-    mutate(corrs = map(data,  ~inner_join(., pc_amps, by = 'year') %>%
+    mutate(corrs = map(data,  ~inner_join(., amps, by = 'year') %>%
                          summarise(PC1 = cor.test(value, PC1)$p.value,
                                    PC2 = cor.test(value, PC2)$p.value,
                                    PC3 = cor.test(value, PC3)$p.value,
