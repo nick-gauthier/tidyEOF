@@ -1,0 +1,141 @@
+---
+title: "Untitled"
+author: "Nick Gauthier"
+date: "12/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidymodels)
+library(scico)
+```
+```{r}
+vfold_cv()
+```
+
+```{r}
+set.seed(3527)
+test_data <- data.frame(id = sort(sample(1:20, size = 80, replace = TRUE)))
+test_data$dat <- runif(nrow(test_data))
+
+set.seed(5144)
+split_by_id <- group_vfold_cv(test_data, group = "id")
+
+get_id_left_out <- function(x)
+  unique(assessment(x)$id)
+
+library(purrr)
+table(map_int(split_by_id$splits, get_id_left_out))
+#> 
+#>  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
+#>  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1 
+
+set.seed(5144)
+split_by_some_id <- group_vfold_cv(test_data, group = "id", v = 7)
+held_out <- map(split_by_some_id$splits, get_id_left_out)
+table(unlist(held_out))
+#> 
+#>  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
+#>  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1 
+# number held out per resample:
+map_int(held_out, length)
+```
+
+```{r}
+n <- 29
+kfolds <- 5
+  r <- n %% kfolds
+  fold_times <- rep(n %/% kfolds, kfolds)
+  fold_times[1:r] <- fold_times[1:r] + 1
+ dat <- tibble(year = 1982:2010, fold = rep(1:kfolds, times = fold_times))
+```
+
+```{r}
+dat_split <- group_vfold_cv(dat, group = fold, v = 5)
+map(dat_split$splits, analysis)
+```
+
+
+```{r}
+prism <- prism_dat %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>% # area weight, sqrt means covariance matrix weighted by cos(lat)
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+  as_tibble()
+
+prism_space <- prism_dat %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(x, y) %>%
+  mutate(id = paste0('V', 1:n()))
+
+cera <- cera_dat %>%
+    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>% # area weight, sqrt means covariance matrix weighted by cos(lat)
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(-x, -y) %>%
+    t() %>%
+  as_tibble()
+
+cera_space <- cera_dat %>%
+    tidyr::spread(year, SWE) %>%
+    dplyr::select(x, y) %>%
+  mutate(id = paste0('V', 1:n()))
+
+prism_pca <- recipe(prism) %>%
+  update_role(everything(), new_role = 'predictor') %>%
+  check_missing(everything()) %>%
+  step_center(all_numeric()) %>%
+  step_pca(all_numeric(), num_comp = 5, id = 'pca') %>%
+  prep()
+
+cera_pca <- recipe(cera) %>%
+  update_role(everything(), new_role = 'outcome') %>%
+  check_missing(everything()) %>%
+  step_center(all_numeric()) %>%
+  step_pca(all_numeric(), num_comp = 5, id = 'pca') %>%
+  prep()
+
+
+prism_pca
+cera_pca
+```
+
+This gets you the eigenvalues
+```{r}
+tidy(cera_pca, id = 'pca', type = 'variance') %>% filter(terms == 'percent variance') %>% pull(value) %>% .[1:10] %>% plot
+```
+
+
+
+```{r}
+#get spatial ids
+
+tidy(cera_pca, id = 'pca', type = 'coef') %>% filter(readr::parse_number(component) <= 5) %>% left_join(cera_space, by = c('terms' = 'id')) %>% ggplot(aes(x, y)) + geom_raster(aes(fill = value)) + coord_quickmap() + scale_fill_scico(palette = 'broc', name = 'Correlation') +
+  facet_wrap(~component)
+
+tidy(prism_pca, id = 'pca', type = 'coef') %>% filter(readr::parse_number(component) <= 5) %>% left_join(prism_space, by = c('terms' = 'id')) %>% ggplot(aes(x, y)) + geom_raster(aes(fill = value)) + coord_quickmap() + scale_fill_scico(palette = 'broc', name = 'Correlation') +
+  facet_wrap(~component) + theme_void()
+```
+```{r}
+
+```
+
+
+```{r}
+test_rec_ica <- recipe(dat %>% select(1:10000)) %>%
+  step_center(all_numeric()) %>%
+  step_ica(all_numeric(), num_comp = 5)
+
+test_prep_ica <- prep(test_rec_ica, select(dat, 1:10000))
+bake(test_prep_ica, new_data = NULL)
+
+tidy(test_prep_ica, number = 2, type = 'coef') %>% filter(component %in% c('IC1', 'IC2', 'IC3', 'IC4', 'IC5')) %>% left_join(space, by = c('terms' = 'id')) %>% ggplot(aes(x, y)) + geom_raster(aes(fill = value)) + coord_quickmap() + scale_fill_scico(palette = 'broc', name = 'Correlation') +
+  facet_wrap(~component)
+
+```
+```{r}
+dat
+```
+
