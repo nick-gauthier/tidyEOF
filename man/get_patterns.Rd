@@ -4,7 +4,7 @@
 \alias{get_patterns}
 \title{Get EOFs and PCs from observations}
 \usage{
-get_patterns(dat, k, scale = FALSE, rotate = FALSE)
+get_patterns(dat, k, common = NULL, scale = FALSE, rotate = FALSE)
 }
 \arguments{
 \item{k}{}

@@ -53,3 +53,5 @@ plot_scree <- function(eigenvalues, k, kmax = 15){
     guides(color = F) +
     scale_x_continuous(breaks = seq(0, 25, 5))
 }
+#' @rdname plot_eofs
+#' @export
