@@ -23,6 +23,7 @@ predict_patterns <- function(coupled_patterns, predictors) {# new_amps) {
     dplyr::select(year, PC, amplitude)
 }
 
+#' @rdname predict_patterns
 reconstruct_field <- function(target_patterns, amplitudes = NULL) {
   if(is.null(amplitudes)) amplitudes <- target_patterns$amplitudes
   eofs <- target_patterns$eofs

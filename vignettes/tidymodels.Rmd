@@ -99,7 +99,7 @@ cera_pca <- recipe(cera) %>%
 
 
 prism_pca
-cera_pca
+tidy(cera_pca, number = 3) 
 ```
 
 This gets you the eigenvalues
