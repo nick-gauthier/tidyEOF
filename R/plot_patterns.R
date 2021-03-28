@@ -29,6 +29,7 @@ plot_eofs <- function(patterns, palette = 'vik', scaled = TRUE){
   }
 }
 
+#' @export
 plot_amps <- function(patterns) {
   patterns$amplitudes %>%
     mutate(PC = paste0('PC', PC)) %>%
@@ -38,6 +39,7 @@ plot_amps <- function(patterns) {
     theme_bw()
 }
 
+#' @export
 plot_scree <- function(eigenvalues, k, kmax = 15){
   eigenvalues %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),

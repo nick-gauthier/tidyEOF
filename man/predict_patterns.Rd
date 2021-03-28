@@ -2,9 +2,12 @@
 % Please edit documentation in R/predict_patterns.R
 \name{predict_patterns}
 \alias{predict_patterns}
+\alias{reconstruct_field}
 \title{Title}
 \usage{
 predict_patterns(coupled_patterns, predictors)
+
+reconstruct_field(target_patterns, amplitudes = NULL)
 }
 \arguments{
 \item{new_amps}{}
