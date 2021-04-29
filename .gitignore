@@ -3,7 +3,11 @@
 .RData
 .Ruserdata
 
-data/
+data-raw/
 
 tmp/
 .DS_Store
+*.png
+*.gif
+*.mp4
+*.png

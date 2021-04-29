@@ -27,7 +27,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
    # note that this object still has scale and center attributes
 
 # eofs_corr <- amplitudes %>%
-#    mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpetable
+#    mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpretable
 #   full_join(dat, by = 'year') %>%
 #  group_by(x, y, PC) %>%
 #  summarise(correlation = cor(amplitude, SWE))
@@ -54,6 +54,29 @@ get_climatology2 <- function(dat) {
   dat %>%
   group_by(x, y) %>%
   summarise(swe_mean = mean(SWE), # make generic (i.e. var rather than swe)
-            swe_sd = sd(SWE)) %>%
-    ungroup()
+            swe_sd = sd(SWE),
+            .groups = 'drop')
 }
+
+# combine these?
+get_anomalies <- function(dat, scale = FALSE) {
+  dat %>%
+    dplyr::group_by(x,y) %>%
+    dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
+   {if(scale) dplyr::mutate(., SWE = SWE / sd(SWE)) else .} %>%
+    dplyr::ungroup()
+}
+
+#stashed changes for common eofs
+# get_patterns <- function(dat, k, common = NULL, scale = FALSE, rotate = FALSE){
+#
+#   climatology <- get_climatology(dat)
+#   dat <- get_anomalies(dat, scale = scale)
+#
+#   if(!is.null(common)) {
+#     climatology <- get_climatology(common)
+#     dat <- bind_rows(get_anomalies(dat, scale = scale),
+#                      get_anomalies(common, scale = scale))
+#   }
+#
+#   pca <- get_pcs(dat)

@@ -23,6 +23,7 @@ get_corrs <- function(dat, patterns) { # should be able to take arbitrary number
     unnest(corrs)
 }
 
+#' @export
 get_fdr <- function(dat, patterns, fdr = 0.1) { # could combine with above
   amps <- patterns$amplitudes %>%
     spread(PC, amplitude, sep ='')
