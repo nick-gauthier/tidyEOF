@@ -97,52 +97,74 @@ ccsm[ccsm < 0] <- 0
 
 #climate data for teleconnection analysis
 
-ppt <- list.files('~/Downloads/PRISM/PRISM_ppt_stable_4kmM3_198101_201904_bil', full.names = TRUE, pattern = '.bil$') %>%
+ppt <- list.files('data-raw/PRISM_ppt_stable_4kmM3_198101_201904_bil/', full.names = TRUE, pattern = '.bil$') %>%
   map(~raster(.) %>% crop(bbox)) %>%
   brick %>%
   aggregate(fact = 2) %>%
   crop(states_wus)
 
-ppt_dat <- names(ppt) %>%
+ppt_dat1 <- names(ppt) %>%
   str_split('_') %>%
   map_chr(~.[[5]]) %>%
-  setNames(ppt, .)%>%
+  setNames(ppt, .) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(time = parse_number(layer)) %>%
   separate(time, into = c('year', 'month'), sep = -2, convert = TRUE) %>%
-  select(-layer) %>%
+  select(-layer)
+
+ppt_jfm <- ppt_dat1 %>%
   filter(month %in% c(1,2,3)) %>%
   group_by(x, y, year) %>%
   summarise(value = sum(value, na.rm = TRUE)) %>% # diff from temp
   ungroup()
 
-tmean <- list.files('~/Downloads/PRISM/PRISM_tmean_stable_4kmM3_198101_201904_bil', full.names = TRUE, pattern = '.bil$') %>%
+ppt_dat <- ppt_dat1 %>%
+  filter(month %in% c(10,11,12)) %>%
+  group_by(x, y, year) %>%
+  summarise(value = sum(value, na.rm = TRUE)) %>% # diff from temp
+  ungroup() %>%
+  mutate(year = year + 1) %>%
+  inner_join(ppt_jfm, by = c("x", "y", "year")) %>%
+  mutate(value = value.x + value.y, .keep = 'unused')
+
+tmean <- list.files('data-raw/PRISM_tmean_stable_4kmM3_198101_201904_bil', full.names = TRUE, pattern = '.bil$') %>%
   map(~raster(.) %>% crop(bbox)) %>%
   brick %>%
   aggregate(fact = 2) %>%
   crop(states_wus)
 
-tmean_dat <- names(tmean) %>%
+tmean_dat1 <- names(tmean) %>%
   str_split('_') %>%
   map_chr(~.[[5]]) %>%
   setNames(tmean, .) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
   mutate(time = parse_number(layer)) %>%
   separate(time, into = c('year', 'month'), sep = -2, convert = TRUE) %>%
-  select(-layer) %>%
+  select(-layer)
+
+tmean_jfm <- tmean_dat1 %>%
   filter(month %in% c(1,2,3)) %>%
   group_by(x, y, year) %>%
   summarise(value = mean(value, na.rm = TRUE)) %>% # diff from precip
   ungroup()
 
+tmean_dat <- tmean_dat1 %>%
+    filter(month %in% c(10,11,12)) %>%
+    group_by(x, y, year) %>%
+    summarise(value = mean(value, na.rm = TRUE)) %>% # diff from precip
+    ungroup() %>%
+    mutate(year = year + 1) %>%
+    inner_join(tmean_jfm, by = c("x", "y", "year")) %>%
+    mutate(value = (value.x + value.y) / 2, .keep = 'unused')
+
 #sst_mean <- mean(brick('~/gdrive/Projects/snow-wna/data/sst.mon.ltm.1981-2010.nc', varname = 'sst')[[1:3]])
 
-sst_brick <- brick('~/gdrive/Projects/snow-wna/data/sst.mnmean.nc', varname = 'sst')
+sst_brick <- brick('data-raw/sst.mnmean.nc', varname = 'sst')
 
 time_sst <- getZ(sst_brick)
-id <- which(time_sst >= as.Date('1982-01-01') & time_sst <= as.Date('2017-03-01') & str_detect(time_sst, c('-01-', '-02-', '-03-')))
+id_jfm <- which(time_sst >= as.Date('1982-01-01') & time_sst <= as.Date('2017-03-01') & str_detect(time_sst, c('-01-', '-02-', '-03-')))
 
-sst_jfm <- subset(sst_brick, id) %>%
+sst_jfm <- subset(sst_brick, id_jfm) %>%
   stackApply(rep(1:36, each = 3), 'mean') %>%
  # `-`(sst_mean) %>% # is this necessary?
   crop(extent(c(-1, 359, -75, 75))) %>%
@@ -152,9 +174,33 @@ sst_jfm <- subset(sst_brick, id) %>%
   mutate(year = parse_number(layer)) %>%
   select(-layer)
 
-geop_jfm <- brick('../data/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
+id_ond <- which(time_sst >= as.Date('1981-10-01') & time_sst <= as.Date('2017-03-01') & str_detect(time_sst, c('-10-', '-11-', '-12-')))
+
+sst_ond <- subset(sst_brick, id_ond) %>%
+  stackApply(rep(1:36, each = 3), 'mean') %>%
+  # `-`(sst_mean) %>% # is this necessary?
+  crop(extent(c(-1, 359, -75, 75))) %>%
+  disaggregate(fact = 2, method = 'bilinear') %>%
+  setNames(1982:2017) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = parse_number(layer)) %>%
+  select(-layer)
+
+sst_dat <- inner_join(sst_jfm, sst_ond, by = c("x", "y", "year")) %>%
+  mutate(value = (value.x + value.y) / 2, .keep = 'unused')
+
+geop_jfm <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
    stackApply(rep(1:36, each = 3), 'mean') %>%
  #   `-`(., mean(.)) %>% # is this necessary?
+  aggregate(fact = 4, method = 'bilinear') %>%
+  setNames(1982:2017) %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  mutate(year = parse_number(layer)) %>%
+  select(-layer)
+
+#geop_ond <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
+  stackApply(rep(1:36, each = 3), 'mean') %>%
+  #   `-`(., mean(.)) %>% # is this necessary?
   aggregate(fact = 4, method = 'bilinear') %>%
   setNames(1982:2017) %>%
   as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
@@ -208,7 +254,7 @@ ccsm_dat <- ccsm %>%
   rename(SWE = value) %>%
   select(-layer)
 
-usethis::use_data(prism_dat, cera_dat, cesm_dat, ccsm_dat, tmean_dat, ppt_dat, geop_jfm, sst_jfm, areas_prism, areas_cera, states_wus, world, internal = TRUE, overwrite = TRUE)
+usethis::use_data(prism_dat, cera_dat, cesm_dat, ccsm_dat, tmean_dat, ppt_dat, geop_jfm, sst_dat, areas_prism, areas_cera, states_wus, world, internal = TRUE, overwrite = TRUE)
 
 
 ## Bilinear interpolation
