@@ -84,10 +84,11 @@ cesm_h2osno_ext <- preprocess('data-raw/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OS
 
 cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
   brick() %>%
-  raster::resample(as(cera, 'Raster')) %>%
-  mask(mean(as(cera, 'Raster'))) %>%
+  #raster::resample(as(cera, 'Raster')) %>%
+ # mask(mean(as(cera, 'Raster'))) %>%
   st_as_stars() %>%
   setNames('SWE') %>%
+  st_crop(states_wus) %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(SWE = units::set_units(if_else(SWE < 0, 0, SWE), mm)) # fix edge effects from resampling
 
@@ -106,10 +107,11 @@ ccsm_ext <- preprocess('data-raw/snw_LImon_CCSM4_historical_r1i2p1_185001-200512
 
 ccsm <- c(ccsm_lm, ccsm_ext) %>%
   brick() %>%
-  raster::resample(as(cera, 'Raster')) %>%
-  mask(mean(as(cera, 'Raster'))) %>%
+  #raster::resample(as(cera, 'Raster')) %>%
+  #mask(mean(as(cera, 'Raster'))) %>%
   st_as_stars() %>%
   setNames('SWE') %>%
+  st_crop(states_wus) %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(SWE = units::set_units(if_else(SWE < 0, 0, SWE), mm)) # fix edge effects from resampling
 
