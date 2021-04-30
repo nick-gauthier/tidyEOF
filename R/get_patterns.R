@@ -1,9 +1,11 @@
 #' Get EOFs and PCs from observations
 #'
-#' @param dat
-#' @param k
+#' @param dat A `stars` object containing spatial and temporal dimensions.
+#' @param k The number of PC/EOF modes to retain.
 #'
-#' @return
+#' @return A `patterns` object containing a tibble of PC amplitudes, a `stars`
+#' object with EOF spatial patterns, and a `stars` object with the mean and
+#' (optionally) standard deviation fields used.
 #' @export
 #'
 #' @examples
@@ -45,38 +47,21 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
 
 #' @export
 get_climatology <- function(dat) {
-  c(st_apply(dat, 1:2, mean),
-    st_apply(dat, 1:2, sd, na.rm = TRUE))
+
+  unit <- units(dat[[1]])
+  c(st_apply(dat, 1:2, mean, na.rm = TRUE),
+    st_apply(dat, 1:2, sd, na.rm = TRUE)) %>%
+    # only works if there's one attribute
+   mutate(mean = units::set_units(mean, unit, mode = 'standard'),
+          sd = units::set_units(sd, unit, mode = 'standard'))
 }
 
-#older version for data frames
-get_climatology2 <- function(dat) {
-  dat %>%
-  group_by(x, y) %>%
-  summarise(swe_mean = mean(SWE), # make generic (i.e. var rather than swe)
-            swe_sd = sd(SWE),
-            .groups = 'drop')
-}
 
 # combine these?
-get_anomalies <- function(dat, scale = FALSE) {
-  dat %>%
-    dplyr::group_by(x,y) %>%
-    dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
-   {if(scale) dplyr::mutate(., SWE = SWE / sd(SWE)) else .} %>%
-    dplyr::ungroup()
-}
-
-#stashed changes for common eofs
-# get_patterns <- function(dat, k, common = NULL, scale = FALSE, rotate = FALSE){
-#
-#   climatology <- get_climatology(dat)
-#   dat <- get_anomalies(dat, scale = scale)
-#
-#   if(!is.null(common)) {
-#     climatology <- get_climatology(common)
-#     dat <- bind_rows(get_anomalies(dat, scale = scale),
-#                      get_anomalies(common, scale = scale))
-#   }
-#
-#   pca <- get_pcs(dat)
+#get_anomalies <- function(dat, scale = FALSE) {
+#  dat %>%
+#    dplyr::group_by(x,y) %>%
+#    dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
+#   {if(scale) dplyr::mutate(., SWE = SWE / sd(SWE)) else .} %>%
+#    dplyr::ungroup()
+#}
