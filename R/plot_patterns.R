@@ -33,7 +33,7 @@ plot_eofs <- function(patterns, palette = 'vik', scaled = TRUE){
 plot_amps <- function(patterns) {
   patterns$amplitudes %>%
     mutate(PC = paste0('PC', PC)) %>%
-    ggplot(aes(year, amplitude)) +
+    ggplot(aes(time, amplitude)) +
     geom_line() +
     facet_wrap(~PC) +
     theme_bw()

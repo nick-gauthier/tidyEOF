@@ -24,8 +24,8 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
     scale() %>%
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'time') %>%
-    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude')
-    #mutate(time = as.numeric(times) )# need to tell if time is numeric or not
+    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
+    mutate(time = as.numeric(time))
    # note that this object still has scale and center attributes
 
 # eofs_corr <- amplitudes %>%
@@ -48,12 +48,12 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
 #' @export
 get_climatology <- function(dat) {
 
-  unit <- units(dat[[1]])
+ # unit <- units(dat[[1]])
   c(st_apply(dat, 1:2, mean, na.rm = TRUE),
-    st_apply(dat, 1:2, sd, na.rm = TRUE)) %>%
+    st_apply(dat, 1:2, sd, na.rm = TRUE)) #%>%
     # only works if there's one attribute
-   mutate(mean = units::set_units(mean, unit, mode = 'standard'),
-          sd = units::set_units(sd, unit, mode = 'standard'))
+  # mutate(mean = units::set_units(mean, unit, mode = 'standard'),
+   #       sd = units::set_units(sd, unit, mode = 'standard'))
 }
 
 
