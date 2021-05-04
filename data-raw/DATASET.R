@@ -191,7 +191,9 @@ sst_ond <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
   st_set_dimensions('time', values = (1981:2016) + 1) # + 1 for water year
 
 sst <- ((sst_jfm + sst_ond) / 2) %>%
-  mutate(sst = units::set_units(sst, '°C'))
+  mutate(sst = units::set_units(sst, '°C')) %>%
+  aperm(c(2,3,1)) %>%
+  st_set_dimensions(names = c('x', 'y', 'time'))
 
 geop_jfm <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
    stackApply(rep(1:36, each = 3), 'mean') %>%
