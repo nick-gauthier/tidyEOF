@@ -20,9 +20,11 @@ get_correlation <- function(dat, patterns) {
   amps <- filter(patterns$amplitudes, time %in% times_cor) %>%
     select(-time)
 
+  suppressWarnings( # suppress warnings that sd is zero
   filter(dat, time %in% times_cor) %>%
   st_apply(c('x', 'y'), function(x) cor(x, amps), .fname = 'PC') %>%
-    st_set_dimensions(., 'PC',values = paste0('PC', st_get_dimension_values(., 'PC')))
+    st_set_dimensions(., 'PC', values = paste0('PC', st_get_dimension_values(., 'PC')))
+  )
 }
 
 # need to make sure time series are on same scale

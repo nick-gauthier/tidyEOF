@@ -30,6 +30,7 @@ library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
 library(modelr)
 library(MuMIn)
+library(stars)
 
 # plotting
 library(sf) # shapefiles and plotting
@@ -40,7 +41,7 @@ library(ggridges) # ridge plots
 # this package
 devtools::load_all()
 
-load('../data.Rdata')
+load('../R/sysdata.rda')
 ```
  
 # Snowpack in the western US
@@ -48,33 +49,33 @@ load('../data.Rdata')
 First plot March SWE climatology from observations and reanalysis data. We immediately see the mismatch between the two because of the coarse resolution reanalysis. To drive home the point, here's the high-resolution observations, resampled to the reanalysis resolution. For a better comparison, each dataset was reduced to the common range of 1982--2010. The coarse data fail to capture the topographic heterogeneity of the domain, and thus the small-scale variations in elevation and temperature that influence snow accumulation and melt.
 
 ```{r, fig.width = 7, fig.asp = .7, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
-a <- prism_dat %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
+a <- ggplot() +
+  geom_stars(data = get_climatology(prism)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)') +
+   scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)') +
+  labs(x = 'Longitude', y = 'Latitude') +
+  theme_bw()
+
+b <- ggplot() +
+  geom_stars(data = get_climatology(filter(cera, time > 1980))) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
   theme_void()
 
-b <- cera_dat %>%
-  filter(year > 1980) %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
+c <- ggplot() +
+  geom_stars(data = get_climatology(filter(cesm, time > 1980))) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
-  theme_void()
-
-c <- cesm_dat %>%
-  filter(year > 1980) %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
+   scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
   theme_void() 
 
-(a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) +  plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')& theme(legend.position = 'bottom')
+d <- ggplot() +
+  geom_stars(data = get_climatology(filter(ccsm, time > 1980))) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+   scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
+  theme_void() 
+
+
+(a + (b / d / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) +  plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')& theme(legend.position = 'bottom')
 ```
 
 ```{r}
@@ -96,35 +97,34 @@ We can decompose all this year-to-year variability into the dominant spatial mod
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests. Note these are each captured on the full time span of each dataset. So 32 years for prism, 
 
 ```{r, echo = FALSE}
-e <- prism_dat %>% 
-  get_anomalies %>%
+e <- prism %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
 
-f <- cera_dat %>% 
-    get_anomalies %>%
+f <- cera %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
                       
-g <- cesm_dat %>% 
-    get_anomalies %>%
+g <- cesm %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
 
-h <- ccsm_dat %>% 
-    get_anomalies %>%
+h <- ccsm %>% 
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
 
 e + f + g + h + plot_annotation(tag_levels = 'A')
+```
+
+```{r echo = FALSE}
 ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```
 
@@ -135,20 +135,67 @@ So let's stick with the 4 and 4 solution, and investigate those patterns more.
 Lets start by truncating at 4. Extract the pc amplitude time series and EOF spatial patterns for the leading 4 modes.
 
 ```{r}
-n_modes <- 5
+n_modes <- 4
 ```
 
 ```{r}
-prism_patterns <- get_patterns(prism_dat, k = n_modes)
-cera_patterns <- get_patterns(cera_dat, k = n_modes)
-cesm_patterns <- get_patterns(cesm_dat, k = n_modes)
-ccsm_patterns <- get_patterns(ccsm_dat, k = n_modes)
+prism_patterns <- get_patterns(prism, k = n_modes)
+cera_patterns <- get_patterns(cera, k = n_modes)
+cesm_patterns <- get_patterns(cesm, k = n_modes)
+ccsm_patterns <- get_patterns(ccsm, k = n_modes)
+```
+
+```{r}
+ggplot() +
+  geom_stars(data = get_patterns(prism, k = n_modes, scale = TRUE)$eofs) +
+  facet_wrap(~PC) +
+  scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
+
+
+ggplot() +
+  geom_stars(data = get_patterns(prism, k = 6, scale = TRUE, rotate = TRUE)$eofs %>% split('PC') %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC3 = PC3 * -1, PC5 = PC5 * -1, PC6 = PC6 * -1) %>% merge(name = 'PC')) +
+  facet_wrap(~PC) +
+  scale_fill_viridis_c(na.value = NA) +
+  #scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
+
+ggplot() +
+  geom_stars(data = get_patterns(cera, k = n_modes, scale = TRUE)$eofs) +
+  facet_wrap(~PC) +
+  scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
+
+ggplot() +
+  geom_stars(data = get_patterns(ccsm, k = n_modes, scale = TRUE)$eofs) +
+  facet_wrap(~PC) +
+  scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
+
+ggplot() +
+  geom_stars(data = get_patterns(cesm, k = n_modes, scale = TRUE)$eofs) +
+  facet_wrap(~PC) +
+  scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
+
+
+ggplot() +
+  geom_stars(data = get_patterns(prism_clim['tmean'], k = n_modes, scale = TRUE)$eofs) +
+  facet_wrap(~PC) +
+  scale_fill_scico(palette = 'vik', na.value = NA) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_bw()
 ```
 
 
 
 ```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2)  + geom_vline(xintercept = 1997)
+plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = 1997)
 plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
 plot_amps(cesm_patterns)
 plot_amps(ccsm_patterns)
@@ -163,17 +210,17 @@ plot_eofs(ccsm_patterns, scaled = FALSE)
 
 Visualize the leading EOFs as correlation coefficients.
 ```{r, fig.width = 7, fig.asp = .875}
-swe_corr_prism <- prism_dat %>%
+swe_corr_prism <- prism %>%
   rename(value = SWE) %>%
-  get_corrs(prism_patterns)
+  get_correlation(prism_patterns)
 
 swe_corr_cera <- cera_dat %>%
   rename(value = SWE) %>%
-  get_corrs(cera_patterns)
+  get_correlation(cera_patterns)
 
 swe_corr_ccsm <- ccsm_dat %>%
   rename(value = SWE) %>%
-  get_corrs(ccsm_patterns)
+  get_correlation(ccsm_patterns)
 
 a <- swe_corr_prism %>%
   gather(PC, value, PC1:PC4) %>%
@@ -222,63 +269,59 @@ ggsave('eofs.png', height = 6, width = 7, dpi = 600)
 
 Calculate the correlation between the leading 4 patterns and regional precipitation, temperature, geopotential, and SST.
 ```{r}
-ppt_corr <- get_corrs(ppt_dat, prism_patterns)
-tmean_corr <- get_corrs(tmean_dat, prism_patterns)
-geop_corr <- get_corrs(geop_jfm, prism_patterns)
-sst_corr <- get_corrs(sst_jfm, prism_patterns)
+ppt_corr <- get_correlation(prism_clim['ppt'], prism_patterns) %>% 
+  st_warp(crs = st_crs(states_wus)) %>% 
+  st_crop(states_wus)
+tmean_corr <- get_correlation(prism_clim['tmean'], prism_patterns) %>% 
+  st_warp(crs = st_crs(states_wus)) %>% 
+  st_crop(states_wus)
+geop_corr <- get_correlation(geop_jfm, prism_patterns)
+sst_corr <- get_correlation(sst, prism_patterns) # change names
 ```
 
 Also calculate the false discovery rate, and generate points where < 0.1.
 ```{r}
-sst_sig_pts <- get_fdr(sst_jfm, prism_patterns)
+sst_sig_pts <- get_fdr(sst, prism_patterns)
 geop_sig_pts <- get_fdr(geop_jfm, prism_patterns)
-ppt_sig_pts <- get_fdr(ppt_dat, prism_patterns)
-tmean_sig_pts <- get_fdr(tmean_dat, prism_patterns)
+ppt_sig_pts <- get_fdr(prism_clim['ppt'], prism_patterns)
+tmean_sig_pts <- get_fdr(prism_clim['tmean'], prism_patterns)
 ```
 
 Plot the results.
 ```{r fig.width = 10.5, fig.asp = .571}
-a <- ppt_corr %>%
-  gather(PC, value, PC1:PC4) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
+a <- ggplot() +
+  geom_stars(data = ppt_corr)+
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  geom_point(data = ppt_sig_pts, aes(x, y), shape = '.', alpha = .075) +
+ # geom_point(data = ppt_sig_pts, aes(x, y), shape = '.', alpha = .075) +
   facet_wrap(~PC, ncol = 1) +
-  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation') +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-b <- tmean_corr %>%
-  gather(PC, value, PC1:PC4) %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = value)) +
+b <- ggplot() +
+  geom_stars(data = tmean_corr) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  geom_point(data = tmean_sig_pts, aes(x,y), shape = '.', alpha = .075) +
+ # geom_point(data = tmean_sig_pts, aes(x,y), shape = '.', alpha = .075) +
   facet_wrap(~PC, ncol = 1) +
-  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation') +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-c <- geop_corr %>%
-  gather(PC, value, PC1:PC4) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = value)) +
+c <- ggplot() +
+  geom_stars(data = geop_corr) +
   geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .35) +
-  geom_point(data = geop_sig_pts, shape = '.', alpha = .075) +
+ # geom_point(data = geop_sig_pts, shape = '.', alpha = .075) +
   facet_wrap(~PC, ncol = 1) +
-  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation') +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   coord_quickmap(ylim = c(-75,75), expand = FALSE) +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_void() +
   theme(panel.border = element_rect(fill = NA, 
                                     colour = "grey20"), panel.spacing = unit(1, "lines"))
 
-d <- sst_corr %>% 
-  gather(PC, value, PC1:PC4) %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = value)) +
-  geom_point(data = sst_sig_pts, shape = '.', alpha = .075) +
+d <- ggplot() +
+  geom_stars(data = sst_corr) +
+  #geom_point(data = sst_sig_pts, shape = '.', alpha = .075) +
   facet_wrap(~PC, ncol = 1) +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation') +
   coord_quickmap(ylim = c(-75,75), expand = FALSE) +
