@@ -24,7 +24,6 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
     scale() %>%
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'time') %>%
-    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
     mutate(time = as.numeric(time))
    # note that this object still has scale and center attributes
 
