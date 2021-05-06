@@ -16,7 +16,7 @@
 #'
 get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
-  eofs <- pca$rotation[, 1:k]
+  eofs <- pca$rotation[, 1:k, drop = FALSE] # drop = FALSE preserves PC names when there's only 1 PC
 
     if(rotate == TRUE) {
       reofs <- varimax(eofs %*% diag(pca$sdev, k, k))

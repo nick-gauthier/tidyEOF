@@ -20,7 +20,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
   times <- st_get_dimension_values(dat, 3)
 
   amplitudes <- pca$x %>%
-    .[,1:k] %>%
+    .[,1:k, drop = FALSE] %>%
     scale() %>%
     {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'time') %>%
