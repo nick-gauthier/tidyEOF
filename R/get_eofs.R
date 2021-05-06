@@ -35,10 +35,12 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     dplyr::select(x, y) %>%
   bind_cols(as_tibble(eofs)) %>%
     st_as_stars() %>%
-    merge(name = 'PC') %>%
-    slice('PC', 1:k)
+    st_set_crs(st_crs(dat)) %>%
+    mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
+    merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
+    .[,,,1:k]
+    #slice('PC', 1:k)
 
   list(eofs = eof_maps,
        rotation_matrix = rotation_matrix)
 }
-
