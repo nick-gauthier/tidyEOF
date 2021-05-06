@@ -36,21 +36,18 @@ prep_cca <- function(preds, obs, k_preds, k_obs) {
 
 prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
   # find the years of overlap between the response and predictor fields
-  years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-  folds <- prep_folds(years)
+  time_steps <- intersect(st_get_dimension_values(preds, 'time'),
+                          st_get_dimension_values(obs, 'time'))
+  preds <- filter(preds, time %in% time_steps)
+  obs <- filter(obs, time %in% time_steps)
+  folds <- prep_folds(time_steps) # this does 5 fold by default, but could change
 
   # preprocess the training data for each fold
-  obs_train_rast <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                                 anti_join(obs, ., by = 'year') %>% # training years
-                                 spread(year, SWE) %>%
-                                 rasterFromXYZ())
+  obs_train_rast <- purrr::map(folds, ~ filter(obs, !(time %in% .)) %>%
+                                 as('Raster'))
 
-  pred_train_rast <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                                  anti_join(preds, ., by = 'year') %>% # training years
-                                  spread(year, SWE) %>%
-                                  rasterFromXYZ())
+  pred_train_rast <-  purrr::map(folds, ~ filter(preds, !(time %in% .)) %>%
+                                   as('Raster'))
 
   obs_train <- purrr::map(obs_train_rast, ~ anomalize(.) %>%
                             denoise(k = k_obs, weighted = TRUE, verbose = FALSE))
@@ -59,10 +56,8 @@ prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
                              denoise(k = k_preds, weighted = TRUE, verbose = FALSE))
 
   # preprocess test data for each fold
-  test <- purrr::map(1:5, ~ filter(folds, fold == .) %>%
-                       semi_join(preds, ., by = 'year') %>%
-                       spread(year, SWE) %>%
-                       rasterFromXYZ())%>% # test years
+  test <- purrr::map(folds, ~ filter(preds, time %in% .) %>%
+                       as('Raster'))%>% # test years
     map2(pred_train_rast, ~.x - mean(.y)) # subtract the training predictor mean from the test predictors
 
   means <- purrr::map(obs_train_rast, mean)
@@ -77,7 +72,33 @@ prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
 
 predict_eot <- function(cv, k) {
   pmap(list(cv$eot, cv$test, cv$mean), ~predict(..1, ..2, n = k) + ..3) %>%
-    brick
+    brick() %>%
+    st_as_stars() %>%
+    st_set_dimensions('band', names = 'time') %>%
+    transmute(value = units::set_units(layer.1.1, mm))
+}
+
+
+cv_eot_error <- function(recon, obs) {
+  # the dates shouldn't be hardcoded!
+  error <- recon - filter(obs, between(time, 1982, 2010))
+
+  rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
+
+  corr <- obs %>%
+    filter(between(time, 1982, 2010)) %>%
+    get_total() %>%
+    cor(get_total(recon))
+
+  c(rmse = rmse,
+    corr = corr)
+}
+
+get_total <- function(dat) {
+  (dat * st_area(dat)) %>%
+    st_apply(3, function(x) sum(x, na.rm = TRUE)) %>%
+    pull() %>%
+    as.numeric()
 }
 
 
@@ -100,37 +121,6 @@ total_swe_corr <- function(errors) {
     summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
     pull(correlation)
 }
-
-
-cv_eot_error <- function(rast) {
-  dat <- rast %>%
-    setNames(1982:2010) %>%
-    as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-    mutate(year = parse_number(layer)) %>%
-    mutate_at(c('x', 'y'), round, digits = 5) %>%
-    rename(SWE = value) %>%
-    dplyr::select(x, y, year, SWE) %>%
-    inner_join(  mutate_at(prism_dat, c('x', 'y'), round, digits = 5) , by = c('x', 'y', 'year'), suffix = c('_recon', '_obs'))
-
-  rmse_dat<- dat %>%
-    mutate(error = SWE_recon - SWE_obs) %>%
-    summarise(rmse = sqrt(mean(error^2)))%>%
-    pull(rmse)
-
-  corr_dat<- dat %>%
-    left_join( mutate_at(areas, c('x', 'y'), round, digits = 5), by = c("x", "y")) %>%
-    group_by(year) %>%
-    summarise(SWE_obs = sum(SWE_obs * area),
-              SWE_recon = sum(SWE_recon * area)) %>%
-    summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
-    pull(correlation)
-
-  c(rmse = rmse_dat,
-    corr = corr_dat)
-}
-
-
-
 # special predict method for cv that scales predictors (should fold into original predict method in future)
 predict_gam <- function(preds, obs, newdata, k) {
 
