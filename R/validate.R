@@ -1,10 +1,13 @@
-prep_folds <- function(years, kfolds = 5){
-  # divide years into 5 contiguous folds
-  n <- length(years)
+prep_folds <- function(times, kfolds = 5){
+  # divide years into kfolds contiguous folds
+  n <- length(times)
   r <- n %% kfolds
   fold_times <- rep(n %/% kfolds, kfolds)
   fold_times[1:r] <- fold_times[1:r] + 1
-  tibble(year = years, fold = rep(1:kfolds, times = fold_times))
+  tibble(time = times, fold = rep(1:kfolds, times = fold_times)) %>%
+    group_nest(fold) %>%
+    pull(data) %>%
+    purrr::map(pull)
 }
 
 prep_cca <- function(preds, obs, k_preds, k_obs) {
