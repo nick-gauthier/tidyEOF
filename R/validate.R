@@ -12,23 +12,21 @@ prep_folds <- function(times, kfolds = 5){
 
 prep_cca <- function(preds, obs, k_preds, k_obs) {
   # find the years of overlap between the response and predictor fields
-  years <- intersect(preds$year, obs$year)
-  preds <- filter(preds, year %in% years)
-  obs <- filter(obs, year %in% years)
-  folds <- prep_folds(years)
+  time_steps <- intersect(st_get_dimension_values(preds, 'time'),
+                          st_get_dimension_values(obs, 'time'))
+  preds <- filter(preds, time %in% time_steps)
+  obs <- filter(obs, time %in% time_steps)
+  folds <- prep_folds(time_steps) # this does 5 fold by default, but could change
 
   # preprocess the training data for each fold
-  train_obs <- map(1:5, ~ filter(folds, fold == .) %>%
-                     anti_join(obs, ., by = 'year') %>% # training years
+  train_obs <- purrr::map(folds, ~ filter(obs, !(time %in% .))  %>%
                      get_patterns(k = k_obs))
 
-  train_preds <- map(1:5, ~ filter(folds, fold == .) %>%
-                      anti_join(preds, ., by = 'year') %>% # training years
+  train_preds <- purrr::map(folds, ~ filter(preds, !(time %in% .)) %>%
                       get_patterns(k = k_preds))
 
   # preprocess test data for each fold
-  test <- map(1:5, ~ filter(folds, fold == .) %>%
-                semi_join(preds, ., by = 'year')) # test years
+  test <- purrr::map(folds, ~ filter(preds, time %in% .))
 
   tibble(train_obs, train_preds, test)
 }
@@ -57,14 +55,14 @@ prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
 
   # preprocess test data for each fold
   test <- purrr::map(folds, ~ filter(preds, time %in% .) %>%
-                       as('Raster'))%>% # test years
+                       as('Raster')) %>% # test years
     map2(pred_train_rast, ~.x - mean(.y)) # subtract the training predictor mean from the test predictors
 
   means <- purrr::map(obs_train_rast, mean)
 
+  # fit model to training data
   eots <- map2(pred_train, obs_train, ~eot(.x, .y, n = k_cca, standardised = FALSE, verbose = FALSE))
 
-  # fit model to training data and use to predict new fields
   list(eot = eots, # this hard codes 10 patterns, but could be changed to min(k_preds, k_obs)
        test = test,
        mean = means)
@@ -78,10 +76,9 @@ predict_eot <- function(cv, k) {
     transmute(value = units::set_units(layer.1.1, mm))
 }
 
-
 cv_eot_error <- function(recon, obs) {
   # the dates shouldn't be hardcoded!
-  error <- recon - filter(obs, between(time, 1982, 2010))
+  error <- units::drop_units(recon) - filter(obs, between(time, 1982, 2010))
 
   rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
 
@@ -101,16 +98,22 @@ get_total <- function(dat) {
     as.numeric()
 }
 
+fit_cv <- function(dat, fun, k, obs) {
+  recon <- pmap(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
+    do.call('c', .)
 
-fit_cv <- function(dat, fun, k) {
-  errors <- pmap_dfr(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
-    arrange(x, y, year) %>%
-    get_errors()
+  error <- recon - filter(obs, between(time, 1982, 2010))
 
-  c(rmse = summarise(errors, rmse = sqrt(mean(error^2))) %>% pull(rmse), # a na.rm =TRUE could go with mean, but best not to now
-    corr = total_swe_corr(errors))
+  rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
+
+  corr <- obs %>%
+    filter(between(time, 1982, 2010)) %>%
+    get_total() %>%
+    cor(get_total(recon))
+
+  c(rmse = rmse,
+    corr = corr)
 }
-
 
 total_swe_corr <- function(errors) {
   errors %>%
@@ -121,6 +124,7 @@ total_swe_corr <- function(errors) {
     summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
     pull(correlation)
 }
+
 # special predict method for cv that scales predictors (should fold into original predict method in future)
 predict_gam <- function(preds, obs, newdata, k) {
 
@@ -145,7 +149,7 @@ predict_gam <- function(preds, obs, newdata, k) {
     bind_rows(.id = 'PC') %>%
     dplyr::select(year, PC, amplitude) %>%
     mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs, .)  # use train_obs to get training pcs
+    reconstruct_field(obs, .) # use train_obs to get training pcs
 }
 
 # same as above but for pcr
@@ -172,22 +176,20 @@ predict_pcr <- function(preds, obs, newdata, k) {
     bind_rows(.id = 'PC') %>%
     dplyr::select(year, PC, amplitude) %>%
     mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs, .)  # use train_obs to get training pcs
+    reconstruct_field(obs, .) # use train_obs to get training pcs
 }
 
 
 
 predict_cca <- function(preds, obs, newdata, k) {
   obs_amps <- obs$amplitudes %>%
-                          mutate(PC = as.numeric(PC)) %>% # so spread doesn't lose order of columns
-                          spread(PC, amplitude) %>%
-                          select(-year) %>%
+                          select(-time) %>%
                           as.matrix()
   preds_amps <- preds$amplitudes %>%
-                            mutate(PC = as.numeric(PC)) %>%
-                            spread(PC, amplitude) %>%
-                            select(-year) %>%
+                            select(-time) %>%
                             as.matrix()
+
+  new_times <-  st_get_dimension_values(newdata, 'time')
 
   k_preds <- ncol(preds_amps)
 
@@ -195,12 +197,15 @@ predict_cca <- function(preds, obs, newdata, k) {
   cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE)
 
   # predict CCA on new data
-  new_amps <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
-    mutate(SWE = SWE - swe_mean) %>%
-    dplyr::select(-swe_mean, -swe_sd) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
+  new_amps <- newdata %>%
+    units::drop_units() %>%
+    `-`(preds$climatology['mean']) %>%
+    area_weight() %>% # weight by sqrt cosine latitude, in radians
+    split('time') %>% # split along the time dimension
+    setNames(new_times) %>%
+    as_tibble() %>%
+    dplyr::select(-c(x,y)) %>%
+    na.omit() %>%
     t() %>%
     predict(preds$pca, .) %>%
     scale(center = FALSE, scale = preds$pca$sdev) %>% # this should be from the training pcs
@@ -208,17 +213,14 @@ predict_cca <- function(preds, obs, newdata, k) {
 
   # add a check here if k <= min(k_preds, k_obs)
 
-  new_years <- unique(newdata$year)
-
   new_amps %*%
     cca$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
     diag(cca$cor, nrow = k) %*%  # nrow likewise prevents weird behavior when k = 1
     solve(cca$ycoef)[1:k,,drop = FALSE] %>%
-    `rownames<-`(new_years) %>%
-    as_tibble(rownames = 'year') %>%
-    gather(PC, amplitude, -year) %>%
-    mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs, .)
+    `rownames<-`(new_times) %>%
+    as_tibble(rownames = 'time') %>%
+    mutate(time = as.numeric(time)) %>%
+    reconstruct_field(obs, amplitudes = .)
 }
 
 # check that the newdata argument is handled the same as not
