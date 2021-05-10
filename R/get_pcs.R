@@ -12,12 +12,11 @@
 get_pcs <- function(dat, scale = FALSE, clim = NULL) {
 
   # get climatologies if not supplied
-  # suppress warning about unequal dimensions
-  if(is.null(clim)) clim <- suppressWarnings(get_climatology(dat))
+  if(is.null(clim)) clim <- get_climatology(dat)
 
   dat %>%
     units::drop_units() %>%
-    `-`(clim['mean']) %>% # center the field
+    {. -  clim['mean']} %>% # center the field
     {if(scale) . /  clim['sd'] else .} %>% # scale the field (optional)
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension

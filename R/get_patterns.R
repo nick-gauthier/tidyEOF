@@ -27,14 +27,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
     mutate(time = as.numeric(time))
    # note that this object still has scale and center attributes
 
-# eofs_corr <- amplitudes %>%
-#    mutate(amplitude = if_else(PC %in% c('1','2'), amplitude * -1, amplitude)) %>% # change signs so physically interpretable
-#   full_join(dat, by = 'year') %>%
-#  group_by(x, y, PC) %>%
-#  summarise(correlation = cor(amplitude, SWE))
-
   patterns <- list(eofs = eofs$eofs,
-                  # eofs_corr = eofs_corr,
        amplitudes = amplitudes,
        climatology = climatology,
        pca = pca,
@@ -54,7 +47,6 @@ get_climatology <- function(dat) {
   # mutate(mean = units::set_units(mean, unit, mode = 'standard'),
    #       sd = units::set_units(sd, unit, mode = 'standard'))
 }
-
 
 # combine these?
 #get_anomalies <- function(dat, scale = FALSE) {
