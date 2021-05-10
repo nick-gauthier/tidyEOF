@@ -16,10 +16,12 @@
 #'
 get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
-  eofs <- pca$rotation[, 1:k, drop = FALSE] # drop = FALSE preserves PC names when there's only 1 PC
+  eofs <- pca$rotation[, 1:k, drop = FALSE] %>% # drop = FALSE preserves PC names when there's only 1 PC
+      `%*%`(diag(pca$sdev, k, k)) %>% # scale by sdev (sqrt(eigenvalues)) for more robust rotation
+    `colnames<-`(paste0('PC', 1:k))
 
     if(rotate == TRUE) {
-      reofs <- varimax(eofs %*% diag(pca$sdev, k, k))
+      reofs <- varimax(eofs)
 
       rotation_matrix <- reofs$rotmat # save the rotation matrix for the amplitudes
 
@@ -38,7 +40,8 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     st_set_crs(st_crs(dat)) %>%
     mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
     merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
-    .[,,,1:k]
+    .[,,,1:k] %>%
+    setNames('weight')
     #slice('PC', 1:k)
 
   list(eofs = eof_maps,
