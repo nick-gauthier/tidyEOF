@@ -28,25 +28,44 @@ get_correlation <- function(dat, patterns) {
   )
 }
 
-# need to make sure time series are on same scale
 #' @export
-get_fdr <- function(dat, patterns, fdr = 0.1) { # could combine with above
-  amps <- patterns$amplitudes %>%
-    spread(PC, amplitude, sep ='')
+get_fdr <- function(dat, patterns, fdr = 0.1) {
+  times_amps <- patterns$amplitudes$time
+  times_dat <- st_get_dimension_values(dat, 'time')
+  times_cor <- intersect(times_amps, times_dat)
 
-  dat %>%
-    group_by(x,y) %>%
-    nest %>%
-    mutate(corrs = map(data,  ~inner_join(., amps, by = 'year') %>%
-                         summarise(PC1 = cor.test(value, PC1)$p.value,
-                                   PC2 = cor.test(value, PC2)$p.value,
-                                   PC3 = cor.test(value, PC3)$p.value,
-                                   PC4 = cor.test(value, PC4)$p.value))) %>%
-    select(-data) %>%
-    unnest(corrs) %>%
-    gather(PC, value, PC1:PC4) %>%
-    group_by(PC) %>%
-    mutate(value = p.adjust(value, method = 'fdr')) %>%
-    filter(value < fdr) %>%
-    ungroup()
+  if(length(times_cor) <= 0) stop ('Need at least two time steps in common') # add to tests
+  if(!(identical(times_cor, times_amps) & identical(times_cor, times_dat))) warning('Using the time period ', first(times_cor), ' to ', last(times_cor))
+
+  amps <- filter(patterns$amplitudes, time %in% times_cor) %>%
+    select(-time)
+
+  suppressWarnings( # suppress warnings that sd is zero
+   fdr_rast <-  filter(dat, time %in% times_cor) %>%
+      st_apply(c('x', 'y'), fdr_fun, amps = amps, .fname = 'PC') %>%
+     aperm(c(2,3,1)) %>%
+      st_apply('PC', adjust)# %>%
+    # setNames('FDR') %>%
+    # mutate(FDR = if_else(FDR < fdr, 1L, NA_integer_)) %>%
+    # st_as_sf(as_points = TRUE, long = TRUE)
+   # st_xy2sfc(as_points = TRUE)
+  )
+
+ fdr_rast %>%
+  st_get_dimension_values('PC') %>%
+ seq_along() %>%
+ map(~slice(fdr_rast, 'PC', .x) %>%
+       st_contour(contour_lines = FALSE, breaks = fdr) %>%
+       filter(Max %in% fdr) %>%
+       transmute(PC = paste0('PC', .x))) %>%
+ do.call(rbind, .)
 }
+
+fdr_fun <- function(x, amps) {
+  if(!any(is.na(x))) apply(amps, 2, function(y) cor.test(x, y)$p.value) else rep(NA, ncol(amps))
+}
+
+adjust <- function(x) {
+  p.adjust(x, method = 'fdr', n = sum(!is.na(x)))
+}
+#
