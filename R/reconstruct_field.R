@@ -9,24 +9,27 @@
 #' @examples
 reconstruct_field <- function(target_patterns, amplitudes = NULL) {
   if(is.null(amplitudes)) amplitudes <- target_patterns$amplitudes
-  eofs <- as_tibble(target_patterns$eofs)
-  clim <- as_tibble(target_patterns$climatology)
 
-  amplitudes %>%
-    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
-    left_join(eofs, by = 'PC') %>%
-    mutate(anomaly = weight * amplitude) %>%
-    dplyr::select(-c(amplitude, weight)) %>%
-    group_by(x, y, time) %>%
-    summarize(anomaly = sum(anomaly, na.rm = TRUE), .groups = 'drop') %>%
-    left_join(clim, by = c("x", "y")) %>%
-    # should rewrite so SWE isn't hard coded
-    mutate(SWE = anomaly + mean,
-           SWE = if_else(SWE < 0, 0, SWE)) %>% # can't have negative swe
-    dplyr::select(-c(mean, sd, anomaly)) %>%
-    st_as_stars(dims = c('x','y','time')) %>%
-    st_set_crs(st_crs(target_patterns$eofs)) %>%
-    mutate(SWE = units::set_units(SWE, mm))
+  # check (ncol(amplitudes) - 1) == number of PCs in eofs?
+  # check margin 3 is time?
+
+amplitudes %>%
+  rowwise() %>%
+  mutate(PCs = list(c_across(-time)), .keep = 'unused') %>%
+  ungroup() %>%
+  deframe() %>%
+  map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
+  do.call('c', .) %>%
+  st_apply(1:2, sum) %>%
+  merge(name = 'time') %>%
+  st_set_dimensions('time', values = amplitudes$time) %>%
+  setNames('SWE') %>%
+  {. +  target_patterns$climatology['mean']} %>%
+  # should make generic!
+  mutate(SWE = if_else(SWE < 0, 0, SWE),
+         SWE = units::set_units(SWE, mm)) # can't have negative swe
 }
 
-# loop through amplitudes, for each time row, multiply those numbers by the eofs, at the end join the results?
+
+
+
