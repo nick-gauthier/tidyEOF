@@ -345,15 +345,15 @@ ggsave('snow_teleconnections2.png', width = 10.5, height = 6, dpi = 600)
 
 Set up a 5 fold cross validation experiment for selecting the truncation level, $k$, for each set of PCs.
 
-
-```{r}
-cv_eot_data <- prep_eot(cera_dat, prism_dat, 10, 10, 10)
+```{r, warning = FALSE}
+cv_eot_data <- prep_eot(cera, prism, 10, 10, 10)
 ```
 
-```{r}
+
+```{r, warning = FALSE, message = FALSE}
 cv_eot <- tibble(k = 1:10) %>%
   mutate(pred = purrr::map(k, predict_eot, cv = cv_eot_data),
-         error = purrr::map(pred, cv_eot_error)) %>%
+         error = purrr::map(pred, cv_eot_error, obs = prism)) %>%
   select(k, error) %>%
   unnest_wider(error)
 ```
@@ -361,24 +361,27 @@ cv_eot <- tibble(k = 1:10) %>%
 ```{r}
 cv_cca <- expand_grid(kx = 1:10, ky = 1:10, kxy = 1:10) %>%
   filter(kxy <= pmin(kx, ky)) %>%
-  mutate(cv = pmap(list(kx, ky, kxy), ~prep_cca(..1, ..2, preds = cera_dat, obs = prism_dat) %>% 
-                     fit_cv(fun = predict_cca, k = ..3))) %>%
+  mutate(cv = pmap(list(kx, ky, kxy), ~prep_cca(..1, ..2, 
+                                                preds = cera, 
+                                                obs = prism) %>% 
+                     fit_cv(fun = predict_cca, k = ..3, prism))) %>%
   unnest_wider(cv)
 ```
 
-```{r}
+
+```{r message=FALSE}
 # does this work for gams too?
 cv_pcr <- expand_grid(kx = 1:10, ky = 1:10) %>%
-  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera_dat, obs = prism_dat) %>% 
-                     fit_cv(fun = predict_pcr, k = .y))) %>%
+  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera, obs = prism) %>% 
+                     fit_cv(fun = predict_pcr, k = .y, obs = prism))) %>%
   unnest_wider(cv)
 ```
 
 ```{r}
 # does this work for gams too?
 cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
-  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera_dat, obs = prism_dat) %>% 
-                     fit_cv(fun = predict_gam, k = .y))) %>%
+  mutate(cv = map2(kx, ky, ~prep_cca(.x, .y, preds = cera, obs = prism) %>% 
+                     fit_cv(fun = predict_gam, k = .y, obs = prism))) %>%
   unnest_wider(cv)
 ```
 
