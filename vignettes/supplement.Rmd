@@ -385,41 +385,27 @@ cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
   unnest_wider(cv)
 ```
 
-```{r}
-cv_gam %>%
-  arrange(rmse)
-cv_gam %>% arrange(-corr)
-```
 
 ```{r}
-cv_pcr %>%
-  arrange(rmse)
-cv_pcr %>% arrange(-corr)
-```
-
-```{r}
-write_csv(cv_eot, 'cv_eot.csv')
-write_csv(cv_cca, 'cv_cca.csv')
-write_csv(cv_pcr, 'cv_pcr.csv')
-write_csv(cv_gam, 'cv_gam.csv')
+write_csv(cv_eot, 'cv_eot2.csv')
+write_csv(cv_cca, 'cv_cca2.csv')
+write_csv(cv_pcr, 'cv_pcr2.csv')
+write_csv(cv_gam, 'cv_gam2.csv')
 ```
 
 
 ```{r}
-cv_cca <- read_csv('cv_cca.csv')
-cv_eot <- read_csv('cv_eot.csv')
+cv_cca <- read_csv('cv_cca2.csv')
+cv_eot <- read_csv('cv_eot2.csv')
+cv_gam <- read_csv('cv_pcr2.csv')
+cv_pcr <- read_csv('cv_gam2.csv')
 ```
-
-
 
 ```{r}
-cv_cca %>% arrange(rmse)
-cv_cca %>% arrange(-corr)
 
-cv_eot %>% arrange(rmse)
-cv_eot %>% arrange(-corr)
+
+
 ```
-
 
 ```{r, fig.asp = .4}
 a <- cv_cca %>%
@@ -448,11 +434,27 @@ scale_color_grey() +
     scale_x_continuous(breaks = 1:10, minor_breaks = NULL) + 
   labs(x = 'Coupled patterns', y = 'Domain-wide correlation')
 
-a + b +plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A')
+a + b + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A')
 ```
 
 ```{r}
 ggsave('method_comparison.png', height = 2.4, width = 6, dpi = 600)
+```
+
+
+The cross validation routine selects `r arrange(cv_cca, rmse)[[1, 'ky']]` PRISM PCs,  `r arrange(cv_cca, rmse)[[1, 'kx']]` CERA PCs, and `r arrange(cv_cca, rmse)[[1, 'kxy']]` combined patterns for the best spatial skill.
+
+The cross validation routine selects `r arrange(cv_cca, -corr)[[1, 'ky']]` PRISM PCs,  `r arrange(cv_cca, -corr)[[1, 'kx']]` CERA PCs, and `r arrange(cv_cca, -corr)[[1, 'kxy']]` combined patterns for the best domain-wide temporal skill.
+
+```{r}
+arrange(cv_cca, rmse)
+arrange(cv_cca, -corr)
+arrange(cv_eot, rmse)
+arrange(cv_eot, -corr)
+arrange(cv_pcr, rmse)
+arrange(cv_pcr, -corr)
+arrange(cv_gam, rmse)
+arrange(cv_gam, -corr)
 ```
 
 
@@ -480,45 +482,13 @@ cv_eot %>%
   mutate(test = (rmse <= lead(rmse)))
 ```
 
-The cross validation routine selects `r rmse_dat[[1, "k_response"]]` PRISM PCs and  `r rmse_dat[[1, "k_predictor"]]` CERA PCs 
-
-
-
-```{r, fig.width=10, fig.asp = 1}
-predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
-            get_patterns(filter(prism_dat, year <= 2010), 4), 
-            filter(cera_dat, year >= 1982),
-            k = 4) %>%
-  group_by(x,y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot(aes(x,y, fill = anomaly)) +
-  geom_raster() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', limits = c(-1000, 1000)) +
-  coord_quickmap() +
-  theme_void()
-
-predict_cca(get_patterns(filter(cera_dat, year >=1982), 10), 
-            get_patterns(filter(prism_dat, year <=2010), 9), 
-            filter(cera_dat, year >= 1982),
-            k = 7) %>%
-  group_by(x,y) %>%
-  mutate(anomaly = SWE - mean(SWE)) %>%
-  ggplot(aes(x,y, fill = anomaly)) +
-  geom_raster() +
-  facet_wrap(~year) +
-  scale_fill_scico(palette = 'vik', limits = c(-1000, 1000)) +
-  coord_quickmap() +
-  theme_void()
-```
-
 ```{r, fig.width=8}
 a <- cv_cca %>%
   group_by(kxy, kx) %>%
-  summarise(rmse = min(rmse)) %>%
+  summarise(rmse = min(rmse)) %>% 
     ggplot(aes(kx, kxy)) +
   geom_tile(aes(fill = rmse)) +
-  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7), name = 'RMSE') +
+  scale_fill_viridis_c(direction = -1, limits = c(41.4, 54.69), breaks = seq(42, 54, 3), name = 'RMSE') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
@@ -529,7 +499,7 @@ b <- cv_cca %>%
   summarise(rmse = min(rmse)) %>% 
     ggplot(aes(ky, kxy)) +
   geom_tile(aes(fill = rmse)) +
-  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7), name = 'RMSE') +
+  scale_fill_viridis_c(direction = -1, limits = c(41.4, 54.69), breaks = seq(42, 54, 3), name = 'RMSE') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
@@ -537,10 +507,10 @@ b <- cv_cca %>%
 
 c <- cv_cca %>%
   group_by(kx, ky) %>%
-  summarise(rmse = min(rmse)) %>%
+  summarise(rmse = min(rmse)) %>% 
     ggplot(aes(kx, ky)) +
   geom_tile(aes(fill = rmse)) +
-  scale_fill_viridis_c(direction = -1, limits = c(41.7, 54.7), name = 'RMSE') +
+  scale_fill_viridis_c(direction = -1, limits = c(41.4, 54.69), breaks = seq(42, 54, 3), name = 'RMSE') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
@@ -548,10 +518,10 @@ c <- cv_cca %>%
 
 d <- cv_cca %>%
   group_by(kxy, kx) %>%
-  summarise(corr = max(corr)) %>%
+  summarise(corr = max(corr)) %>% 
     ggplot(aes(kx, kxy)) +
   geom_tile(aes(fill = corr)) +
-  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935), name = 'Cor.') +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.7677, 0.9405), name = 'Cor.') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
@@ -562,7 +532,7 @@ e <- cv_cca %>%
   summarise(corr = max(corr)) %>%
     ggplot(aes(ky, kxy)) +
   geom_tile(aes(fill = corr)) +
-  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935), name = 'Cor.') +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.7677, 0.9405), name = 'Cor.') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
@@ -570,16 +540,16 @@ e <- cv_cca %>%
 
 f <- cv_cca %>%
   group_by(kx, ky) %>%
-  summarise(corr = max(corr)) %>%
+  summarise(corr = max(corr)) %>% 
     ggplot(aes(kx, ky)) +
   geom_tile(aes(fill = corr)) +
-  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.764, 0.935), name = 'Cor.') +
+  scale_fill_viridis_c(option = 'magma', direction = 1, limits = c(0.7677, 0.9405), name = 'Cor.') +
   theme_minimal() +
   scale_x_continuous(breaks = 1:10, minor_breaks = NULL) +
   scale_y_continuous(breaks = 1:10, minor_breaks = NULL) +
   coord_fixed()
 
-(a+b +c + plot_layout(guides = 'collect')) / (d + e + f + plot_layout(guides = 'collect')) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
+(a + b + c + plot_layout(guides = 'collect')) / (d + e + f + plot_layout(guides = 'collect')) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 ```
 
 ```{r}
@@ -589,37 +559,37 @@ ggsave('cca_cv.png', width = 8, height = 4.944, dpi = 600)
 # Reconstruction
 
 ```{r}
-# k's here could be taken directly from the CV results here
-recon_20c_time <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
-            get_patterns(filter(prism_dat, year <= 2010), 4), 
-            cera_dat,
-            k = 4)
+# k's here could be taken directly from the CV results above
+recon_20c_time <- predict_cca(get_patterns(filter(cera, time >= 1982), 5), 
+            get_patterns(filter(prism, time <= 2010), 8), 
+            cera,
+            k = 5)
 
-recon_20c_space <-predict_cca(get_patterns(filter(cera_dat, year >= 1982), 10), 
-            get_patterns(filter(prism_dat, year <= 2010), 9), 
-            cera_dat,
+recon_20c_space <- predict_cca(get_patterns(filter(cera, time >= 1982), 10), 
+            get_patterns(filter(prism, time <= 2010), 9), 
+            cera,
             k = 7)
 ```
 
 ```{r}
-wus_stats <- get_areas(prism_dat, areas_prism)
+wus_stats <- get_total(prism)
 
-cera_baseline <- get_areas(cera_dat, areas_cera)
+cera_baseline <- get_total(cera)
 
-recon_series <- get_areas(recon_20c_time, areas_prism)
+recon_series <- get_total(recon_20c_time)
 
-ccsm_series <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
-            get_patterns(filter(prism_dat, year <= 2010), 4), 
-            ccsm_dat %>% filter(year >= 1700),
-            k = 4) %>%
-  get_areas(areas_prism)
+ccsm_series <- predict_cca(get_patterns(filter(cera, time >= 1982), 5), 
+            get_patterns(filter(prism, time <= 2010), 8), 
+            ccsm %>% filter(time >= 1700),
+            k = 5) %>%
+  get_total()
 
-ccsm_series_raw <- get_areas(ccsm_dat, areas_cera) %>% filter(year > 1700)
+ccsm_series_raw <- get_total(ccsm) %>% filter(time > 1700)
 ```
 
 ```{r fig.width=6.5}
 recon_series %>%
-  ggplot(aes(year, SWE * 1.0E-6)) +
+  ggplot(aes(time, as.numeric(SWE))) +
     geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
   geom_line(size = 1.1, aes(color = 'black')) +
   geom_line(data = wus_stats, aes(color = 'red'), size = 1.1, alpha = .7) +
@@ -631,6 +601,7 @@ recon_series %>%
   theme_bw() +
   theme(legend.position = 'bottom')
 ```
+
 ```{r}
 ggsave('20c_recon.png', height = .6 * 6.5, width = 6.5, dpi = 600)
 ```
@@ -639,15 +610,15 @@ ggsave('20c_recon.png', height = .6 * 6.5, width = 6.5, dpi = 600)
 ```{r, fig.width = 6, fig.height = 4}
 bind_rows('ccsm_recon' = ccsm_series,
           'ccsm_raw' = ccsm_series_raw, .id = 'type') %>%
-  filter(year < 2000) %>%
-  mutate(period = floor(year / 50) * 50) %>%
-  ggplot(aes(SWE * 1.0E-6, fct_rev(as_factor(period)))) +
+  filter(time < 2000) %>%
+  mutate(period = floor(time / 50) * 50) %>%
+  ggplot(aes(as.numeric(SWE), fct_rev(as_factor(period)))) +
   geom_density_ridges(alpha = .8, aes(group = interaction(period, type), fill = type)) +
   scale_fill_manual(name = NULL,
                           values = c('lightgrey', "darkgrey"),
                           labels = c("Raw CCSM4", 'Downscaled CCSM4'),
                          guide = "legend") +
-  geom_vline(xintercept= mean(wus_stats$SWE) * 1.0E-6, linetype = 2) +
+  geom_vline(xintercept= as.numeric(mean(wus_stats$SWE) ), linetype = 2) +
   ggridges::theme_ridges(grid = FALSE, center_axis_labels = TRUE) +
   labs(x = 'Total SWE (TL)', y = 'Period')
 ```

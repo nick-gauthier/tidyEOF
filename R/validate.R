@@ -101,7 +101,9 @@ get_total_num <- function(dat) {
 get_total <- function(dat) {
 (dat * st_area(dat)) %>%
   st_apply(3, function(x) sum(x, na.rm = TRUE)) %>%
-    as_tibble()
+    as_tibble() %>%
+    mutate(SWE = units::set_units(SWE, m^2*mm) %>%
+             units::set_units(Tl))
 }
 
 fit_cv <- function(dat, fun, k, obs) {
