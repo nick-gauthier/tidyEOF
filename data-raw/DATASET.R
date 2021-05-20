@@ -24,11 +24,11 @@ world <- maps::map('world', wrap=c(0, 360), fill = TRUE, plot = FALSE) %>%
 bbox <- extent(st_bbox(states_wus))# extent(c(-125, -102, 31, 49))
 
 
-preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, daily = FALSE) {
+preprocess <- function(x, var, bbox, flip = FALSE, regrid = FALSE, daily = FALSE, month = '-03-') {
   maps <- brick(x, varname = var)
 
-  indices <- getZ(maps) %>% # find the index for April 1st
-    str_detect('-03-')%>%
+  indices <- getZ(maps) %>% # find the index for the time steps in question
+    str_detect(month)%>%
     which()
 
   raster::subset(maps, indices) %>%
@@ -47,29 +47,34 @@ prism <- list.files('data-raw/UA-SWE', pattern = 'SWE_Depth', full.names = TRUE)
   st_set_dimensions('band', values = 1982:2017, names = 'time') %>%
   mutate(SWE = units::set_units(SWE, mm)) %>%
   st_set_crs(4326) %>% # the documentation for UA SWE says its EPSG 4326, but the file says EPSG 4269 -- not a huge difference at this scale so just transform without reprojecting
-  st_crop(states_wus)
+  st_crop(states_wus) %>%
+  .[,2:273,1:212,] # remove blank cells at edges of domain
 
 ## cera
-cera <- map(1:10, ~ (brick('data-raw/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
+cera_raw <- map(1:10, ~ (brick('data-raw/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
   # this averages over the full ensemble
   reduce(`+`) %>%
   `/`(10) %>%
-  crop(bbox, snap = 'out') %>%
   `*`(1000) %>% # convert to mm
+ # crop(bbox, snap = 'out') %>%
   mask(., all(near(., 0)), maskvalue = 1) %>%
+ # mask(states_wus) %>%
   st_as_stars() %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 1901:2010, names = 'time') %>%
-  mutate(SWE = units::set_units(SWE, mm))
+  mutate(SWE = units::set_units(SWE, mm)) %>%
+  st_crop(states_wus) %>%
+  .[,2:23,2:18] # remove na cells at edges
 
 # the CERA data are in mm SWE for the land fraction of the grid cell. Need to correct for this
 land_frac <- read_ncdf('data-raw/_grib2netcdf-webmars-public-svc-blue-003-6fe5cac1a363ec1525f54343b6cc9fd8-tyqPrq.nc',
                        var = 'lsm') %>%
   adrop(4) %>%
   slice('number', 1) %>%
-  st_crop(st_bbox(cera))
+  st_crop(states_wus) %>%
+  .[,2:23,2:18] # remove na cells at edges
 
-#cera <- cera * land_frac
+cera <- cera_raw * land_frac
 
 # cesm
 cesm_h2osno <- preprocess('data-raw/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSNO.085001-184912.nc',
@@ -84,11 +89,12 @@ cesm_h2osno_ext <- preprocess('data-raw/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OS
 
 cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
   brick() %>%
-  mask(., all(near(., 0)), maskvalue = 1) %>%
+  #mask(., all(near(., 0)), maskvalue = 1) %>%
   st_as_stars() %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
-  mutate(SWE = units::set_units(SWE, mm))
+  mutate(SWE = units::set_units(SWE, mm)) %>%
+  st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
 
 ccsm_lm <- preprocess('data-raw/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
                    var = 'snw',
@@ -102,11 +108,58 @@ ccsm_ext <- preprocess('data-raw/snw_LImon_CCSM4_historical_r1i2p1_185001-200512
 
 ccsm <- c(ccsm_lm, ccsm_ext) %>%
   brick() %>%
-  mask(., all(near(., 0)), maskvalue = 1) %>%
+  #mask(., all(near(., 0)), maskvalue = 1) %>%
   st_as_stars() %>%
+  st_warp(slice(cera, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
-  mutate(SWE = units::set_units(SWE, mm))
+  mutate(SWE = units::set_units(SWE, mm)) %>%
+  st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
+
+ccsm_lm_prec <- preprocess('data-raw/pr_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc',
+                      var = 'pr',
+                      flip = TRUE,
+                      bbox = bbox)
+
+ccsm_ext_prec <- preprocess('data-raw/pr_Amon_CCSM4_historical_r1i2p1_185001-200512.nc',
+                       var = 'pr',
+                       flip = TRUE,
+                       bbox = bbox)[[-1]] # the datasets overlap in year 1850
+
+ccsm_prec <- c(ccsm_lm_prec, ccsm_ext_prec) %>%
+  brick() %>%
+  #mask(., all(near(., 0)), maskvalue = 1) %>%
+  st_as_stars() %>%
+  st_warp(slice(cera, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
+  setNames('pr') %>%
+  st_set_dimensions('band', values = 850:2005, names = 'time') %>%
+  mutate(pr = units::set_units(pr, mm)) %>%
+  st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
+
+st_apply(ccsm_prec, 'time', sum) %>% pull %>% plot
+
+ccsm_lm_temp <- preprocess('data-raw/tas_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc',
+                           var = 'tas',
+                           flip = TRUE,
+                           bbox = bbox)
+
+ccsm_ext_temp <- preprocess('data-raw/tas_Amon_CCSM4_historical_r1i2p1_185001-200512.nc',
+                            var = 'tas',
+                            flip = TRUE,
+                            bbox = bbox)[[-1]] # the datasets overlap in year 1850
+
+ccsm_temp <- c(ccsm_lm_temp, ccsm_ext_temp) %>%
+  brick() %>%
+  #mask(., all(near(., 0)), maskvalue = 1) %>%
+  st_as_stars() %>%
+  st_warp(slice(cera, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
+  setNames('tas') %>%
+  st_set_dimensions('band', values = 850:2005, names = 'time') %>%
+  mutate(tas = units::set_units(tas, '°C')) %>%
+  st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
+
+
+st_apply(ccsm_temp, 'time', mean) %>% pull %>% plot
 
 ###### climate data for teleconnection analysis
 
@@ -158,10 +211,13 @@ tmean_ond <- tmean %>%
   st_set_dimensions('time', values = (1981:2018) + 1) # + 1 for water year
 
 # combine
+# why does ppt have no nas but tmean does?
 prism_clim <- c(ppt_jfm[,-1] + ppt_ond,
                 (tmean_jfm[,-1] + tmean_ond) / 2) %>%
   mutate(ppt = units::set_units(ppt, mm),
-         tmean = units::set_units(tmean, '°C'))
+         tmean = units::set_units(tmean, '°C')) %>%
+  st_warp(prism) %>%
+  st_crop(states_wus)
 
 # sst
 sst_jfm <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
@@ -209,8 +265,7 @@ geop_ond <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0f
 #  unnest(rasters) %>%
 #  dplyr::select(-X1982)
 
-usethis::use_data(prism, cera, cesm, ccsm, prism_clim, geop_jfm, sst, land_frac, states_wus, world, internal = TRUE, overwrite = TRUE)
-
+usethis::use_data(prism, cera, cesm, ccsm, ccsm_prec, ccsm_temp, prism_clim, geop, sst, states_wus, world, internal = TRUE, overwrite = TRUE)
 
 ## noaa
 noaa <- read_ncdf('~/Downloads/weasd.mon.mean.nc', var = 'weasd') %>%
