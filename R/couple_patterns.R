@@ -29,22 +29,18 @@ prep_data <- function(patterns.x, patterns.y) {
   amps.x <- if('patterns' %in% class(patterns.x)) patterns.x$amplitudes else patterns.x
   amps.y <- if('patterns' %in% class(patterns.y)) patterns.y$amplitudes else patterns.y
 
-  predictors <- amps.x %>%
-    mutate(PC = paste0('PC', PC)) %>%
-    spread(PC, amplitude)
+  predictors <- amps.x
 
-  predictands <- amps.y %>%
-    mutate(PC = paste0('PC', PC)) %>%
-    dplyr::select(year, PC, amplitude)
+  predictands <- tidyr::pivot_longer(amps.y, -time, names_to = 'PC', values_to = 'amplitude')
 
-  inner_join(predictands, predictors, by = 'year')
+  inner_join(predictands, predictors, by = 'time')
 }
 
 # this is a holdover from the gam only implementation, needs to be more general
 fit_model <- function(data_in) {
   gam_formula <- data_in %>%
-    # this should be more flexible below, checking for innapropriate predictors
-    dplyr::select(-PC, -amplitude, -year) %>%
+    # this should be more flexible below, checking for inappropriate predictors
+    dplyr::select(-PC, -amplitude, -time) %>%
     names() %>%
     map( ~ paste0("s(", ., ", bs = 'cr', k = 3)")) %>%
     paste(collapse = ' + ') %>%
@@ -66,7 +62,7 @@ fit_model <- function(data_in) {
 fit_pcr <- function(data_in) {
   lm_formula <- data_in %>%
     # this should be more flexible below, checking for inapropriate predictors
-    dplyr::select(-PC, -amplitude, -year) %>%
+    dplyr::select(-PC, -amplitude, -time) %>%
     names() %>%
     paste(collapse = ' + ') %>%
     paste('amplitude ~ ', .) %>%
