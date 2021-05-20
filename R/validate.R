@@ -78,38 +78,44 @@ predict_eot <- function(cv, k) {
 
 cv_eot_error <- function(recon, obs) {
   # the dates shouldn't be hardcoded!
-  error <- units::drop_units(recon) - filter(obs, between(time, 1982, 2010))
-
-  rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
-
-  corr <- obs %>%
-    filter(between(time, 1982, 2010)) %>%
-    get_total() %>%
-    cor(get_total(recon))
-
-  c(rmse = rmse,
-    corr = corr)
-}
-
-get_total <- function(dat) {
-  (dat * st_area(dat)) %>%
-    st_apply(3, function(x) sum(x, na.rm = TRUE)) %>%
-    pull() %>%
-    as.numeric()
-}
-
-fit_cv <- function(dat, fun, k, obs) {
-  recon <- pmap(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
-    do.call('c', .)
-
   error <- recon - filter(obs, between(time, 1982, 2010))
 
   rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
 
   corr <- obs %>%
     filter(between(time, 1982, 2010)) %>%
-    get_total() %>%
-    cor(get_total(recon))
+    get_total_num() %>%
+    cor(get_total_num(recon))
+
+  c(rmse = rmse,
+    corr = corr)
+}
+
+get_total_num <- function(dat) {
+  (dat * st_area(dat)) %>%
+    st_apply(3, function(x) sum(x, na.rm = TRUE)) %>%
+    pull() %>%
+    as.numeric()
+}
+
+get_total <- function(dat) {
+(dat * st_area(dat)) %>%
+  st_apply(3, function(x) sum(x, na.rm = TRUE)) %>%
+    as_tibble()
+}
+
+fit_cv <- function(dat, fun, k, obs) {
+  recon <- pmap(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
+    do.call('c', .)
+
+  error <- recon - dplyr::filter(obs, between(time, 1982, 2010))
+
+  rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
+
+  corr <- obs %>%
+    filter(between(time, 1982, 2010)) %>%
+    get_total_num() %>%
+    cor(get_total_num(recon))
 
   c(rmse = rmse,
     corr = corr)
@@ -124,61 +130,6 @@ total_swe_corr <- function(errors) {
     summarise(correlation = cor(SWE_recon, SWE_obs)) %>%
     pull(correlation)
 }
-
-# special predict method for cv that scales predictors (should fold into original predict method in future)
-predict_gam <- function(preds, obs, newdata, k) {
-
-  k_preds <- unique(preds$amplitudes$PC) %>% length()
-
-  mod <- prep_data(preds, obs) %>%
-    fit_model()
-
-  new_pcs <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
-    mutate(SWE = SWE - swe_mean) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-    dplyr::select(-swe_mean, -swe_sd) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
-    predict(preds$pca, .) %>%
-    scale(center = FALSE, scale = preds$pca$sdev) %>% # scale according to training pcs
-    .[,1:k_preds, drop = FALSE] %>%
-    as_tibble(rownames = 'year')
-
-  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
-    bind_rows(.id = 'PC') %>%
-    dplyr::select(year, PC, amplitude) %>%
-    mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs, .) # use train_obs to get training pcs
-}
-
-# same as above but for pcr
-predict_pcr <- function(preds, obs, newdata, k) {
-# k is just here as a placeholder so the pmap command in fit_cv will run, but it doesn't have to be and should be removed
-  k_preds <- unique(preds$amplitudes$PC) %>% length()
-
-  mod <- prep_data(preds, obs) %>%
-    fit_pcr()
-
-  new_pcs <- left_join(newdata, preds$climatology, by = c("x", "y")) %>%
-    mutate(SWE = SWE - swe_mean) %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>%
-    dplyr::select(-swe_mean, -swe_sd) %>%
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
-    predict(preds$pca, .) %>%
-    scale(center = FALSE, scale = preds$pca$sdev) %>% # scale according to training pcs
-    .[,1:k_preds, drop = FALSE] %>%
-    as_tibble(rownames = 'year')
-
-  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
-    bind_rows(.id = 'PC') %>%
-    dplyr::select(year, PC, amplitude) %>%
-    mutate(year = as.numeric(year)) %>%
-    reconstruct_field(obs, .) # use train_obs to get training pcs
-}
-
 
 
 predict_cca <- function(preds, obs, newdata, k) {
@@ -196,8 +147,8 @@ predict_cca <- function(preds, obs, newdata, k) {
   # train CCA on training data
   cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE)
 
-  # predict CCA on new data
-  new_amps <- newdata %>%
+  # get PCs from newdata
+  new_pcs <- newdata %>%
     units::drop_units() %>%
     `-`(preds$climatology['mean']) %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
@@ -213,7 +164,8 @@ predict_cca <- function(preds, obs, newdata, k) {
 
   # add a check here if k <= min(k_preds, k_obs)
 
-  new_amps %*%
+  # predict CCA on newdata
+  new_pcs %*%
     cca$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
     diag(cca$cor, nrow = k) %*%  # nrow likewise prevents weird behavior when k = 1
     solve(cca$ycoef)[1:k,,drop = FALSE] %>%
@@ -226,6 +178,80 @@ predict_cca <- function(preds, obs, newdata, k) {
 # check that the newdata argument is handled the same as not
 # identical(cca_fit(prism_dat, cera_dat, k_preds = 4, k_obs = 4) ,
 #          cca_fit(prism_dat, cera_dat, cera_dat, k_preds = 4, k_obs = 4) %>% filter(year >= 1982) )
+
+# special predict method for cv that scales predictors (should fold into original predict method in future)
+predict_gam <- function(preds, obs, newdata, k) {
+
+  k_preds <- preds$amplitudes %>%
+    select(-time) %>%
+    ncol()
+
+  new_times <-  st_get_dimension_values(newdata, 'time')
+
+  mod <- prep_data(preds, obs) %>% # in the cca code this is done internally, but here it calls another function . . . choose one?
+    fit_model()
+
+  new_pcs <- newdata %>%
+    units::drop_units() %>%
+    `-`(preds$climatology['mean']) %>%
+    area_weight() %>% # weight by sqrt cosine latitude, in radians
+    split('time') %>% # split along the time dimension
+    setNames(new_times) %>%
+    as_tibble() %>%
+    dplyr::select(-c(x,y)) %>%
+    na.omit() %>%
+    t() %>%
+    predict(preds$pca, .) %>%
+    scale(center = FALSE, scale = preds$pca$sdev) %>% # this should be from the training pcs
+    .[,1:k_preds, drop = FALSE] %>%
+    as_tibble(rownames = 'time')
+
+
+  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
+    bind_rows(.id = 'PC') %>%
+    dplyr::select(time, PC, amplitude) %>%
+    mutate(time = as.numeric(time)) %>%
+    tidyr::pivot_wider(names_from = PC, names_prefix = 'PC', values_from = amplitude) %>% # names_prefix here because the gam predictor doesn't do pcs with pc attached, only the number. could fix upstream
+    reconstruct_field(obs, .) # use train_obs to get training pcs
+}
+
+
+# same as above but for pcr
+predict_pcr <- function(preds, obs, newdata, k) {
+  # k is just here as a placeholder so the pmap command in fit_cv will run, but it doesn't have to be and should be removed
+  k_preds <- preds$amplitudes %>%
+    select(-time) %>%
+    ncol()
+
+  new_times <-  st_get_dimension_values(newdata, 'time')
+
+  mod <- prep_data(preds, obs) %>%
+    fit_pcr()
+
+  new_pcs <- newdata %>%
+    units::drop_units() %>%
+    `-`(preds$climatology['mean']) %>%
+    area_weight() %>% # weight by sqrt cosine latitude, in radians
+    split('time') %>% # split along the time dimension
+    setNames(new_times) %>%
+    as_tibble() %>%
+    dplyr::select(-c(x,y)) %>%
+    na.omit() %>%
+    t() %>%
+    predict(preds$pca, .) %>%
+    scale(center = FALSE, scale = preds$pca$sdev) %>% # this should be from the training pcs
+    .[,1:k_preds, drop = FALSE] %>%
+    as_tibble(rownames = 'time')
+
+  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
+    bind_rows(.id = 'PC') %>%
+    dplyr::select(time, PC, amplitude) %>%
+    mutate(time = as.numeric(time)) %>%
+    tidyr::pivot_wider(names_from = PC, names_prefix = 'PC', values_from = amplitude) %>% # names_prefix here because the gam predictor doesn't do pcs with pc attached, only the number. could fix upstream
+    reconstruct_field(obs, .) # use train_obs to get training pcs
+}
+
+#####
 
 get_errors <- function(x) {
   x %>%
