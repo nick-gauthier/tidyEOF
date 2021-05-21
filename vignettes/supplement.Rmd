@@ -387,24 +387,18 @@ cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
 
 
 ```{r}
-write_csv(cv_eot, 'cv_eot2.csv')
-write_csv(cv_cca, 'cv_cca2.csv')
-write_csv(cv_pcr, 'cv_pcr2.csv')
-write_csv(cv_gam, 'cv_gam2.csv')
+write_csv(cv_eot, 'cv_eot.csv')
+write_csv(cv_cca, 'cv_cca.csv')
+write_csv(cv_pcr, 'cv_pcr.csv')
+write_csv(cv_gam, 'cv_gam.csv')
 ```
 
 
 ```{r}
-cv_cca <- read_csv('cv_cca2.csv')
-cv_eot <- read_csv('cv_eot2.csv')
-cv_gam <- read_csv('cv_pcr2.csv')
-cv_pcr <- read_csv('cv_gam2.csv')
-```
-
-```{r}
-
-
-
+cv_cca <- read_csv('cv_cca.csv')
+cv_eot <- read_csv('cv_eot.csv')
+cv_gam <- read_csv('cv_pcr.csv')
+cv_pcr <- read_csv('cv_gam.csv')
 ```
 
 ```{r, fig.asp = .4}
