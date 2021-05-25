@@ -51,30 +51,33 @@ prism <- list.files('data-raw/UA-SWE', pattern = 'SWE_Depth', full.names = TRUE)
   .[,2:273,1:212,] # remove blank cells at edges of domain
 
 ## cera
+# the CERA data are in mm SWE for the land fraction of the grid cell. Need to correct for this
+land_frac <- read_ncdf('data-raw/_grib2netcdf-webmars-public-svc-blue-003-6fe5cac1a363ec1525f54343b6cc9fd8-tyqPrq.nc',
+                       var = 'lsm') %>%
+  adrop(4) %>%
+  slice('number', 1)
+
 cera_raw <- map(1:10, ~ (brick('data-raw/CERA-20C_snow.nc', varname = 'sd', level = .))) %>%
   # this averages over the full ensemble
   reduce(`+`) %>%
   `/`(10) %>%
   `*`(1000) %>% # convert to mm
- # crop(bbox, snap = 'out') %>%
-  mask(., all(near(., 0)), maskvalue = 1) %>%
- # mask(states_wus) %>%
   st_as_stars() %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 1901:2010, names = 'time') %>%
   mutate(SWE = units::set_units(SWE, mm)) %>%
-  st_crop(states_wus) %>%
-  .[,2:23,2:18] # remove na cells at edges
+  `*`(land_frac)
 
-# the CERA data are in mm SWE for the land fraction of the grid cell. Need to correct for this
-land_frac <- read_ncdf('data-raw/_grib2netcdf-webmars-public-svc-blue-003-6fe5cac1a363ec1525f54343b6cc9fd8-tyqPrq.nc',
-                       var = 'lsm') %>%
-  adrop(4) %>%
-  slice('number', 1) %>%
-  st_crop(states_wus) %>%
-  .[,2:23,2:18] # remove na cells at edges
+# mask out cells that never receive snow
+cera_mask <- cera_raw %>%
+  units::drop_units() %>%
+  near(0) %>%
+  st_apply(1:2, all) %>%
+  transmute(all = as.numeric(na_if(!all, 0)))
 
-cera <- cera_raw * land_frac
+cera <- (cera_raw * cera_mask) %>%
+  st_crop(states_wus) %>%
+  .[,2:23,2:18]
 
 # cesm
 cesm_h2osno <- preprocess('data-raw/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSNO.085001-184912.nc',
