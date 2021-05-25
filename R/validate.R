@@ -293,3 +293,53 @@ get_areas <- function(dat, areas){
     group_by(year) %>%
     summarise(SWE = sum(SWE * area))
 }
+
+
+prep_delta <- function(preds, obs) {
+  # find the years of overlap between the response and predictor fields
+  time_steps <- intersect(st_get_dimension_values(preds, 'time'),
+                          st_get_dimension_values(obs, 'time'))
+  preds <- filter(preds, time %in% time_steps)
+  obs <- filter(obs, time %in% time_steps)
+  folds <- prep_folds(time_steps) # this does 5 fold by default, but could change
+
+  # preprocess the training data for each fold
+  train_obs <- purrr::map(folds, ~ filter(obs, !(time %in% .)))
+
+  train_preds <- purrr::map(folds, ~ filter(preds, !(time %in% .)))
+
+  # preprocess test data for each fold
+  test <- purrr::map(folds, ~ filter(preds, time %in% .))
+
+  tibble(train_preds, train_obs, test)
+}
+
+delta <- function(pred, obs, newdata = NULL, k = NULL) { # k is just aplaceholder
+  if(is.null(newdata)) newdata <- pred
+  pred_clim <- get_climatology(pred)
+  obs_clim <- get_climatology(obs)
+
+  (newdata / pred_clim['mean']) %>%
+    st_warp(slice(obs, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
+    setNames(names(newdata)) %>%
+    mutate(across(everything(), ~units::set_units(.x, units(newdata[[1]]), mode = 'standard'))) %>%
+    st_set_dimensions('band', values = st_get_dimension_values(newdata, 'time'), names = 'time') %>%
+    `*`(obs_clim['mean'])
+}
+
+delta_add <- function(pred, obs, newdata = NULL, k = NULL) { # k is just aplaceholder
+  if(is.null(newdata)) newdata <- pred
+  pred_clim <- get_climatology(pred)
+  obs_clim <- get_climatology(obs)
+
+  # simplify units here!
+  (units::drop_units(newdata) - pred_clim['mean']) %>%
+    st_warp(slice(obs, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
+    setNames(names(newdata)) %>%
+    mutate(across(everything(), ~units::set_units(.x, units(newdata[[1]]), mode = 'standard'))) %>%
+    st_set_dimensions('band', values = st_get_dimension_values(newdata, 'time'), names = 'time') %>%
+    units::drop_units() %>%
+    `+`(obs_clim['mean']) %>%
+    mutate(SWE = units::set_units(if_else(SWE < 0, 0, SWE), mm))
+}
+
