@@ -633,46 +633,47 @@ ggsave('ccsm4_comparison.png', height = 4, width = 6, dpi = 600)
 
 
 ```{r fig.width = 6.5, fig.asp = .5}
-a <- cera_dat %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
-  ungroup() %>%
-  filter(year == 1997) %>%
-  remove_missing() %>% # shouldn't be necessary, but for division by sd
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
+cera_anomaly <- cera %>%
+  filter(between(time, 1982, 2010)) %>%
+  units::drop_units() %>%
+  `-`(get_climatology(filter(cera, between(time, 1982, 2010)))['mean']) %>%
+  `/`(get_climatology(filter(cera, between(time, 1982, 2010)))['sd']) %>%
+  filter(time == 1997) 
+
+recon_anomaly <- recon_20c_space %>%
+  filter(between(time, 1982, 2010)) %>%
+  units::drop_units() %>%
+  `-`(get_climatology(filter(recon_20c_space, between(time, 1982, 2010)))['mean']) %>%
+  `/`(get_climatology(filter(recon_20c_space, between(time, 1982, 2010)))['sd']) %>%
+  filter(time == 1997) 
+
+prism_anomaly <- prism %>%
+  filter(between(time, 1982, 2010)) %>%
+  units::drop_units() %>%
+  `-`(get_climatology(filter(prism, between(time, 1982, 2010)))['mean']) %>%
+  `/`(get_climatology(filter(prism, between(time, 1982, 2010)))['sd']) %>%
+  filter(time == 1997) 
+
+a <- ggplot() +
+  geom_stars(data = cera_anomaly) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-6,6), name =  'Standard deviations') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-5.2,5.2), name =  'Standard deviations', na.value = NA) +
   theme_void()
 
-b <- recon_20c_space %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
-  ungroup() %>%
-  filter(year == 1997) %>%
-  remove_missing() %>% # shouldn't be necessary, but for division by sd
-  ggplot() +
-  geom_raster(aes(x, y, fill = anomaly)) +
+b <-  ggplot() +
+  geom_stars(data = recon_anomaly) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-6, 6), name =  'Standard deviations') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-5.2, 5.2), name =  'Standard deviations', na.value = NA) +
   theme_void()
 
-c <- prism_dat %>%
-  filter(between(year, 1982, 2010)) %>%
-  group_by(x,y) %>%
-  mutate(anomaly = (SWE - mean(SWE))/sd(SWE)) %>%
-  ungroup() %>%
-  filter(year == 1997) %>%
-  remove_missing() %>% # shouldn't be necessary, but for division by sd
-  ggplot()+
-  geom_raster(aes(x, y, fill = anomaly)) +
+c <- ggplot() +
+  geom_stars(data = prism_anomaly)  +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-6, 6), name = 'Standard deviations') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-5.2, 5.2), name = 'Standard deviations', na.value = NA) +
   theme_void()
 
 a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
 ```
+```{r}
 ggsave('anomalies_1997.png', height = 3.25, width = 6.5, dpi = 600)
 ```
