@@ -94,6 +94,7 @@ cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
   brick() %>%
   #mask(., all(near(., 0)), maskvalue = 1) %>%
   st_as_stars() %>%
+  st_warp(slice(cera, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(SWE = units::set_units(SWE, mm)) %>%
@@ -119,15 +120,20 @@ ccsm <- c(ccsm_lm, ccsm_ext) %>%
   mutate(SWE = units::set_units(SWE, mm)) %>%
   st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
 
-ccsm_lm_prec <- preprocess('data-raw/pr_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc',
-                      var = 'pr',
-                      flip = TRUE,
-                      bbox = bbox)
+ccsm_lm_prec <- 'data-raw/pr_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc' %>%
+  preprocess(var = 'pr', bbox = bbox, flip = TRUE,
+             month = paste0('-', c('01', '02', '03', 10:12), '-')) %>%
+  stackApply(rep(1:2002, each = 3), sum) %>%
+  .[[-c(1, 2002)]] %>%
+  stackApply(rep(1:1000, each = 2), sum)
 
-ccsm_ext_prec <- preprocess('data-raw/pr_Amon_CCSM4_historical_r1i2p1_185001-200512.nc',
-                       var = 'pr',
-                       flip = TRUE,
-                       bbox = bbox)[[-1]] # the datasets overlap in year 1850
+# note the datasets overlap in year 1850
+ccsm_ext_prec <- 'data-raw/pr_Amon_CCSM4_historical_r1i2p1_185001-200512.nc' %>%
+  preprocess(var = 'pr', bbox = bbox, flip = TRUE,
+             month = paste0('-', c('01', '02', '03', 10:12), '-')) %>%
+  stackApply(rep(1:312, each = 3), sum) %>%
+  .[[-c(1, 312)]] %>%
+  stackApply(rep(1:155, each = 2), sum)
 
 ccsm_prec <- c(ccsm_lm_prec, ccsm_ext_prec) %>%
   brick() %>%
@@ -137,19 +143,22 @@ ccsm_prec <- c(ccsm_lm_prec, ccsm_ext_prec) %>%
   setNames('pr') %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(pr = units::set_units(pr, mm)) %>%
-  st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
+  st_crop(st_as_sf(cera[,,,1])) # make sure na cells in CERA are na here too
 
-st_apply(ccsm_prec, 'time', sum) %>% pull %>% plot
+ccsm_lm_temp <- 'data-raw/tas_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc' %>%
+  preprocess(var = 'tas', bbox = bbox, flip = TRUE,
+             month = paste0('-', c('01', '02', '03', 10:12), '-')) %>%
+  stackApply(rep(1:2002, each = 3), mean) %>%
+  .[[-c(1, 2002)]] %>%
+  stackApply(rep(1:1000, each = 2), mean)
 
-ccsm_lm_temp <- preprocess('data-raw/tas_Amon_CCSM4_past1000_r1i1p1_085001-185012.nc',
-                           var = 'tas',
-                           flip = TRUE,
-                           bbox = bbox)
-
-ccsm_ext_temp <- preprocess('data-raw/tas_Amon_CCSM4_historical_r1i2p1_185001-200512.nc',
-                            var = 'tas',
-                            flip = TRUE,
-                            bbox = bbox)[[-1]] # the datasets overlap in year 1850
+# note the datasets overlap in year 1850
+ccsm_ext_temp <- 'data-raw/tas_Amon_CCSM4_historical_r1i2p1_185001-200512.nc' %>%
+  preprocess(var = 'tas', bbox = bbox, flip = TRUE,
+             month = paste0('-', c('01', '02', '03', 10:12), '-')) %>%
+  stackApply(rep(1:312, each = 3), mean) %>%
+  .[[-c(1, 312)]] %>%
+  stackApply(rep(1:155, each = 2), mean)
 
 ccsm_temp <- c(ccsm_lm_temp, ccsm_ext_temp) %>%
   brick() %>%
@@ -160,9 +169,6 @@ ccsm_temp <- c(ccsm_lm_temp, ccsm_ext_temp) %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(tas = units::set_units(tas, '°C')) %>%
   st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
-
-
-st_apply(ccsm_temp, 'time', mean) %>% pull %>% plot
 
 ###### climate data for teleconnection analysis
 
