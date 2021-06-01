@@ -7,7 +7,7 @@
 #' @export
 #'
 #' @examples
-reconstruct_field <- function(target_patterns, amplitudes = NULL) {
+reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE) {
   if(is.null(amplitudes)) amplitudes <- target_patterns$amplitudes
 
   # check (ncol(amplitudes) - 1) == number of PCs in eofs?
@@ -23,13 +23,11 @@ amplitudes %>%
   st_apply(1:2, sum) %>%
   merge(name = 'time') %>%
   st_set_dimensions('time', values = amplitudes$time) %>%
-  setNames('SWE') %>%
+  setNames(target_patterns$names) %>%
   {. +  target_patterns$climatology['mean']} %>%
-  # should make generic!
-  mutate(SWE = if_else(SWE < 0, 0, SWE),
-         SWE = units::set_units(SWE, mm)) # can't have negative swe
+  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) %>%
+  {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .}
 }
-
 
 
 
