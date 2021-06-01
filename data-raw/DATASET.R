@@ -12,11 +12,18 @@ states_wus <- rnaturalearth::ne_states(country = 'United States of America', ret
                      'Oregon', 'Washington', 'Idaho',
                      'Wyoming', 'Montana'))
 
-world <- maps::map('world', wrap=c(0, 360), fill = TRUE, plot = FALSE) %>%
+d <- rnaturalearth::ne_countries(returnclass = "sf", scale = 'small') %>%
+  st_set_precision(1e7) %>%
+  st_as_s2() %>%
   st_as_sf()
+x1 <- st_crop(d, st_bbox(c(xmin = 0, xmax = 180, ymin = -90, ymax = 90)))
+x2 <- st_crop(d, st_bbox(c(xmin = -180, xmax = -0.001, ymin = -90, ymax = 90)))
 
-#rnaturalearth::ne_countries(returnclass = 'sf') %>% st_wrap_dateline() %>% plot
-
+x <- rbind(x1, x2)
+## mollwiede on lon=180
+prj <- "+proj=moll +lon_0=180 +ellps=WGS84 +datum=WGS84 +no_defs"
+## fudge above means we get a seam in Antarctica and Russia ....
+world <- sf::st_transform(x[1], prj)
 
 ## Geographic Data
 
