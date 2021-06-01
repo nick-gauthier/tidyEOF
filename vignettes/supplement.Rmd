@@ -37,9 +37,12 @@ library(sf) # shapefiles and plotting
 library(scico) # color palettes
 library(patchwork) # multi-panel plots
 library(ggridges) # ridge plots
+library(smoothr) # smooth contours on maps
 
 # this package
 devtools::load_all()
+
+sf_use_s2(TRUE) # use s2 spherical geometry
 
 load('../R/sysdata.rda')
 ```
@@ -269,68 +272,97 @@ ggsave('eofs.png', height = 6, width = 7, dpi = 600)
 
 Calculate the correlation between the leading 4 patterns and regional precipitation, temperature, geopotential, and SST.
 ```{r}
-ppt_corr <- get_correlation(prism_clim['ppt'], prism_patterns) %>% 
-  st_warp(crs = st_crs(states_wus)) %>% 
-  st_crop(states_wus)
-tmean_corr <- get_correlation(prism_clim['tmean'], prism_patterns) %>% 
-  st_warp(crs = st_crs(states_wus)) %>% 
-  st_crop(states_wus)
-geop_corr <- get_correlation(geop_jfm, prism_patterns)
-sst_corr <- get_correlation(sst, prism_patterns) # change names
+ppt_corr <- get_correlation(prism_clim['ppt'], prism_patterns)
+tmean_corr <- get_correlation(prism_clim['tmean'], prism_patterns)
 ```
 
 Also calculate the false discovery rate, and generate points where < 0.1.
 ```{r}
-sst_sig_pts <- get_fdr(sst, prism_patterns)
-geop_sig_pts <- get_fdr(geop_jfm, prism_patterns)
-ppt_sig_pts <- get_fdr(prism_clim['ppt'], prism_patterns)
-tmean_sig_pts <- get_fdr(prism_clim['tmean'], prism_patterns)
+ppt_sig <- get_fdr(prism_clim['ppt'], prism_patterns) %>%
+  drop_crumbs(units::set_units(100, km))  %>% 
+  smooth(method = 'ksmooth', smoothness = 5)
+tmean_sig <- get_fdr(prism_clim['tmean'], prism_patterns) %>%
+  drop_crumbs(units::set_units(100, km))  %>% 
+  smooth(method = 'ksmooth', smoothness = 5)
 ```
 
 Plot the results.
-```{r fig.width = 10.5, fig.asp = .571}
-a <- ggplot() +
-  geom_stars(data = ppt_corr)+
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
- # geom_point(data = ppt_sig_pts, aes(x, y), shape = '.', alpha = .075) +
-  facet_wrap(~PC, ncol = 1) +
+
+```{r}
+e <- ggplot() +
+  geom_stars(data = ppt_corr) +
+   geom_sf(data = ppt_sig, alpha = 0.65) +
+    facet_wrap(~paste0(PC, '-Precipitation'), nrow = 1) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-b <- ggplot() +
+f <- ggplot() +
   geom_stars(data = tmean_corr) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
- # geom_point(data = tmean_sig_pts, aes(x,y), shape = '.', alpha = .075) +
-  facet_wrap(~PC, ncol = 1) +
+   geom_sf(data = tmean_sig, alpha = 0.65) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~paste0(PC, '-Temperature'), nrow = 1) +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_void()
 
-c <- ggplot() +
+prism_tele <- (e/f) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
+prism_tele
+```
+
+```{r}
+ggsave('prism_teleconnections.png', prism_tele, width = 12, height = 12 * 0.618)
+```
+
+
+
+```{r}
+sst_corr <- get_correlation(st_warp(sst, dest = ref), prism_patterns) # change names
+geop_corr <- get_correlation(st_warp(geop, dest = ref), prism_patterns) # change names
+
+sst_sig <- get_fdr(st_warp(sst, dest = ref), prism_patterns) %>% 
+  smooth(method = 'ksmooth', smoothness = 5)
+geop_sig <- get_fdr(st_warp(geop, dest = ref), prism_patterns) %>% 
+  smooth(method = 'ksmooth', smoothness = 5)
+```
+
+
+```{r, fig.asp = .4}
+i <- ggplot() +
   geom_stars(data = geop_corr) +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group), alpha = .35) +
- # geom_point(data = geop_sig_pts, shape = '.', alpha = .075) +
-  facet_wrap(~PC, ncol = 1) +
+  geom_sf(data = world, fill = 'grey20', color = NA, alpha = 0.35) +
+     geom_sf(data = geop_sig, alpha = 0.65) +
+  facet_wrap(~paste0(PC, '-Geopotential'), nrow = 1) +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
-  coord_quickmap(ylim = c(-75,75), expand = FALSE) +
-  labs(x = 'Longitude', y = 'Latitude') +
-  theme_void() +
-  theme(panel.border = element_rect(fill = NA, 
-                                    colour = "grey20"), panel.spacing = unit(1, "lines"))
+ # coord_sf(ylim = c(-75,75), expand = FALSE) +
+    #coord_sf(crs = '+proj=moll +lon_0=-150', ylim = c(-7500000, 7500000)) +
+#  labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()# +
+  #theme(panel.border = element_rect(fill = NA, 
+                                #    colour = "grey20"), panel.spacing = unit(0, "lines"))
 
-d <- ggplot() +
+j <- ggplot() +
   geom_stars(data = sst_corr) +
-  #geom_point(data = sst_sig_pts, shape = '.', alpha = .075) +
-  facet_wrap(~PC, ncol = 1) +
-  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation') +
-  coord_quickmap(ylim = c(-75,75), expand = FALSE) +
-  geom_polygon(data = world, aes(x = long, y = lat, group = group)) +
-  theme_void() +
-  theme(panel.border = element_rect(fill = NA, 
-                                    colour = "grey20"), panel.spacing = unit(1, "lines"))
+    #  geom_sf(data = sst_sig, alpha = 0.65) +
+  facet_wrap(~paste0(PC, '-SST'), nrow = 1) +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+  geom_sf(data = world, fill = 'grey20', color = NA) +
+   #   coord_sf(crs = '+proj=moll +lon_0=180') +
+  #coord_sf(expand = FALSE) +
+  theme_void()
+  #theme(panel.border = element_rect(fill = NA, 
+   #                                colour = "grey20"), panel.spacing = unit(1, "lines"))
 
-(a | b | c | d) + plot_layout(guides = 'collect', widths = c(1,1,1.3, 1.3)) + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
+cera_tele <- (i/j) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
+
+cera_tele
+```
+
+
+```{r}
+ggsave('cera_teleconnections.png', cera_tele, width = 12, height = 12 * 0.4)
+```
 ```
 
 
