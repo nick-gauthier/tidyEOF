@@ -68,7 +68,7 @@ cera_raw <- map(1:10, ~ (brick('data-raw/CERA-20C_snow.nc', varname = 'sd', leve
   # this averages over the full ensemble
   reduce(`+`) %>%
   `/`(10) %>%
-  `*`(1000) %>% # convert to mm
+  `*`(1000) %>% # convert from m water equivalent to mm
   st_as_stars() %>%
   setNames('SWE') %>%
   st_set_dimensions('band', values = 1901:2010, names = 'time') %>%
@@ -106,6 +106,16 @@ cesm <- c(cesm_h2osno, cesm_h2osno_ext) %>%
   st_set_dimensions('band', values = 850:2005, names = 'time') %>%
   mutate(SWE = units::set_units(SWE, mm)) %>%
   st_crop(st_as_sf(cera[,,,1]))# make sure na cells in CERA are na here too
+
+cesm_raw <- c(cesm_h2osno, cesm_h2osno_ext) %>%
+  brick() %>%
+  #mask(., all(near(., 0)), maskvalue = 1) %>%
+  st_as_stars() %>%
+ # st_warp(slice(cera, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
+  setNames('SWE') %>%
+  st_set_dimensions('band', values = 850:2005, names = 'time') %>%
+  mutate(SWE = units::set_units(SWE, mm)) #%>%
+#  st_crop(st_as_sf(cera[,,,1]))
 
 ccsm_lm <- preprocess('data-raw/snw_LImon_CCSM4_past1000_r1i1p1_085001-185012.nc',
                    var = 'snw',
@@ -235,40 +245,62 @@ prism_clim <- c(ppt_jfm[,-1] + ppt_ond,
   st_warp(prism) %>%
   st_crop(states_wus)
 
-# sst
-sst_jfm <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
-  st_crop(st_bbox(c(xmin = -1, xmax = 359, ymin = -75, ymax = 75), crs = 4326)) %>%
-  filter(between(time, as.POSIXct('1981-09-01'), as.POSIXct('2017-03-01')),
-         format(time, '%m') %in% c('01', '02', '03')) %>%
-  aggregate(by = 'years', mean, na.rm = TRUE) %>%
-  st_set_dimensions('time', values = 1982:2017)
-
-sst_ond <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
-  st_crop(st_bbox(c(xmin = -1, xmax = 359, ymin = -75, ymax = 75), crs = 4326)) %>%
-  filter(between(time, as.POSIXct('1981-09-01'), as.POSIXct('2017-03-01')),
-         format(time, '%m') %in% c('10','11','12')) %>%
-  aggregate(by = 'years', mean, na.rm = TRUE) %>%
-  st_set_dimensions('time', values = (1981:2016) + 1) # + 1 for water year
-
-sst <- ((sst_jfm + sst_ond) / 2) %>%
-  mutate(sst = units::set_units(sst, '°C')) %>%
-  aperm(c(2,3,1)) %>%
-  st_set_dimensions(names = c('x', 'y', 'time'))
-
-geop_jfm <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
-   stackApply(rep(1:36, each = 3), 'mean') %>%
-  aggregate(fact = 8) %>%
+# CERA-20C geopotential
+geop <- map(1:10, ~ (brick('data-raw/CERA-20C_geop.nc', level = .))) %>%
+  # this averages over the full ensemble
+  reduce(`+`) %>%
+  `/`(10) %>%
+  stackApply(rep(1:29, each = 6), 'mean') %>%
+ # shift(180) %>%
+  #rotate() %>%
+  #shift(180) %>%
   st_as_stars() %>%
-  st_set_dimensions('band', values = 1982:2017, names = 'time')
+  st_set_dimensions('band', values = 1982:2010, names = 'time') #%>%
+ # st_set_crs(4326)
 
-geop_ond <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
-  stackApply(rep(1:36, each = 3), 'mean') %>%
-  #   `-`(., mean(.)) %>% # is this necessary?
-  aggregate(fact = 4, method = 'bilinear') %>%
-  setNames(1982:2017) %>%
-  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
-  mutate(year = parse_number(layer)) %>%
-  select(-layer)
+# CERA-20C sst
+land_mask <- read_ncdf('~/Downloads/_grib2netcdf-webmars-public-svc-blue-000-6fe5cac1a363ec1525f54343b6cc9fd8-6_792e.nc',
+                       var = 'lsm') %>%
+  adrop(4) %>%
+  slice('number', 1) %>%
+  mutate(lsm = if_else(lsm < 0.5, 1, NA_real_))
+
+sst <- map(1:10, ~ (brick('data-raw/CERA-20C_sst.nc', level = .))) %>%
+  # this averages over the full ensemble
+  reduce(`+`) %>%
+  `/`(10) %>%
+  stackApply(rep(1:29, each = 6), 'mean') %>%
+  #shift(180) %>%
+  #rotate() %>%
+  #shift(180) %>%
+  st_as_stars() %>%
+  st_set_dimensions('band', values = 1982:2010, names = 'time') %>%
+  `*`(land_mask)
+ # st_set_crs(4326)
+
+sst_cera_jfm <- map(1:10, ~ (brick('data-raw/CERA-20C_sst_jfm.nc', level = .))) %>%
+  # this averages over the full ensemble
+  reduce(`+`) %>%
+  `/`(10) %>%
+  stackApply(rep(1:29, each = 3), 'mean') %>%
+  #shift(180) %>%
+  #rotate() %>%
+  #shift(180) %>%
+  st_as_stars() %>%
+  st_set_dimensions('band', values = 1982:2010, names = 'time') %>%
+  `*`(land_mask)
+
+geop_cera_jfm <- map(1:10, ~ (brick('data-raw/CERA-20C_geop_jfm.nc', level = .))) %>%
+  # this averages over the full ensemble
+  reduce(`+`) %>%
+  `/`(10) %>%
+  stackApply(rep(1:29, each = 3), 'mean') %>%
+  # shift(180) %>%
+  #rotate() %>%
+  #shift(180) %>%
+  st_as_stars() %>%
+  st_set_dimensions('band', values = 1982:2010, names = 'time') #%>%
+# st_set_crs(4326)
 
 #mountains <- read_sf('../data/ne_10m_geography_regions_polys.shp') %>%
 #  filter(name %in% c('SIERRA NEVADA', 'CASCADE RANGE', 'ROCKY MOUNTAINS')) %>%
@@ -281,18 +313,21 @@ geop_ond <- brick('data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0f
 #  unnest(rasters) %>%
 #  dplyr::select(-X1982)
 
-usethis::use_data(prism, cera, cesm, ccsm, ccsm_prec, ccsm_temp, prism_clim, geop, sst, states_wus, world, internal = TRUE, overwrite = TRUE)
+usethis::use_data(prism, cera, cera_raw, cesm, ccsm, ccsm_prec, ccsm_temp, prism_clim, geop, sst, noaa, states_wus, world, internal = TRUE, overwrite = TRUE)
 
 ## noaa
 noaa <- read_ncdf('~/Downloads/weasd.mon.mean.nc', var = 'weasd') %>%
-  filter(lubridate::month(time) == 3,
-         dplyr::between(lubridate::year(time), 1901, 2010)) %>% # alternatively format(myDate,"%m")
+  filter(lubridate::month(time) == 3) %>%
+      #   dplyr::between(lubridate::year(time), 1901, 2010)) %>% # alternatively format(myDate,"%m")
   as('Raster') %>%
   raster::rotate() %>%
   raster::crop(bbox) %>%
   raster::mask(., all(near(., 0)), maskvalue = 1) %>%
   st_as_stars() %>%
-  st_crop(states_wus)
+  st_crop(states_wus) %>%
+  setNames('SWE') %>%
+  mutate(SWE = units::set_units(SWE, mm)) %>%
+  st_set_dimensions('band', values = 1836:2015, names = 'time')
 
 ## Bilinear interpolation
 
