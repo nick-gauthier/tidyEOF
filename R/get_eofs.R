@@ -23,7 +23,8 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     if(rotate == TRUE) {
       reofs <- varimax(eofs)
 
-      rotation_matrix <- reofs$rotmat # save the rotation matrix for the amplitudes
+      rotation_matrix <- reofs$rotmat %>% # save the rotation matrix for the amplitudes
+        `colnames<-`(paste0('PC', 1:k))
 
       eofs <- unclass(reofs$loadings) %>%
         `colnames<-`(paste0('PC', 1:k))
@@ -33,7 +34,7 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
   eof_maps <- dat[,,,1] %>%
     as_tibble() %>%
-    na.omit() %>%
+    na.omit() %>% # can introduce issues if there are entire null rows/columns
     dplyr::select(x, y) %>%
   bind_cols(as_tibble(eofs)) %>%
     st_as_stars() %>%
