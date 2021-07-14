@@ -31,7 +31,9 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
        amplitudes = amplitudes,
        climatology = climatology,
        pca = pca,
-       eigenvalues = eigenvalues)
+       eigenvalues = eigenvalues,
+       units = units(dat[[1]]), # only units of the 1st dataset
+        names = names(dat))
 
   class(patterns) <- 'patterns'
   return(patterns)
