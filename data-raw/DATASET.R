@@ -302,6 +302,45 @@ geop_cera_jfm <- map(1:10, ~ (brick('data-raw/CERA-20C_geop_jfm.nc', level = .))
   st_set_dimensions('band', values = 1982:2010, names = 'time') #%>%
 # st_set_crs(4326)
 
+plot(world)
+ref <- geop[,,,1] %>%
+  st_transform(prj) %>%
+  st_bbox() %>%
+  st_as_stars(pretty = FALSE, dx = 100000)
+ggplot() +
+  geom_stars(data = st_warp(geop[,,,1], dest = ref)) +
+  coord_sf(crs = prj) +
+  scale_fill_viridis_c(na.value = NA) +
+  theme_void()
+
+ggplot() +
+  geom_stars(data = st_warp(sst[,,,1], dest = ref)) +
+  coord_sf(crs = prj) +
+  scale_fill_viridis_c(na.value = NA) +
+  theme_void()
+
+test <- st_warp(sst, dest = ref)
+test1 <- get_correlation(test, cera_patterns)
+test2 <- get_correlation(test, prism_patterns)
+
+test3 <- get_fdr(test, cera_patterns)
+ggplot() +
+  geom_stars(data =  test1) +
+  facet_wrap(~PC) +
+  geom_sf(data = world, fill ='grey20', color = NA) +
+  coord_sf(crs = prj) +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+  theme_void()
+ggsave('testcera.png')
+ggplot() +
+  geom_stars(data =  test2) +
+  facet_wrap(~PC) +
+  geom_sf(data = world, fill ='grey20', color = NA) +
+  coord_sf(crs = prj) +
+  scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+  theme_void()
+ggsave('testprism.png')
+
 #mountains <- read_sf('../data/ne_10m_geography_regions_polys.shp') %>%
 #  filter(name %in% c('SIERRA NEVADA', 'CASCADE RANGE', 'ROCKY MOUNTAINS')) %>%
 #  dplyr::select(name, geometry)

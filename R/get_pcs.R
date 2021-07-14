@@ -30,7 +30,7 @@ get_pcs <- function(dat, scale = FALSE, clim = NULL) {
 
 
 area_weight <- function(dat) {
-  st_dim_to_attr(dat, which = 2) %>% # get the y coordinates
+  st_dim_to_attr(dat, which = 2) %>% # get the y coordinates # this is brittle!
     `*`(pi / 180) %>% # convert to radians
     cos() %>% # cosine weighting
     sqrt() %>% # sqrt so the covariance matrix is weighted by cosine latitude

@@ -110,14 +110,14 @@ fit_cv <- function(dat, fun, k, obs) {
   recon <- pmap(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
     do.call('c', .)
 
-  error <- recon - dplyr::filter(obs, between(time, 1982, 2010))
+  error <- dplyr::filter(recon, between(time, 1982, 2010)) - dplyr::filter(obs, between(time, 1982, 2010))
 
   rmse <- sqrt(mean(pull(error, 1) ^ 2, na.rm = TRUE)) %>% as.numeric()
 
   corr <- obs %>%
     filter(between(time, 1982, 2010)) %>%
     get_total_num() %>%
-    cor(get_total_num(recon))
+    cor(get_total_num(filter(recon, between(time, 1982, 2010))))
 
   c(rmse = rmse,
     corr = corr)
@@ -133,7 +133,7 @@ total_swe_corr <- function(errors) {
     pull(correlation)
 }
 
-
+#' @export
 predict_cca <- function(preds, obs, newdata, k) {
   obs_amps <- obs$amplitudes %>%
                           select(-time) %>%
