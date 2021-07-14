@@ -24,9 +24,9 @@ amplitudes %>%
   merge(name = 'time') %>%
   st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
-  {. +  target_patterns$climatology['mean']} %>%
-  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) %>%
-  {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .}
+  `+`(target_patterns$climatology['mean']) %>% # this gives some weird distortion iff . . .
+  {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
+  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
 }
 
 
