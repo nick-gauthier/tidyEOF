@@ -25,7 +25,7 @@ amplitudes %>%
   st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
   `+`(target_patterns$climatology['mean']) %>%
-  {if(scale) `*`(target_patterns$climatology['sd']) else .} %>%
+  {if(scale) . * target_patterns$climatology['sd'] else .} %>%
   {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
   mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
 }

@@ -154,7 +154,7 @@ predict_cca <- function(preds, obs, newdata, k) {
   new_pcs <- newdata %>%
     units::drop_units() %>%
     `-`(preds$climatology['mean']) %>%
-    {if(preds$scaled == TRUE) `/`(preds$climatology['sd']) else .} %>%
+    {if(preds$scaled == TRUE) . / preds$climatology['sd'] else .} %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(new_times) %>%
