@@ -33,7 +33,8 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
        pca = pca,
        eigenvalues = eigenvalues,
        units = units(dat[[1]]), # only units of the 1st dataset
-        names = names(dat))
+        names = names(dat),
+       scaled = scale)
 
   class(patterns) <- 'patterns'
   return(patterns)

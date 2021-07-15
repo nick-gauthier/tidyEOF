@@ -135,6 +135,7 @@ total_swe_corr <- function(errors) {
 
 #' @export
 predict_cca <- function(preds, obs, newdata, k) {
+  #check if both preds and obs or scaled or not?
   obs_amps <- obs$amplitudes %>%
                           select(-time) %>%
                           as.matrix()
@@ -153,6 +154,7 @@ predict_cca <- function(preds, obs, newdata, k) {
   new_pcs <- newdata %>%
     units::drop_units() %>%
     `-`(preds$climatology['mean']) %>%
+    {if(preds$scaled == TRUE) `/`(preds$climatology['sd']) else .} %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(new_times) %>%
@@ -174,7 +176,7 @@ predict_cca <- function(preds, obs, newdata, k) {
     `rownames<-`(new_times) %>%
     as_tibble(rownames = 'time') %>%
     mutate(time = as.numeric(time)) %>%
-    reconstruct_field(obs, amplitudes = .)
+    reconstruct_field(obs, amplitudes = ., scale = obs$scaled)
 }
 
 # check that the newdata argument is handled the same as not
@@ -340,6 +342,7 @@ delta_add <- function(pred, obs, newdata = NULL, k = NULL) { # k is just aplaceh
     st_set_dimensions('band', values = st_get_dimension_values(newdata, 'time'), names = 'time') %>%
     units::drop_units() %>%
     `+`(obs_clim['mean']) %>%
+    # make varname generic!
     mutate(SWE = units::set_units(if_else(SWE < 0, 0, SWE), mm))
 }
 
