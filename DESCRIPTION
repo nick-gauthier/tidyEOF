@@ -1,6 +1,6 @@
 Package: tidyEOF
 Type: Package
-Title: Tidy Empirical Orthogonal Functions and Spatial Downcaling (Title Case)
+Title: Tidy Empirical Orthogonal Functions and Spatial Downscaling
 Version: 0.1.0
 Author: Nicolas Gauthier
 Maintainer: Nicolas Gauthier <ngauthier@arizona.edu>
