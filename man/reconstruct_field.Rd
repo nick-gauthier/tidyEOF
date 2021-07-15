@@ -4,12 +4,7 @@
 \alias{reconstruct_field}
 \title{Title}
 \usage{
-reconstruct_field(
-  target_patterns,
-  amplitudes = NULL,
-  nonneg = TRUE,
-  scale = FALSE
-)
+reconstruct_field(target_patterns, amplitudes = NULL, nonneg = TRUE)
 }
 \arguments{
 \item{amplitudes}{}
