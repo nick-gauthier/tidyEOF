@@ -82,14 +82,62 @@ psych::factor.congruence(t1,t2) %>% corrplot()
 EFAtools::COMPARE(as.matrix(t1), as.matrix(t2), reorder = 'congruence', na.rm = TRUE)$diff_corres_cros
 ```
 ```{r}
+t1 <- as_tibble(cera_patterns$eofs) %>% 
+  pivot_wider(names_from = PC, values_from = weight) %>% 
+  select(-x,-y) %>% remove_missing()
+
+t2 <- as_tibble(ccsm_patterns$eofs) %>% 
+  pivot_wider(names_from = PC, values_from = weight) %>% 
+  select(-x,-y) %>% remove_missing
+
 psych::factor.congruence(t1,t2) %>%
   as_tibble(rownames = 'ref') %>%
   pivot_longer(-ref) %>%
   group_by(ref) %>%
   arrange(-abs(value), .by_group = TRUE) %>%
-  filter(abs(value) >= 0.5)
+  mutate(fit = case_when(abs(value) >= 0.98 ~ 'Excellent',
+                         abs(value) >= 0.92 ~ 'Good',
+                         abs(value) >= 0.82 ~ 'Borderline',
+                         abs(value) >= 0.68 ~ 'Poor',
+                         TRUE ~ 'Terrible'))
+
+  filter(abs(value) >= 0.68 | abs(value) == max(abs(value)))
 ```
 
+```{r}
+pca <- prcomp(data_RSE[1:150,], scale. = TRUE)
+pca$rotation[, 1:2, drop = FALSE]
+
+pca$rotation[, 1:2, drop = FALSE] %>% # drop = FALSE preserves PC names when there's only 1 PC
+      `%*%`(diag(pca$sdev, 2, 2))
+
+pca$sdev^2
+```
+
+```{r}
+library(EFA.dimensions)
+PCAoutput_1 <- PCA(data_RSE[1:150,],   Nfactors = 2,rotate = 'none', verbose=FALSE)
+
+PCAoutput_2 <- PCA(data_RSE[151:300,], Nfactors = 2, rotate='PROMAX', verbose=FALSE)
+
+t4 <- PROCRUSTES(target=as.matrix(t1), loadings=as.matrix(t2), 
+           type = 'orthogonal', verbose=FALSE)
+```
+
+```{r}
+library(vegan)
+procrustes(as.matrix(t1), as.matrix(t2), scale = FALSE) ->t3
+t3$rotation;psych::factor.congruence(t1,t2) 
+```
+
+```{r}
+
+psych::factor.congruence(t1,t4$loadingsPROC) #%>% diag # these are the correct phi values post rotation!
+```
+
+```{r}
+cor(t1,t4$loadingsPROC) %>% corrplot()
+```
 
 so the problem with both correlation, pearson and spearman, and cosine similarities is that there is still mixing across the modes and the patterns aren't precisely matched!
 rotate signs as needed

@@ -71,7 +71,7 @@ c <- cesm_dat %>%
   ggplot() +
   geom_raster(aes(x, y, fill = swe_mean)) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
+  scale_fill_distiller(palette = 'Blues', direction = 1, name = 'SWE\n(mm)', limits = c(0, 330)) +
   theme_void() 
 
 (a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) +  plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')& theme(legend.position = 'bottom')
@@ -80,16 +80,6 @@ c <- cesm_dat %>%
 ggsave('swe_comparison.png', width = 7, height = .7 * 7)
 ```
 
-```{r}
- ccsm_dat %>%
-  filter(year > 1980) %>%
-  get_climatology() %>%
-  ggplot() +
-  geom_raster(aes(x, y, fill = swe_mean)) +
-  geom_sf(data = states_wus, fill = NA, color = 'black') +
-   scale_fill_scico(palette = 'davos', direction = -1, name = 'SWE\n(mm)', limits = c(0, 320)) +
-  theme_void() 
-```
 
 Next we'll look at how SWE has varied over time and space.
 
@@ -126,21 +116,7 @@ d <- cera_dat %>%
   theme_void() +
   theme(legend.position = 'bottom')
 
-c_gif <- gganimate::animate(c)
-d_gif <- gganimate::animate(d)
-
-c_mgif <- image_read(c_gif)
-d_mgif <- image_read(d_gif)
-
-new_gif <- image_append(c(c_mgif[1], d_mgif[1]))
-for(i in 2:100){
-  combined <- image_append(c(c_mgif[i], d_mgif[i]))
-  new_gif <- c(new_gif, combined)
-}
-
-new_gif
-
-image_write(new_gif, 'anomalies.mp4')
+c + b
 ```
 
 ## PCA
@@ -149,29 +125,38 @@ We can decompose all this year-to-year variability into the dominant spatial mod
 
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests.
 
-```{r, fig.width = 8, fig.asp = .4, echo = FALSE}
+```{r, echo = FALSE}
 e <- prism_dat %>% 
+  get_anomalies %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
 
 f <- cera_dat %>% 
+    get_anomalies %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
                       
 g <- cesm_dat %>% 
+    get_anomalies %>%
   get_pcs() %>%
   get_eigenvalues() %>% 
   plot_scree(k = 4, kmax = 10) +
   scale_color_brewer(palette = 'Spectral')
 
-e + f + g + plot_annotation(tag_levels = 'A')
+h <- ccsm_dat %>% 
+    get_anomalies %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 10) +
+  scale_color_brewer(palette = 'Spectral')
+
+e + f + g + h + plot_annotation(tag_levels = 'A')
 ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```
-
 
 ```{r}
 # prism for the whole period
@@ -238,24 +223,47 @@ n_modes <- 4
 
 ```{r}
 prism_patterns <- get_patterns(prism_dat, k = n_modes)
-cera_patterns <- get_patterns(cera_dat, k = n_modes)
-cesm_patterns <- get_patterns(cesm_dat %>% filter(year > 1800), k = nmodes)
+cera_patterns <- get_patterns(cera_dat %>% filter(year >= 1982), k = n_modes)
+cesm_patterns <- get_patterns(cesm_dat, k = n_modes)
+ccsm_patterns <- get_patterns(ccsm_dat, k = n_modes)
+common_patterns_cesm <- get_patterns(filter(cera_dat, between(year, 1951, 2000))%>% semi_join(get_climatology(cesm_dat)), 
+                                 k = n_modes, 
+                                 common = filter(cesm_dat, year < 1951 & year >= 1901))
+
+common_patterns_ccsm <- get_patterns(filter(cera_dat, between(year, 1901, 2005)),
+                                 k = n_modes, 
+                                 common = filter(ccsm_dat, between(year, 1901, 2005)) %>% mutate(year = year - 105))
 ```
+
 
 
 ```{r, echo = FALSE}
 plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2)  + geom_vline(xintercept = 1997)
 plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
 plot_amps(cesm_patterns)
+plot_amps(ccsm_patterns)
+plot_amps(common_patterns_cesm)
+plot_amps(common_patterns_ccsm)
+```
+
+```{r}
+plot_eofs(prism_patterns, 'vik', scaled = FALSE)
+plot_eofs(cesm_patterns, scaled = FALSE)
+plot_eofs(common_patterns_cesm, 'vik', scaled = FALSE)
+
+plot_eofs(cera_patterns, 'vik', scaled = FALSE)
+plot_eofs(common_patterns_ccsm, 'vik', scaled = FALSE)
+plot_eofs(ccsm_patterns, 'vik', scaled = FALSE)
 ```
 
 Plot the eofs. 
 ```{r echo = FALSE, fig.asp = 1}
 plot_eofs(prism_patterns, 'vik', scaled = FALSE) 
-plot_eofs(cera_patterns, 'vik', scaled = FALSE)
-plot_eofs(prism_patterns, 'vik', scaled = TRUE) 
+plot_eofs(cera_patterns,'vik', scaled = FALSE)
+plot_eofs(prism_patterns,'vik', scaled = TRUE) 
 plot_eofs(cera_patterns, 'vik', scaled = TRUE)
 ```
+
 
 ```{r, fig.width = 8, fig.height = 8}
  get_patterns(prism_dat, k = 4, rotate = TRUE) %>% plot_eofs(scaled = FALSE) + ggtitle('REOFs')
@@ -265,9 +273,9 @@ ggsave('reofs.png',height = 8, width = 8)
 ```{r, fig.width = 8, fig.asp = .7}
 prism_patterns$eofs_corr <- prism_patterns$eofs_corr %>% mutate(correlation = if_else(PC == 4, correlation, correlation * -1))
 
-a<-plot_eofs(prism_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('Leading March SWE spatial modes', 'Observed') + theme(legend.position = 'bottom')
+a <- plot_eofs(prism_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('Leading March SWE spatial modes', 'Observed') + theme(legend.position = 'bottom')
 
-b<-plot_eofs(cera_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('', 'Simulated') + theme(legend.position = 'bottom')
+b <- plot_eofs(cera_patterns, 'vik', scaled = TRUE) + facet_wrap(~paste0('EOF', PC), nrow = 1) + ggtitle('', 'Simulated') + theme(legend.position = 'bottom')
 
 c <- a / b & theme(legend.position = "bottom")
 c + plot_layout(guides = "collect", heights = 1,1)
@@ -967,7 +975,7 @@ clim_baseline <- t2 %>%
   unnest(clim) %>%
   rename(SWE = swe_mean) %>%
   get_errors  %>% 
-   left_join(areas, by = c("x", "y")) %>%
+   left_join(areas_prism, by = c("x", "y")) %>%
     group_by(year) %>%
     summarise(SWE_obs = sum(SWE_obs * area),
               SWE_recon = sum(SWE_recon * area)) %>%
@@ -1434,7 +1442,7 @@ cv_dat$gam[[1]]
 #### Domain averages
 ```{r}
 wus_stats <- prism_dat %>%
-  left_join(areas, by = c("x", "y")) %>%
+  left_join(areas_prism, by = c("x", "y")) %>%
   group_by(year) %>%
   #mutate(covered = if_else(SWE >= 3, area, 0)) %>% # 3mm threshold
     mutate(covered = pmin(1, SWE / 3) * area) %>% # linear decline below 3mm
@@ -1442,7 +1450,7 @@ wus_stats <- prism_dat %>%
             SCA = sum(covered))
 
 mountains_stats <- prism_dat %>%
-  left_join(areas, by = c("x", "y")) %>%
+  left_join(areas_prism, by = c("x", "y")) %>%
   inner_join(mountains_mask, by = c("x", "y")) %>%
   group_by(year, name) %>%
  # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
@@ -1453,7 +1461,7 @@ mountains_stats <- prism_dat %>%
 
 ```{r}
 cv_recons <- cv_dat %>%
-  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")))) %>%
+  mutate(cv = map(cv, ~left_join(., areas_prism, by = c("x", "y")))) %>%
   unnest(cv) %>%
  # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
       mutate(covered = pmin(1, SWE / 3) * area) %>% # linear decline below 3mm
@@ -1463,7 +1471,7 @@ cv_recons <- cv_dat %>%
   left_join(wus_stats, by = 'year', suffix = c('_recon', '_obs'))
 gc()
 range_recons <- cv_dat %>%
-  mutate(cv = map(cv, ~left_join(., areas, by = c("x", "y")) %>% 
+  mutate(cv = map(cv, ~left_join(., areas_prism, by = c("x", "y")) %>% 
                     inner_join(mountains_mask, by = c("x", "y")))) %>%
   unnest(cv) %>%
  # mutate(covered = if_else(SWE >= 3, area, 0)) %>%
@@ -1568,29 +1576,110 @@ bind_rows(t1, t2) %>%
 # Reconstruction
 
 ```{r}
-recon_20c_time <- predict_cca(get_patterns(filter(cera_dat, year >=1982), 5), 
+# k's here could be taken directly from the CV results here
+recon_20c_time <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
             get_patterns(filter(prism_dat, year <= 2010), 4), 
             cera_dat,
             k = 4)
 
-recon_20c_space <-predict_cca(get_patterns(filter(cera_dat, year >=1982), 10), 
+recon_20c_space <-predict_cca(get_patterns(filter(cera_dat, year >= 1982), 10), 
             get_patterns(filter(prism_dat, year <= 2010), 9), 
             cera_dat,
             k = 7)
 
-recon_20c_gam <- couple_patterns(get_patterns(cera_dat, 4), get_patterns(prism_dat, 6)) %>%
-  predict_patterns(get_patterns(cera_dat, 4)) %>%
-  reconstruct_field(get_patterns(prism_dat, 6), .)
+recon_project_ccsm <- predict_cca(get_patterns(filter(cera_dat, year >= 1982), 5), 
+            get_patterns(filter(prism_dat, year <= 2010), 4), 
+            ccsm_dat,
+            k = 4)
 ```
 
 ```{r}
-cera_areas <- raster::area(cera) %>%
-  as.data.frame(xy = TRUE)
+# why doesn't CESM work here? there's probably a null cell at the edge that is in cera. might have to mask cera too?
+recon_project_cesm <- predict_cca(get_patterns(filter(cera_dat, year >=1982) %>% semi_join(get_climatology(cesm_dat)), 5), 
+            get_patterns(filter(prism_dat, year <= 2010), 4), 
+            filter(cesm_dat, year > 1700),
+            k = 4)
 
-cera_baseline <- cera_dat%>%
-  left_join(cera_areas) %>%
+# need a way for this to couple for patterns with different time horizons
+test <- get_patterns(cera_dat, 5, common = filter(ccsm_dat, year >= 1751)) 
+# try doing this so you predict on the common eof data too, so you can see whether it messes up the reanalysis period and what the change in mean looks like
+test$amplitudes <- filter(test$amplitudes, year >=1982)
+
+recon_common_ccsm <- predict_cca(test,
+              get_patterns(filter(prism_dat, year <= 2010), 4), 
+            filter(ccsm_dat, year >1700),
+            k = 4)
+
+test2 <- get_patterns(cera_dat%>% semi_join(get_climatology(cesm_dat)), 5, common = filter(cesm_dat, year >= 1701 & year <= 1900))
+test2$amplitudes <- filter(test2$amplitudes, year >=1982)
+
+recon_common_cesm <- predict_cca(test2,
+              get_patterns(filter(prism_dat, year <= 2010), 4), 
+            filter(cesm_dat, year > 1700),
+            k = 4)
+
+# why is there a mean bias?
+recon_project_ccsm %>%group_by(year) %>% summarise(SWE = sum(SWE)) %>%
+  ggplot(aes(year, SWE)) + 
+  geom_line() +
+  # why is raw ccsm off?
+  #geom_line(data = ccsm_dat %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'blue') +
+  #geom_line(data = recon_project_cesm %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'blue') +
+ # geom_line(data = recon_common_ccsm %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'red') +
+   # geom_line(data = recon_common_cesm %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'green') +
+  geom_line(data = recon_20c_time %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'red') +
+    geom_line(data = prism_dat %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'orange') #+
+ #  geom_line(data = cera_dat %>%group_by(year) %>% summarise(SWE = sum(SWE)), color = 'purple')
+
+
+# so it looks like bias in the mean field strikes again -- another argument for maybe subtracting the cesm mean rather than the calibration mean, here doing that looks like it leads to biases. but wait, something looks wrong .... oh theres no area weighting
+```
+```{r}
+recon_project_ccsm %>%
+  filter(year < 1880 | year > 1975) %>%
+  group_by(x, y, era = year > 1900) %>%
+  summarise(SWE = mean(SWE)) %>%
+  pivot_wider(names_from = era, values_from = SWE) %>%
+  summarise(SWE = (`TRUE` - `FALSE`)) %>%
+  #filter(SWE > -5) %>%
+   ggplot() +
+  geom_raster(aes(x, y, fill = SWE)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_viridis_c(option = 'magma', direction = -1) +
+  theme_void()
+```
+
+
+```{r}
+plot_eofs(test, scaled = FALSE)
+```
+
+
+```{r}
+cera_baseline <- cera_dat %>%
+  left_join(areas_cera) %>%
   group_by(year) %>%
-  summarise(SWE = sum(SWE* layer))
+  summarise(SWE = sum(SWE * area))
+
+ccsm_series <- recon_project_ccsm %>%
+  left_join(areas_prism) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area))
+
+cesm_series <- recon_project_cesm %>%
+  left_join(areas_prism) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area))
+
+ccsm_series_raw <- ccsm_dat %>%
+  left_join(areas_cera) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area))
+
+cesm_series_raw <- cesm_dat %>%
+  left_join(areas_cera) %>%
+  group_by(year) %>%
+  summarise(SWE = sum(SWE * area))
 ```
 
 ```{r}
@@ -1598,28 +1687,33 @@ delta_preds <- delta(pred = filter(cera_dat, year >= 1982),
       obs = filter(prism_dat, year <= 2010),
       newdata = cera_dat)
 
-delta_baseline_add <- left_join(mutate(delta_add_dat, x = round(x,5), y = round(y,5)), mutate(areas, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
+delta_baseline_add <- left_join(mutate(delta_add_dat, x = round(x,5), y = round(y,5)), mutate(areas_prism, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area, na.rm = TRUE))
 
-delta_baseline_mult <- left_join(mutate(delta_mult_dat, x = round(x,5), y = round(y,5)), mutate(areas, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
+delta_baseline_mult <- left_join(mutate(delta_mult_dat, x = round(x,5), y = round(y,5)), mutate(areas_prism, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area, na.rm = TRUE))
 
-delta_baseline_mult2 <- left_join(mutate(delta_mult_dat2, x = round(x,5), y = round(y,5)), mutate(areas, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
+delta_baseline_mult2 <- left_join(mutate(delta_mult_dat2, x = round(x,5), y = round(y,5)), mutate(areas_prism, x = round(x,5), y = round(y,5)), by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area, na.rm = TRUE))
 ```
 
 
 ```{r fig.width=6.5}
-left_join(recon_20c_time, areas, by = c("x", "y")) %>%
+left_join(recon_20c_time, areas_prism, by = c("x", "y")) %>%
   group_by(year) %>%
   summarise(SWE = sum(SWE * area)) %>%
   ggplot(aes(year, SWE)) +
     geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
   geom_line(size = 1.1, aes(color = 'black')) +
   geom_line(data = wus_stats, aes(color = 'red'), size = 1.1, alpha = .7) +
+    geom_line(data = ccsm_series, aes(color = 'orange'), size = 1.1, alpha = .7) +
+    geom_line(data = ccsm_series_raw, aes(color = 'blue'), size = 1.1, alpha = .7) +
+    geom_line(data = filter(cesm_series_raw, year > 1840), aes(color = 'green'), size = 1.1, alpha = .7) +
+
+     # geom_line(data = cesm_series, aes(color = 'red'), size = 1.1, alpha = .7) +
  #geom_line(data = delta_baseline, color = 'green') +
   # geom_line(data = delta_baseline_mult, color = 'blue') +
  #  geom_line(data = delta_baseline_mult2, color = 'orange') +
@@ -1680,6 +1774,50 @@ a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') 
 ggsave('anomalies_1997.png', height = 3.25, width = 6.5)
 ```
 
+```{r fig.width = 6.5, fig.asp = .5}
+a <- cera_dat %>%
+  filter(between(year, 1982, 2010)) %>%
+  group_by(x,y) %>%
+      mutate(anomaly = (SWE - mean(SWE))) %>%
+  ungroup() %>%
+  filter(year == 1997) %>%
+    remove_missing() %>% # shouldn't be necessary, but for division by sd
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
+  theme_void()
+
+b <- recon_20c_space %>%
+  filter(between(year, 1982, 2010)) %>%
+  group_by(x,y) %>%
+      mutate(anomaly = (SWE - mean(SWE))) %>%
+  ungroup() %>%
+  filter(year == 1997) %>%
+      remove_missing() %>% # shouldn't be necessary, but for division by sd
+ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+    geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
+  theme_void()
+
+c <- prism_dat %>%
+  filter(between(year, 1982, 2010)) %>%
+  group_by(x,y) %>%
+      mutate(anomaly = (SWE - mean(SWE))) %>%
+  ungroup() %>%
+  filter(year == 1997) %>% 
+      remove_missing() %>% # shouldn't be necessary, but for division by sd
+  ggplot()+
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', limits = c(-953, 953), direction = -1) +
+  theme_void()
+
+a + b + c + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'A') & theme(legend.position = 'bottom')
+
+ggsave('anomalies_1997_unstandardized.png', height = 3.25, width = 6.5)
+```
 #### Local error
 ```{r}
 scores <- cv_dat %>%
