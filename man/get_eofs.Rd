@@ -4,14 +4,17 @@
 \alias{get_eofs}
 \title{Title}
 \usage{
-get_eofs(dat, pca, k, eigenvalues, rotate)
+get_eofs(dat, pca, k, rotate = FALSE)
 }
 \arguments{
-\item{rotate}{}
+\item{rotate}{scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)}
 }
 \value{
 
 }
 \description{
 Title
+}
+\examples{
+
 }

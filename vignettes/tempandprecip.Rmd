@@ -1,0 +1,77 @@
+---
+title: "Temp and Precip"
+author: "Nick Gauthier"
+date: "7/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(raster)
+library(stars)
+library(tidyverse)
+
+# this package
+devtools::load_all()
+```
+
+
+```{r}
+bbox <- extent(c(-10, 45, 30, 50))
+bbox <- st_bbox(c(xmin = -10, ymin = 30, xmax = 45, ymax = 50), crs = 4326)
+
+
+test <- read_stars('/home/nick/gdrive/Data/CHELSA/prec/CHELSA_prec_01_V1.2_land.tif') %>%
+  st_crop(bbox) %>%
+  as_tibble()
+  ggplot() +
+  geom_stars(data = test)
+```
+
+
+```{r}
+
+time <- brick('/home/nick/gdrive/Data/b40.lm850-1850.1deg.001.cam2.h0.PRECT.085001-185012.nc') %>% getZ
+test <- brick('/home/nick/gdrive/Data/b40.lm850-1850.1deg.001.cam2.h0.PRECT.085001-185012.nc') %>%
+  flip('x')%>%
+  crop(bbox)
+
+plot(test)
+get(test)
+
+test2 <- test %>%
+  setNames(time) %>%
+  as.data.frame(na.rm = TRUE, xy = TRUE, long = TRUE) %>%
+  mutate(time = str_sub(layer, 2, -1)) %>%
+  separate(time, into = c('year', 'month', 'day'), convert = TRUE) %>%
+  mutate(month = if_else(day == 1, month - 1L, month),
+         month = if_else(month == 0, 12L, month))  %>%
+  select(-layer, -day) %>%
+  as_tibble() %>%
+  rename(SWE = value) %>%
+  mutate(year = year + (month - 1)/12) %>%
+  select(-month)
+
+
+filter(test2, year >= 1700) %>%
+  get_pcs() %>%
+  get_eigenvalues() %>% 
+  plot_scree(k = 4, kmax = 15) +
+  scale_color_brewer(palette = 'Spectral')
+
+test3 <- get_patterns(filter(test2, year >= 1700), 4)
+
+plot_eofs(test3)
+
+plot_amps(test3)
+
+ggplot(test3$eofs) +
+      geom_raster(aes(x, y, fill = value)) +
+      facet_wrap(~paste0('EOF', EOF)) +
+      scale_fill_scico(palette = 'vik', direction = -1) +
+      theme_void()+
+      ggtitle('Observed March SWE EOFS')
+
+library(scico)
+```
+

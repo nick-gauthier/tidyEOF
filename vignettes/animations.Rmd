@@ -1,0 +1,72 @@
+---
+title: "animations"
+author: "Nick Gauthier"
+date: "10/29/2020"
+output: html_document
+---
+```{r setup}
+knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
+
+# analysis
+library(remote) # empirical orthogonal teleconnections
+library(tidyverse) # data manipulation and visualization
+library(mgcv) # flexible nonlinear regression models
+library(modelr)
+
+# plotting
+library(sf) # shapefiles and plotting
+library(gganimate) # animated gifs
+library(magick) # for multi-panel animations
+library(scico) # color palettes
+library(patchwork)
+
+# this package
+devtools::load_all()
+
+load('../data.Rdata')
+```
+
+```{r animation, echo = FALSE, warning=FALSE,cache = TRUE}
+# code courtesy of https://github.com/thomasp85/gganimate/wiki/Animation-Composition
+c <- prism_dat %>%
+      filter(between(year, 1990, 2010)) %>%
+  group_by(x, y) %>%
+  mutate(anomaly = (SWE - mean(SWE)) / sd(SWE))  %>% 
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-4.5, 4.5), name = 'Standard\n deviations') +
+    transition_states(year) +
+    ggtitle("March {closest_state} SWE anomaly", "Observed") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+d <- cera_dat %>%
+      filter(between(year, 1990, 2010)) %>%
+    group_by(x, y) %>%
+    mutate(anomaly = (SWE - mean(SWE)) / sd(SWE)) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = anomaly)) +
+  geom_sf(data = states_wus, fill = NA, color = 'black') +
+  scale_fill_scico(palette = 'vik', direction = -1, limits = c(-4.5, 4.5), name = 'Standard\n deviations') +
+  transition_states(year) +
+  ggtitle("", "Simulated") +
+  theme_void() +
+  theme(legend.position = 'bottom')
+
+c_gif <- gganimate::animate(c)
+d_gif <- gganimate::animate(d)
+
+c_mgif <- image_read(c_gif)
+d_mgif <- image_read(d_gif)
+
+new_gif <- image_append(c(c_mgif[1], d_mgif[1]))
+for(i in 2:100){
+  combined <- image_append(c(c_mgif[i], d_mgif[i]))
+  new_gif <- c(new_gif, combined)
+}
+
+new_gif
+
+image_write(new_gif, 'anomalies.mp4')
+```

@@ -1,2 +1,2 @@
-#' @import dplyr broom tidyr stringr methods
+#' @import stars dplyr broom tidyr stringr methods
 NULL

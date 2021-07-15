@@ -1,0 +1,169 @@
+---
+title: "dimensionality"
+author: "Nick Gauthier"
+date: "7/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# ICA
+
+```{r}
+library(fastICA)
+
+cera_mat <- cera %>%
+  as_tibble() %>% 
+  pivot_wider(names_from = time, values_from = SWE) %>%
+  select(-x, -y) %>%
+  drop_na() %>%
+  t()
+
+test_ica <- fastICA(cera_mat, 6)
+plot(test_ica$S)
+
+test_ica$S %>%
+  as_tibble() %>%
+  mutate(time = 1901:2010) %>%
+  pivot_longer(-time) %>%
+  ggplot(aes(time, value)) +
+  geom_line() +
+  facet_wrap(~name)
+```
+```{r}
+get_patterns(cera, k = 6) %>% plot_amps
+```
+```{r}
+ggplot() +
+  geom_stars(data = st_apply(cera, 1:2, function(x) cor(x, as_tibble(test_ica$S)), .fname = 'DF')) +
+  facet_wrap(~DF) +
+geom_sf(data = states_wus, fill = NA) +
+  theme_minimal() +
+  scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+
+ggplot() +
+  geom_stars(data = st_crop(get_correlation(cera, get_patterns(cera, k = 6)), states_wus) %>% split %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC4 = PC4 * -1) %>% merge(name= 'PC')) + # the signs are arbitrary, so adjust the cera signs so the colors match prism)
+        geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC, nrow = 2) +
+scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+
+ggplot() +
+  geom_stars(data = st_crop(get_correlation(cera, get_patterns(cera, k = 6, scale = TRUE, rotate = FALSE)), states_wus) %>% split %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC4 = PC4 * -1) %>% merge(name= 'PC')) + # the signs are arbitrary, so adjust the cera signs so the colors match prism)
+        geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC, nrow = 2) +
+scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+
+ggplot() +
+  geom_stars(data = st_crop(get_correlation(cera, get_patterns(cera, k = 6, rotate = TRUE)), states_wus) %>% split %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC4 = PC4 * -1) %>% merge(name= 'PC')) + # the signs are arbitrary, so adjust the cera signs so the colors match prism)
+        geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC, nrow = 2) +
+scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+
+ggplot() +
+  geom_stars(data = st_crop(get_correlation(cera, get_patterns(cera, k = 6, scale = TRUE, rotate = TRUE)), states_wus) %>% split %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC4 = PC4 * -1) %>% merge(name= 'PC')) + # the signs are arbitrary, so adjust the cera signs so the colors match prism)
+        geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC, nrow = 2) +
+scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
+    labs(x = 'Longitude', y = 'Latitude') +
+  theme_void()
+```
+
+
+```{r}
+library(h2o)  # for fitting autoencoders
+h2o.init(max_mem_size = "10g")  # initialize H2O instance
+```
+
+```{r}
+data.table::fwrite(cera_mat,file="cera_mat.csv",row.names=FALSE)
+# Convert mnist features to an h2o input data set
+features <- h2o.importFile('cera_mat.csv')
+
+# Train an autoencoder
+ae1 <- h2o.deeplearning(
+  x = seq_along(features),
+  training_frame = features,
+  autoencoder = TRUE,
+  hidden = c(6),
+  activation = 'Tanh',
+  sparse = TRUE
+)
+ae1_codings <- h2o.deepfeatures(ae1, features, layer = 1)
+```
+```{r}
+ae2_codings <- h2o.deepfeatures(ae1, features[1:120,], layer = 2)
+
+plot(as_tibble(ae1_codings))
+plot(as_tibble(ae2_codings))
+
+```
+
+
+```{r}
+as_tibble(ae1_codings) %>%
+  mutate(time = 1901:2010) %>%
+  pivot_longer(-time) %>%
+  ggplot(aes(time, value * -1)) +
+  geom_line() + 
+  geom_hline(yintercept = 0, linetype = 2) +
+  facet_wrap(~name) +
+  scale_x_continuous(breaks = -12:-1) +
+  theme_bw()
+```
+```{r}
+ggplot() +
+  geom_stars(data = st_apply(cera, 1:2, function(x) cor(x, as_tibble(ae1_codings)), .fname = 'DF')) +
+  facet_wrap(~DF) +
+    scale_fill_scico(palette = 'vik', direction = -1, na.value = NA) +
+geom_sf(data = states_wus, fill = NA) +
+  theme_minimal()
+```
+
+```{r}
+ae2 <- h2o.deeplearning(
+  x = seq_along(features),
+  training_frame = features,
+  autoencoder = TRUE,
+  hidden = c(6),
+  activation = 'RectifierWithDropout',
+  sparse = TRUE
+)
+ae2_codings <- h2o.deepfeatures(ae2, features, layer = 1)
+ggplot() +
+  geom_stars(data = st_apply(cera, 1:2, function(x) cor(x, as_tibble(ae2_codings)), .fname = 'DF')) +
+  facet_wrap(~DF) +
+    scale_fill_scico(palette = 'vik', direction = -1, na.value = NA) +
+geom_sf(data = states_wus, fill = NA) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(df, aes(seq(-12, -.1, .1), DF.L1.C1 * -1)) +
+  geom_line() +
+  geom_smooth()
+```
+```{r}
+m1 <- df %>%
+  mutate(time = seq(-12,-.1, .1),
+         var = DF.L1.C1 * -1)%>%
+  mgcv::gam(var ~ s(time), data = .)
+```
+
+```{r}
+qplot(x = seq(-12,-.1, .1), y = residuals(m1), geom = 'line') +
+  scale_x_continuous(breaks = -12:-1) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  theme_bw()
+```
+

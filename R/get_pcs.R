@@ -8,19 +8,36 @@
 #' @export
 #'
 #' @examples
-get_pcs <- function(dat, scale = FALSE){
+
+get_pcs <- function(dat, scale = FALSE, clim = NULL) {
+
+  # get climatologies if not supplied
+  if(is.null(clim)) clim <- get_climatology(dat)
+
   dat %>%
-    dplyr::group_by(x,y) %>%
-    dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
-    {if(scale) dplyr::mutate(., SWE = SWE / sd(SWE)) else .} %>%
-    dplyr::ungroup() %>%
-    dplyr::mutate(SWE = SWE * sqrt(cos(y * pi / 180))) %>% # area weight, sqrt means covariance matrix weighted by cos(lat)
-    tidyr::spread(year, SWE) %>%
-    dplyr::select(-x, -y) %>%
-    t() %>%
+    units::drop_units() %>%
+    {. -  clim['mean']} %>% # center the field
+    {if(scale) . /  clim['sd'] else .} %>% # scale the field (optional)
+    area_weight() %>% # weight by sqrt cosine latitude, in radians
+    split('time') %>% # split along the time dimension
+    setNames(st_get_dimension_values(dat, 'time')) %>%
+    as_tibble() %>%
+    dplyr::select(-c(x,y)) %>%
+    na.omit() %>%
+    t() %>% # transpose to space is columns and time rows
     prcomp(center = FALSE)
 }
 
+
+area_weight <- function(dat) {
+  st_dim_to_attr(dat, which = 2) %>% # get the y coordinates # this is brittle!
+    `*`(pi / 180) %>% # convert to radians
+    cos() %>% # cosine weighting
+    sqrt() %>% # sqrt so the covariance matrix is weighted by cosine latitude
+    `*`(dat, .)
+}
+
+#' @export
 get_eigenvalues <- function(pca){
   n <- length(pca$sdev)
 
@@ -32,4 +49,3 @@ get_eigenvalues <- function(pca){
            hi = eigenvalues * (1 + error) * 100 / sum(eigenvalues),
            cumvar_line = hi + 0.02 * max(hi))
 }
-

@@ -4,13 +4,17 @@
 \alias{get_patterns}
 \title{Get EOFs and PCs from observations}
 \usage{
-get_patterns(dat, k, common = NULL, scale = FALSE, rotate = FALSE)
+get_patterns(dat, k = 4, scale = FALSE, rotate = FALSE)
 }
 \arguments{
-\item{k}{}
+\item{dat}{A `stars` object containing spatial and temporal dimensions.}
+
+\item{k}{The number of PC/EOF modes to retain.}
 }
 \value{
-
+A `patterns` object containing a tibble of PC amplitudes, a `stars`
+object with EOF spatial patterns, and a `stars` object with the mean and
+(optionally) standard deviation fields used.
 }
 \description{
 Get EOFs and PCs from observations

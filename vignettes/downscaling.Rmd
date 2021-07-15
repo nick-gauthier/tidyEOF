@@ -1,0 +1,390 @@
+---
+title: "Downscaling"
+author: "Nick Gauthier"
+date: "11/26/2019"
+output: html_document
+---
+
+# Setup
+
+Import required packages
+```{r setup, message = FALSE, warning = FALSE}
+library(raster) # processing raster data
+library(tidyverse) # data manipulation and visualization
+library(broom) # tidying PC objects
+library(furrr) # parallel processing
+library(lubridate) # processing dates
+plan(multisession)
+library(gganimate) # animations
+library(remote) # EOT analysis
+```
+
+Define a study area to constrain all computaitons.
+```{r}
+bbox_wus <- extent(c(-125, -100, 33, 50))
+bbox_co <- extent(c(-115, -104, 35, 45))
+```
+
+## PRISM Import
+
+```{r, warning = FALSE}
+prism <- list.files('~/Downloads/PRISM/PRISM_ppt_stable_4kmM3_198101_201904_bil', 
+                    pattern = '*.bil$',
+                    full.names = TRUE) %>%
+  future_map(raster) %>%
+  future_map(crop, bbox_wus) %>%
+  brick() %>%
+  projectRaster(crs = '+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0') %>%
+  crop(bbox_co) %>%
+  aggregate(fact = 3)
+
+prism_dat <- prism %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  # parse time data
+  mutate(time = str_split(layer, pattern = '_'),
+         time = map_chr(time, ~.[5]),
+         time = parse_date(time, format = '%Y%m')) %>%
+  mutate_at(vars(time), funs(year, month)) %>%
+  # calculate water years
+  mutate(water_year = if_else(month < 10, year, year + 1L)) %>%
+  # get winter months
+  filter(month %in% c(1, 2, 3, 11, 12)) %>%
+  select(-layer) %>%
+  rename(precip = value) %>%
+  # remove water years for which we don't have all the months
+  group_by(x, y, water_year) %>%
+  add_tally() %>%
+  filter(n == 5) %>%
+  # calculate total winter precip
+  summarise(precip = sum(precip)) %>%
+  ungroup()
+```
+
+```{r, echo = FALSE}
+a <- prism_dat %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = precip)) +
+  scale_fill_viridis_c() +
+  transition_states(water_year) +
+  coord_quickmap() +
+  theme_void()
+
+b <- prism_dat %>%
+  group_by(x, y) %>%
+  mutate(anomaly = precip - mean(precip)) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = anomaly)) +
+  scale_fill_distiller(palette = 'RdBu') +
+  transition_states(water_year) +
+  coord_quickmap() +
+  theme_void()
+
+a;b
+```
+
+
+## CERA Import
+
+```{r}
+cera <- brick('data/CERA-20C_precipitation.nc') %>%
+  crop(bbox_wus, snap = 'out') %>%
+  as.data.frame(xy = TRUE, na.rm = TRUE, long = TRUE) %>%
+  # parse the time data
+  mutate(time = parse_datetime(Z)) %>%
+  mutate_at(vars(time), funs(year, month)) %>%
+  # calculate water years
+  mutate(water_year = if_else(month < 10, year, year + 1L)) %>%
+  # get winter months
+  filter(month %in% c(1, 2, 3, 11, 12)) %>%
+  rename(precip = value) %>%
+  # remove water years for which we don't have all the months
+  group_by(x, y, water_year) %>%
+  add_tally() %>%
+  filter(n == 5) %>%
+  # calculate total winter precip
+  summarise(precip = sum(precip)) %>%
+  ungroup()
+```
+
+```{r, echo = FALSE}
+a <- cera %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = precip)) +
+  scale_fill_viridis_c() +
+  transition_states(water_year) +
+  coord_quickmap() +
+  theme_void()
+
+b <- cera %>%
+  group_by(x, y) %>% 
+  mutate(anomaly = precip - mean(precip)) %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = anomaly)) +
+  scale_fill_distiller(palette = 'RdBu') +
+  transition_states(water_year) +
+  coord_quickmap() +
+  theme_void()
+
+a;b
+```
+
+# EOF Analysis
+
+## CERA 
+```{r}
+cera_pca <- cera %>%
+  spread(water_year, precip) %>%
+  select(-x, -y) %>%
+  t() %>%
+  prcomp(scale. = TRUE)
+```
+
+```{r, echo = FALSE}
+cera_eigs <- cera_pca %>%
+  broom::tidy(matrix = 'pcs') %>%
+  mutate(eigenvalues = std.dev ^ 2)
+```
+
+```{r plot_variance_sim, fig.width = 5, fig.height = 4, echo = FALSE}
+cera_eigs %>% 
+    filter(PC <= 12) %>%
+ggplot(aes(x = PC, y = percent * 100)) +
+  #geom_errorbar(aes(x = PC, ymin = low, ymax = hi), width = 0.4) +
+  geom_point(size = 2) + 
+ # geom_text(aes(x = PC, y = cumvar_line, label = paste0(round(cumulative * 100, 0), '%')), size = 2.5, vjust = 0) +
+  labs(x = "Principal Component", y = "Normalized Eigenvalue") + 
+  geom_vline(xintercept = 4.5, linetype = 2, color = 'red', alpha = .7) +
+  theme_bw() + 
+  guides(color = F) + 
+  scale_x_continuous(breaks = seq(0, 12, 2))
+```
+
+
+
+```{r calc_eofs}
+eofs_cera <- cera_pca %>% # calculate unrotated EOFs
+  broom::tidy(matrix = 'variables') %>%
+  filter(PC <= 4) %>%
+  left_join(cera_eigs[1:2], by = 'PC') %>%
+  mutate(eof = value * std.dev,
+         PC = as.character(PC)) %>%
+  select(-std.dev,-value) 
+```
+
+```{r}
+tidy(cera_pca) %>%
+  mutate(time = as.numeric(as.character(row))) %>%
+  filter(PC <=4) %>%
+  ggplot(aes(time, value)) +
+  geom_line() +
+  facet_wrap(~PC)
+```
+
+```{r, echo = FALSE}
+cera %>%
+  spread(water_year, precip) %>%
+  mutate(column = 1:n()) %>%
+  select(x, y, column) %>%
+  full_join(eofs_cera) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = eof)) +
+  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-1, 1)) +
+  theme_void()+
+  coord_quickmap() +
+  ggtitle('Reanalysis Precipitation EOFs')
+```
+
+```{r}
+pcs_cera <- tidy(cera_pca) %>%
+  mutate(water_year = as.numeric(as.character(row))) %>%
+  filter(PC <= 4) %>%
+  mutate(PC = paste0('PC', PC)) %>%
+  spread(PC, value)
+```
+
+## PRISM
+
+```{r}
+prism_pca <- prism_dat %>%
+  ungroup %>%
+  select(x:precip) %>%
+  spread(water_year, precip) %>%
+  select(-x, -y,) %>%
+  t() %>%
+  prcomp(scale. = TRUE)
+```
+
+```{r, echo = FALSE}
+prism_eigs <- prism_pca %>%
+  broom::tidy(matrix = 'pcs') %>%
+  mutate(eigenvalues = std.dev ^ 2,
+         error = sqrt(2 / n_effective(prism)),
+         low =  eigenvalues * (1 - error) * 100 / sum(eigenvalues),
+         hi = eigenvalues * (1 + error) * 100 / sum(eigenvalues),
+         cumvar_line = hi + 0.02 * max(hi))
+```
+
+```{r plot_variance_sim, fig.width = 5, fig.height = 4, echo = FALSE}
+prism_eigs %>% 
+    filter(PC <= 12) %>%
+ggplot(aes(x = PC, y = percent * 100)) +
+  geom_errorbar(aes(x = PC, ymin = low, ymax = hi), width = 0.4) +
+  geom_point(size = 2) + 
+ geom_text(aes(x = PC, y = cumvar_line, label = paste0(round(cumulative * 100, 0), '%')), size = 2.5, vjust = 0) +
+  labs(x = "Principal Component", y = "Normalized Eigenvalue") + 
+  geom_vline(xintercept = 4.5, linetype = 2, color = 'red', alpha = .7) +
+  theme_bw() + 
+  guides(color = F) + 
+  scale_x_continuous(breaks = seq(0, 12, 2))
+```
+
+```{r calc_eofs}
+eofs_prism <- prism_pca %>% # calculate unrotated EOFs
+  broom::tidy(matrix = 'variables') %>%
+  filter(PC <= 4) %>%
+  left_join(prism_eigs[1:2], by = 'PC') %>%
+  mutate(eof = value * std.dev,
+         PC = as.character(PC)) %>%
+  select(-std.dev,-value) 
+```
+
+```{r, echo = FALSE}
+tidy(prism_pca) %>%
+  mutate(time = as.numeric(as.character(row))) %>%
+  filter(PC <=4) %>%
+  ggplot(aes(time, value)) +
+  geom_line() +
+  facet_wrap(~PC)
+```
+
+```{r, echo = FALSE}
+prism_dat %>%
+  ungroup() %>%
+  select(x:precip) %>%
+  spread(water_year, precip) %>%
+  mutate(column = 1:n()) %>%
+  select(x, y, column) %>%
+  full_join(eofs_prism) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = eof)) +
+  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~PC) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-1, 1)) +
+  theme_void()+
+  coord_quickmap() +
+  ggtitle('Observed Precipitation EOFs')
+```
+
+```{r}
+pcs_prism <- tidy(prism_pca) %>%
+  mutate(water_year = as.numeric(as.character(row))) %>%
+  filter(PC <= 4) %>%
+  mutate(PC = paste0('PC', PC)) %>%
+  spread(PC, value)
+```
+
+
+# CCA Analysis
+```{r}
+t1 <- pcs_prism %>%
+  filter(water_year <= 2010) %>%
+  select(PC1:PC4) %>%
+  as.matrix()
+t2 <- pcs_cera %>%
+    filter(water_year >= 1982) %>%
+  select(PC1:PC4) %>%
+  as.matrix()
+
+t3 <- cancor(t1, t2, xcenter = FALSE, ycenter = FALSE) # pcs already centered
+```
+
+```{r}
+t4 <- eofs_cera %>%
+  spread(PC, eof) %>%
+  select(-column) %>%
+  as.matrix() %>%
+  `%*%`(t3$ycoef) %>%
+  as_tibble()
+  
+t5 <- eofs_prism %>%
+  spread(PC, eof) %>%
+  select(-column) %>%
+  as.matrix() %>%
+  `%*%`(t3$xcoef) %>%
+  as_tibble()
+```
+
+```{r}
+cera %>%
+  spread(water_year, precip) %>%
+  mutate(column = 1:n()) %>%
+  select(x, y, column) %>%
+  bind_cols(t4) %>%
+  gather(pattern, value, V1:V4) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+  scale_fill_distiller(palette = 'RdBu') +
+  theme_void()+
+  coord_quickmap() +
+  ggtitle('Reanalysis CCA')
+```
+
+```{r}
+prism_dat %>%
+  spread(water_year, precip) %>%
+  mutate(column = 1:n()) %>%
+  select(x, y, column) %>%
+  bind_cols(t5) %>%
+  gather(pattern, value, V1:V4) %>%
+  ggplot() +
+  geom_raster(aes(x, y, fill = value)) +
+  #geom_sf(data = states_wus, fill = NA, color = 'black') +
+  facet_wrap(~pattern) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-.01, .01)) +
+  theme_void()+
+  coord_quickmap() +
+  ggtitle('Observed CCA')
+```
+
+# EOT Analysis
+
+```{r}
+prism_rast <- prism_dat %>%
+  filter(water_year <= 2010) %>%
+  spread(water_year, precip) %>%
+  rasterFromXYZ()
+
+cera_rast <- cera %>%
+  filter(water_year >= 1982) %>%
+  spread(water_year, precip) %>%
+  rasterFromXYZ()
+```
+
+
+```{r}
+test_eot <- eot(cera_rast, prism_rast, n = 4, type = 'rsq')
+```
+
+```{r}
+plot(test_eot, y = 1)
+plot(test_eot, y = 2)
+plot(test_eot, y = 3)
+plot(test_eot, y = 4)
+```
+
+```{r}
+test2 <- eot(anomalize(cera_rast), anomalize(prism_rast), n = 4, type = 'rsq')
+```
+
+```{r}
+plot(test2, y = 1)
+plot(test2, y = 2)
+plot(test2, y = 3)
+plot(test2, y = 4)
+```
+
+so anomalizing the rasters doesn't change the spatial patterns, just the percent variance explained .. makes sense

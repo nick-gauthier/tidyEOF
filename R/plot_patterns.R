@@ -29,15 +29,17 @@ plot_eofs <- function(patterns, palette = 'vik', scaled = TRUE){
   }
 }
 
+#' @export
 plot_amps <- function(patterns) {
   patterns$amplitudes %>%
-    mutate(PC = paste0('PC', PC)) %>%
-    ggplot(aes(year, amplitude)) +
+    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
+    ggplot(aes(time, amplitude)) +
     geom_line() +
     facet_wrap(~PC) +
     theme_bw()
 }
 
+#' @export
 plot_scree <- function(eigenvalues, k, kmax = 15){
   eigenvalues %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
@@ -50,7 +52,7 @@ plot_scree <- function(eigenvalues, k, kmax = 15){
     labs(x = "Principal Component", y = "Normalized Eigenvalue") +
     geom_vline(xintercept = k + .5, linetype = 2, color = 'red', alpha = .7) +
     theme_bw() +
-    guides(color = F) +
+    guides(color = 'none') +
     scale_x_continuous(breaks = seq(0, 25, 5))
 }
 #' @rdname plot_eofs

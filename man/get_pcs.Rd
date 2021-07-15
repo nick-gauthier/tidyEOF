@@ -4,7 +4,7 @@
 \alias{get_pcs}
 \title{Calculate principal components}
 \usage{
-get_pcs(dat, scale = FALSE)
+get_pcs(dat, scale = FALSE, clim = NULL)
 }
 \arguments{
 \item{scale}{}

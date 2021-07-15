@@ -7,46 +7,44 @@
 #' @param eigenvalues
 #' @param rotate
 #'
+#'scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)
+#'
 #' @return
 #' @export
 #'
 #' @examples
-get_eofs <- function(dat, pca, k, eigenvalues, rotate) {
-  eofs <- pca %>%
-    broom::tidy(matrix = 'variables') %>%
-    filter(PC <= k) %>%
-    left_join(eigenvalues[1:2], by = 'PC') %>%
-    mutate(weight = value * std.dev, # scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)
-           EOF = as.character(PC),
-           column = as.character(column)) %>%
-    dplyr::select(-c(std.dev, PC))
+#'
+get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
-  if(rotate == TRUE) {
-    reofs <- eofs %>% # varimax rotation
-      dplyr::select(-value) %>% # rotate on the weights
-      pivot_wider(names_from = EOF, values_from = weight) %>%
-      column_to_rownames(var = 'column') %>%
-      as.matrix() %>%
-      varimax()
+  eofs <- pca$rotation[, 1:k, drop = FALSE] %>% # drop = FALSE preserves PC names when there's only 1 PC
+      `%*%`(diag(pca$sdev, k, k)) %>% # scale by sdev (sqrt(eigenvalues)) for more robust rotation
+    `colnames<-`(paste0('PC', 1:k))
 
-    rotation_matrix <- reofs$rotmat # save the rotation matrix for the amplitudes
+    if(rotate == TRUE) {
+      reofs <- varimax(eofs)
 
-    eofs <- unclass(reofs$loadings) %>%
-      as_tibble(rownames = 'column') %>%
-      pivot_longer(-column, names_to = 'EOF', values_to = 'weight')
-  } else {
-    rotation_matrix <- NULL
-  }
+      rotation_matrix <- reofs$rotmat %>% # save the rotation matrix for the amplitudes
+        `colnames<-`(paste0('PC', 1:k))
 
-  eofs <- dat %>%
-    spread(year, SWE) %>%
-    mutate(column = as.character(1:n())) %>%
-    dplyr::select(x, y, column) %>%
-    full_join(eofs, by = 'column') %>%
-    dplyr::select(-column)
+      eofs <- unclass(reofs$loadings) %>%
+        `colnames<-`(paste0('PC', 1:k))
+    } else {
+      rotation_matrix <- NULL
+    }
 
-  list(eofs = eofs,
+  eof_maps <- dat[,,,1] %>%
+    as_tibble() %>%
+    na.omit() %>% # can introduce issues if there are entire null rows/columns
+    dplyr::select(x, y) %>%
+  bind_cols(as_tibble(eofs)) %>%
+    st_as_stars() %>%
+    st_set_crs(st_crs(dat)) %>%
+    mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
+    merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
+    .[,,,1:k] %>%
+    setNames('weight')
+    #slice('PC', 1:k)
+
+  list(eofs = eof_maps,
        rotation_matrix = rotation_matrix)
 }
-
-
