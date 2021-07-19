@@ -9,15 +9,17 @@
 #' @export
 #'
 #' @examples
-get_correlation <- function(dat, patterns) {
-  times_amps <- patterns$amplitudes$time
+get_correlation <- function(dat, patterns, amplitudes = NULL) {
+  if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
+
+  times_amps <- amplitudes$time
   times_dat <- st_get_dimension_values(dat, 'time')
   times_cor <- intersect(times_amps, times_dat)
 
   if(length(times_cor) <= 0) stop ('Need at least two time steps in common') # add to tests
   if(!(identical(times_cor, times_amps) & identical(times_cor, times_dat))) warning('Using the time period ', first(times_cor), ' to ', last(times_cor))
 
-  amps <- filter(patterns$amplitudes, time %in% times_cor) %>%
+  amps <- filter(amplitudes, time %in% times_cor) %>%
     select(-time)
 
   suppressWarnings( # suppress warnings that sd is zero
@@ -29,15 +31,17 @@ get_correlation <- function(dat, patterns) {
 }
 
 #' @export
-get_fdr <- function(dat, patterns, fdr = 0.1) {
-  times_amps <- patterns$amplitudes$time
+get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
+  if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
+
+  times_amps <- amplitudes$time
   times_dat <- st_get_dimension_values(dat, 'time')
   times_cor <- intersect(times_amps, times_dat)
 
   if(length(times_cor) <= 0) stop ('Need at least two time steps in common') # add to tests
   if(!(identical(times_cor, times_amps) & identical(times_cor, times_dat))) warning('Using the time period ', first(times_cor), ' to ', last(times_cor))
 
-  amps <- filter(patterns$amplitudes, time %in% times_cor) %>%
+  amps <- filter(amplitudes, time %in% times_cor) %>%
     select(-time)
 
   suppressWarnings( # suppress warnings that sd is zero
