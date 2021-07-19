@@ -156,11 +156,8 @@ Run a principal components analysis. Get the eigenvalues, and run some truncatio
 
 ```{r, echo = FALSE}
 e <- plot_scree(prism, k = 4, kmax = 10)
-
 f <- plot_scree(cera, k = 4, kmax = 10)
-                      
 g <- plot_scree(cesm, k = 4, kmax = 10)
-
 h <- plot_scree(ccsm, k = 4, kmax = 10)
 
 e + f + g + h + plot_annotation(tag_levels = 'A')
@@ -192,67 +189,19 @@ ccsm_patterns <- get_patterns(filter(ccsm, time >= 1700), k = n_modes)
 noaa_patterns <- get_patterns(filter(noaa, between(time, 1901, 2010)), k = n_modes)
 ```
 
-```{r}
-ggplot() +
-  geom_stars(data = get_patterns(prism, k = n_modes, scale = TRUE)$eofs) +
-  facet_wrap(~PC) +
-  scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-
-
-ggplot() +
-  geom_stars(data = get_patterns(prism, k = 6, scale = TRUE, rotate = TRUE)$eofs %>% split('PC') %>% mutate(PC1 = PC1 * -1, PC2 = PC2 * -1, PC3 = PC3 * -1, PC5 = PC5 * -1, PC6 = PC6 * -1) %>% merge(name = 'PC')) +
-  facet_wrap(~PC) +
-  scale_fill_viridis_c(na.value = NA) +
-  #scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-
-ggplot() +
-  geom_stars(data = get_patterns(cera, k = n_modes, scale = TRUE)$eofs) +
-  facet_wrap(~PC) +
-  scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-
-ggplot() +
-  geom_stars(data = get_patterns(ccsm, k = n_modes, scale = TRUE)$eofs) +
-  facet_wrap(~PC) +
-  scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-
-ggplot() +
-  geom_stars(data = get_patterns(cesm, k = n_modes, scale = TRUE)$eofs) +
-  facet_wrap(~PC) +
-  scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-
-
-ggplot() +
-  geom_stars(data = get_patterns(prism_clim['tmean'], k = n_modes, scale = TRUE)$eofs) +
-  facet_wrap(~PC) +
-  scale_fill_scico(palette = 'vik', na.value = NA) +
-  geom_sf(data = states_wus, fill = NA) +
-  theme_bw()
-```
-
-
 
 ```{r, echo = FALSE}
-plot_amps(prism_patterns) + geom_hline(yintercept = 0, linetype = 2) + geom_vline(xintercept = 1997)
-plot_amps(cera_patterns) + geom_hline(yintercept = 0, linetype = 2) 
+plot_amps(prism_patterns)
+plot_amps(cera_patterns) 
 plot_amps(cesm_patterns)
 plot_amps(ccsm_patterns)
 ```
 Plot the EOFs
 ```{r}
-plot_eofs(prism_patterns, scaled = FALSE)
-plot_eofs(cera_patterns, scaled = FALSE)
-plot_eofs(cesm_patterns, scaled = FALSE)
-plot_eofs(ccsm_patterns, scaled = FALSE)
+plot_eofs(prism_patterns)
+plot_eofs(cera_patterns)
+plot_eofs(cesm_patterns)
+plot_eofs(ccsm_patterns)
 ```
 
 Visualize the leading EOFs as correlation coefficients.
@@ -285,6 +234,8 @@ scale_fill_scico(palette = 'broc', limits = c(-1, 1), name = 'Correlation', na.v
 
 (a / b / c) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
 ```
+
+
 ```{r}
 t1 <- st_crop(get_correlation(ccsm, ccsm_patterns),states_wus) %>% split %>% mutate(PC1 = PC1 * -1,
          PC2 = PC2 * -1,
@@ -403,6 +354,12 @@ ggsave('prism_teleconnections.png', prism_tele, width = 12, height = 12 * 0.618)
 
 
 ```{r}
+#ref raster in mollweide for reprojection
+ref <- geop[,,,1] %>%
+   st_transform("+proj=moll +lon_0=180 +ellps=WGS84 +datum=WGS84 +no_defs") %>%
+   st_bbox() %>%
+   st_as_stars(pretty = FALSE, dx = 50000)
+
 sst_corr <- get_correlation(st_warp(sst, dest = ref), prism_patterns) # change names
 geop_corr <- get_correlation(st_warp(geop, dest = ref), prism_patterns) # change names
 
@@ -420,151 +377,25 @@ i <- ggplot() +
      geom_sf(data = geop_sig, alpha = 0.65) +
   facet_wrap(~paste0(PC, '-Geopotential'), nrow = 1) +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
- # coord_sf(ylim = c(-75,75), expand = FALSE) +
-    #coord_sf(crs = '+proj=moll +lon_0=-150', ylim = c(-7500000, 7500000)) +
-#  labs(x = 'Longitude', y = 'Latitude') +
-  theme_void()# +
-  #theme(panel.border = element_rect(fill = NA, 
-                                #    colour = "grey20"), panel.spacing = unit(0, "lines"))
+  theme_void()
 
 j <- ggplot() +
   geom_stars(data = sst_corr) +
-    #  geom_sf(data = sst_sig, alpha = 0.65) +
+   # geom_sf(data = sst_sig, alpha = 0.65) + # not significant!
   facet_wrap(~paste0(PC, '-SST'), nrow = 1) +
   scale_fill_scico(palette = 'vikO', limits = c(-1, 1), name = 'Correlation', na.value = NA) +
   geom_sf(data = world, fill = 'grey20', color = NA) +
-   #   coord_sf(crs = '+proj=moll +lon_0=180') +
-  #coord_sf(expand = FALSE) +
   theme_void()
-  #theme(panel.border = element_rect(fill = NA, 
-   #                                colour = "grey20"), panel.spacing = unit(1, "lines"))
 
 cera_tele <- (i/j) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
 
 cera_tele
 ```
 
-
 ```{r}
 ggsave('cera_teleconnections.png', cera_tele, width = 12, height = 12 * 0.4)
 ```
 
-```{r}
-
- ref <- geop[,,,1] %>%
-   st_transform(prj) %>%
-   st_bbox() %>%
-   st_as_stars(pretty = FALSE, dx = 50000)
-
- test <- get_fdr(sst_jfm, prism_patterns)#get_fdr(prism_clim['tmean'], prism_patterns)
-test %>% st_apply('PC', adjust) %>% plot
-test %>% st_apply('PC', function(x) sum(!is.na(x)))
-  plot((test %>% st_apply('PC', adjust)) < 0.1)
-  
-  test[[1]] %>% is.na %>% `!`() %>% sum(na.rm = TRUE)
-  slice(test, 'PC', 1) %>%.[[1]] %>% is.na %>% `!`() %>% sum(na.rm = TRUE)
-# test %>% st_cast('MULTIPOINT') %>% st_transform(prj) %>% st_cast('LINESTRING') %>% plot
-# test %>%  st_transform(prj) %>% plot
-#
-# plot(test)
-# st_is_valid(test)
-# ggplot() +
-#   geom_sf(data = test ) +
-#   facet_wrap(~PC) +
-#  coord_sf(crs = prj)#"+proj=moll +lon_0=180")
-# # this works, but need a way to loop through everything.
-# ggplot() +
-#   geom_sf(data = remove_missing(st_as_sf(test, long = TRUE) )) +
-#   facet_wrap(~PC) +
-#   coord_sf(crs = prj)#"+proj=moll +lon_0=180")
-# ggplot() +
-#   geom_stars(data = st_xy2sfc(test,as_points = TRUE), downsample = c(5,5,1)) +
-#   facet_wrap(~PC) +
-#   coord_sf(crs = prj)
-#
-# st_apply(prism_clim['ppt'], 'time', function(x) sum(!is.na(x))) %>% .[[1]]
-#
-#
-#
-# test %>% plot
-#
-sst_jfm <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
-  #st_crop(st_bbox(c(xmin = -1, xmax = 359, ymin = -75, ymax = 75), crs = 4326)) %>%
-  filter(between(time, as.POSIXct('1981-09-01'), as.POSIXct('2017-03-01')),
-         format(time, '%m') %in% c('01', '02', '03')) %>%
-  aggregate(by = 'years', mean, na.rm = TRUE) %>%
-  st_set_dimensions('time', values = 1982:2017) %>%
-  aperm(c(2,3,1)) %>%
-   st_set_dimensions(names = c('x', 'y', 'time'))
-
-sst_ond <- read_ncdf('data-raw/sst.mnmean.nc', sub = 'sst') %>%
-  #st_crop(st_bbox(c(xmin = -1, xmax = 359, ymin = -75, ymax = 75), crs = 4326)) %>%
-  filter(between(time, as.POSIXct('1981-09-01'), as.POSIXct('2017-03-01')),
-         format(time, '%m') %in% c('10','11','12')) %>%
-  aggregate(by = 'years', mean, na.rm = TRUE) %>%
-  st_set_dimensions('time', values = (1981:2016) + 1) %>% # + 1 for water year
-  aperm(c(2,3,1)) %>%
-  st_set_dimensions(names = c('x', 'y', 'time'))
-
-sst_obs <- ((sst_jfm + sst_ond) / 2) %>%
-  mutate(sst = units::set_units(sst, '°C'))
-
-geop_jfm <- brick('../data-raw/adaptor.mars.internal-1584737536.594777-6445-11-8d0fcc69-bd7d-40e2-a423-cf86c741ac79.nc')[[-(1:3)]] %>%
-   stackApply(rep(1:36, each = 3), 'mean') %>%
-  aggregate(fact = 4) %>%
-  st_as_stars() %>%
-  st_set_dimensions('band', values = 1982:2017, names = 'time')
-#
-#
-#
-# ggplot() +
-#   geom_stars(data = st_warp(geop[,,,1], dest = ref, use_gdal = TRUE, method = 'bilinear'))
-# ggplot() +
-#   geom_stars(data = geop[,,,1:6]- st_apply(geop, 1:2, mean)) +
-#   scale_fill_distiller(palette = 'RdBu') +
-#   facet_wrap(~time) +
-#   coord_quickmap()
-# ggsave('test1.png')
-#
-# ggplot() +
-#   geom_stars(data = st_warp(geop[,,,1:6]- st_apply(geop, 1:2, mean), dest = ref)) +
-#   scale_fill_distiller(palette = 'RdBu', na.value = NA) +
-#   facet_wrap(~time) +
-#   coord_sf(crs = prj)
-# ggsave('test2.png')
-#
-#
-# ggplot() +
-#   geom_stars(data = st_warp(geop[,,,1:6]- st_apply(geop, 1:2, mean), dest = ref, use_gdal = TRUE, method = 'bilinear')) +
-#   scale_fill_distiller(palette = 'RdBu', na.value = NA) +
-#   facet_wrap(~band) +
-#   coord_sf(crs = prj)
-# ggsave('test3.png')
-#
-# ggplot() +
-#   geom_stars(data = test < 0.1) +
-#   facet_wrap(~PC)
-#
-# ggplot() +
-#   geom_stars(data = test2 < 0.1) +
-#   facet_wrap(~PC)
-
-```
-
-
-
-```{r}
-tele <- (e/f/i/j) + plot_layout(guides = 'collect', heights = c(1.5,1.5,1, 1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
-```
-
-```{r}
-ggsave('snow_teleconnections3.png',tele,  width = 7, height = 7)
-```
-
-
-```{r}
-ggsave('snow_teleconnections2.png', width = 10.5, height = 6, dpi = 600)
-```
 
 # Coupled Pattern Analysis
 
@@ -1219,5 +1050,10 @@ hot_years_space - filter(prism, time %in% c(1992, 1999, 2000, 2003, 2004, 2005))
 
 
 sqrt(mean(pull(hot_years_space - filter(prism, time %in% c(1992, 1999, 2000, 2003, 2004, 2005)))^2, na.rm = TRUE))
+```
+
+## Save final reconstruction.
+```{r}
+write_stars(recon_20c_space, 'swe_wus_CERA_downscaled.tif')
 ```
 
