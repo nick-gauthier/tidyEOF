@@ -28,8 +28,9 @@ plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
 }
 
 #' @export
-plot_amps <- function(patterns, scaled = TRUE) {
+plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
   if(!scaled) {
+    stopifnot(is.na(patterns$rotation)) # this won't work yet for rotated eofs
     eigs <- patterns$eigenvalues %>%
       dplyr::select(PC, std.dev) %>%
       dplyr::mutate(PC = paste0('PC', PC))
@@ -46,6 +47,7 @@ plot_amps <- function(patterns, scaled = TRUE) {
     ggplot(amps, aes(time, amplitude)) +
     geom_line() +
     geom_hline(yintercept = 0, linetype = 2) +
+    geom_vline(xintercept = events, color = 'red', lintetype = 2) +
     facet_wrap(~PC) +
     theme_bw()
 }
