@@ -21,7 +21,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
 
   amplitudes <- pca$x %>%
     .[,1:k, drop = FALSE] %>%
-    scale() %>%
+    scale() %>% # too strict? just divide by sqrt(eigenvalue)?
     {if(rotate) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'time') %>%
     mutate(time = as.numeric(time))

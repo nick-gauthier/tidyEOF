@@ -4,7 +4,7 @@
 \alias{plot_eofs}
 \title{Title}
 \usage{
-plot_eofs(patterns, scaled = TRUE, rawdata = NULL)
+plot_eofs(patterns, scaled = FALSE, rawdata = NULL)
 }
 \arguments{
 \item{normalized}{}

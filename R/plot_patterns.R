@@ -28,11 +28,24 @@ plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
 }
 
 #' @export
-plot_amps <- function(patterns) {
-  patterns$amplitudes %>%
-    pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
-    ggplot(aes(time, amplitude)) +
+plot_amps <- function(patterns, scaled = TRUE) {
+  if(!scaled) {
+    eigs <- patterns$eigenvalues %>%
+      dplyr::select(PC, std.dev) %>%
+      dplyr::mutate(PC = paste0('PC', PC))
+
+    amps <- patterns$amplitudes %>%
+      pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
+      left_join(eigs, by = 'PC') %>%
+      dplyr::mutate(amplitude = amplitude * std.dev)
+  } else {
+    amps <-  patterns$amplitudes %>%
+      pivot_longer(-time, names_to = 'PC', values_to = 'amplitude')
+  }
+
+    ggplot(amps, aes(time, amplitude)) +
     geom_line() +
+    geom_hline(yintercept = 0, linetype = 2) +
     facet_wrap(~PC) +
     theme_bw()
 }
