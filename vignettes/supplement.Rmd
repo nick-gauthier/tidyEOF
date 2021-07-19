@@ -155,29 +155,13 @@ We can decompose all this year-to-year variability into the dominant spatial mod
 Run a principal components analysis. Get the eigenvalues, and run some truncation tests. Note these are each captured on the full time span of each dataset. So 32 years for prism, 
 
 ```{r, echo = FALSE}
-e <- prism %>%
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(k = 4, kmax = 10) +
-  scale_color_brewer(palette = 'Spectral')
+e <- plot_scree(prism, k = 4, kmax = 10)
 
-f <- cera %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(k = 4, kmax = 10) +
-  scale_color_brewer(palette = 'Spectral')
+f <- plot_scree(cera, k = 4, kmax = 10)
                       
-g <- cesm %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(k = 4, kmax = 10) +
-  scale_color_brewer(palette = 'Spectral')
+g <- plot_scree(cesm, k = 4, kmax = 10)
 
-h <- ccsm %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(k = 4, kmax = 10) +
-  scale_color_brewer(palette = 'Spectral')
+h <- plot_scree(ccsm, k = 4, kmax = 10)
 
 e + f + g + h + plot_annotation(tag_levels = 'A')
 ```
@@ -187,11 +171,7 @@ ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```
 
 ```{r}
-noaa %>% 
-  get_pcs() %>%
-  get_eigenvalues() %>% 
-  plot_scree(k = 4, kmax = 10) +
-  scale_color_brewer(palette = 'Spectral')
+plot_scree(noaa, k = 4, kmax = 10)
 ```
 
 

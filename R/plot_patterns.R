@@ -40,8 +40,9 @@ plot_amps <- function(patterns) {
 }
 
 #' @export
-plot_scree <- function(eigenvalues, k, kmax = 15){
-  eigenvalues %>%
+plot_scree <- function(dat, k, kmax = 15, scale = FALSE){
+  get_pcs(dat, scale = scale) %>%
+    get_eigenvalues() %>%
     mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
            multiplet = as.factor(cumsum(separated))) %>%
     filter(PC <= kmax) %>%
@@ -53,7 +54,8 @@ plot_scree <- function(eigenvalues, k, kmax = 15){
     geom_vline(xintercept = k + .5, linetype = 2, color = 'red', alpha = .7) +
     theme_bw() +
     guides(color = 'none') +
-    scale_x_continuous(breaks = seq(0, 25, 5))
+    scale_x_continuous(breaks = seq(0, 25, 5)) +
+    scale_color_brewer(palette = 'Spectral')
 }
 #' @rdname plot_eofs
 #' @export
