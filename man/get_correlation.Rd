@@ -4,7 +4,7 @@
 \alias{get_correlation}
 \title{Calculate teleconnections between a patterns object and another layer}
 \usage{
-get_correlation(dat, patterns)
+get_correlation(dat, patterns, amplitudes = NULL)
 }
 \arguments{
 \item{patterns}{}
