@@ -8,11 +8,11 @@
 #' @export
 #'
 #' @examples
-plot_eofs <- function(patterns, scaled = TRUE, rawdata = NULL){
+plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
   if(scaled){
     ggplot() +
       geom_stars(data = get_correlation(rawdata, patterns))
-      facet_wrap(~paste0('EOF', PC)) +
+      facet_wrap(~PC) +
       scale_fill_distiller(palette = 'RdBu', na.value = NA, limits = c(-1, 1)) +
       coord_quickmap() +
       theme_void()
@@ -20,7 +20,7 @@ plot_eofs <- function(patterns, scaled = TRUE, rawdata = NULL){
     max_weight <- max(abs(patterns$eofs$weight))
     ggplot() +
       geom_stars(data = patterns$eofs) +
-      facet_wrap(~paste0('EOF', PC)) +
+      facet_wrap(~ PC) +
       scale_fill_distiller(palette = 'RdBu', na.value = NA, limits = c(-1, 1) * max_weight) +
       coord_quickmap() +
       theme_void()
