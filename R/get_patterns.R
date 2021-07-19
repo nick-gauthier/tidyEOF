@@ -22,7 +22,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
   amplitudes <- pca$x %>%
     .[,1:k, drop = FALSE] %>%
     scale() %>%
-    {if(rotate == TRUE) . %*% eofs$rotation_matrix else .} %>%
+    {if(rotate) . %*% eofs$rotation_matrix else .} %>%
     as_tibble(rownames = 'time') %>%
     mutate(time = as.numeric(time))
    # note that this object still has scale and center attributes
@@ -32,6 +32,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
        climatology = climatology,
        pca = pca,
        eigenvalues = eigenvalues,
+       rotation = if(rotate) eofs$rotation_matrix else NA,
        units = units(dat[[1]]), # only units of the 1st dataset
         names = names(dat),
        scaled = scale)
