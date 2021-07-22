@@ -31,7 +31,7 @@ predict_cca <- function(preds, obs, newdata, k) {
     `-`(preds$climatology['mean']) %>%
     {if(preds$scaled) . / preds$climatology['sd'] else .} %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
-    split('time') %>% # split along the time dimension
+    split('time') %>% # split along the time dimension # this fails when folds = 1
     setNames(new_times) %>%
     as_tibble() %>%
     dplyr::select(-c(x,y)) %>%
@@ -39,8 +39,9 @@ predict_cca <- function(preds, obs, newdata, k) {
     t() %>%
     predict(preds$pca, .) %>%
     scale(center = FALSE, scale = preds$pca$sdev) %>% # this should be from the training pcs
-    {if(!is.na(preds$rotation)) . %*% preds$rotation else .} %>%
-    .[,1:k_preds, drop = FALSE]
+    .[,1:k_preds, drop = FALSE] %>%
+    {if(is.matrix(preds$rotation)) . %*% preds$rotation else .}
+
 
   # add a check here if k <= min(k_preds, k_obs)
 

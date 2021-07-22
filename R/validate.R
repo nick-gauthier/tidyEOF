@@ -32,6 +32,8 @@ get_total <- function(dat) {
              units::set_units(Tl))
 }
 
+#make generic!
+#' @export
 fit_cv <- function(dat, fun, k, obs) {
   recon <- pmap(list(dat$train_preds, dat$train_obs, dat$test), fun, k = k) %>%
     do.call('c', .)

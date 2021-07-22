@@ -53,10 +53,10 @@ plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
 }
 
 #' @export
-plot_scree <- function(dat, k, kmax = 15, scale = FALSE){
+plot_scree <- function(dat, k, kmax = 10, scale = FALSE){
   get_pcs(dat, scale = scale) %>%
     get_eigenvalues() %>%
-    mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
+    dplyr::mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
            multiplet = as.factor(cumsum(separated))) %>%
     filter(PC <= kmax) %>%
     ggplot(aes(x = PC, y = percent * 100)) +
