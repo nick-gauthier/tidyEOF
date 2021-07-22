@@ -11,7 +11,7 @@
 plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
   if(scaled){
     ggplot() +
-      geom_stars(data = get_correlation(rawdata, patterns))
+      geom_stars(data = get_correlation(rawdata, patterns)) +
       facet_wrap(~PC) +
       scale_fill_distiller(palette = 'RdBu', na.value = NA, limits = c(-1, 1)) +
       coord_quickmap() +
