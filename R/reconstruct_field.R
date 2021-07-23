@@ -20,9 +20,9 @@ amplitudes %>%
   deframe() %>%
   map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
   do.call('c', .) %>%
-  st_apply(1:2, sum) %>%
+  stars::st_apply(1:2, sum) %>%
   merge(name = 'time') %>%
-  st_set_dimensions('time', values = amplitudes$time) %>%
+  stars::st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
   {if(target_patterns$scaled) . * target_patterns$climatology['sd'] else .} %>%
   `+`(target_patterns$climatology['mean']) %>%

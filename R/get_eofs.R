@@ -17,13 +17,14 @@
 get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
   eofs <- pca$rotation[, 1:k, drop = FALSE] %>% # drop = FALSE preserves PC names when there's only 1 PC
-      `%*%`(diag(pca$sdev, k, k)) %>% # scale by sdev (sqrt(eigenvalues)) for more robust rotation
+    `%*%`(diag(pca$sdev, k, k)) %>% # scale by sdev (sqrt(eigenvalues)) for more robust rotation
     `colnames<-`(paste0('PC', 1:k))
 
-    if(rotate == TRUE) {
+    if(rotate == TRUE & k > 1) {
       reofs <- varimax(eofs)
 
-      rotation_matrix <- reofs$rotmat %>% # save the rotation matrix for the amplitudes
+      # save the rotation matrix to use later on the amplitudes
+      rotation_matrix <- reofs$rotmat %>%
         `colnames<-`(paste0('PC', 1:k))
 
       eofs <- unclass(reofs$loadings) %>%
@@ -37,8 +38,8 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     na.omit() %>% # can introduce issues if there are entire null rows/columns
     dplyr::select(x, y) %>%
   bind_cols(as_tibble(eofs)) %>%
-    st_as_stars() %>%
-    st_set_crs(st_crs(dat)) %>%
+    stars::st_as_stars() %>%
+    sf::st_set_crs(st_crs(dat)) %>%
     mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
     merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
     .[,,,1:k] %>%

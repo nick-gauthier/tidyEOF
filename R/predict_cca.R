@@ -59,8 +59,8 @@ predict_cca <- function(preds, obs, newdata, k) {
 predict_eot <- function(cv, k) {
   pmap(list(cv$eot, cv$test, cv$mean), ~predict(..1, ..2, n = k) + ..3) %>%
     brick() %>%
-    st_as_stars() %>%
-    st_set_dimensions('band', names = 'time') %>%
+    stars::st_as_stars() %>%
+    stars::st_set_dimensions('band', names = 'time') %>%
     transmute(value = units::set_units(layer.1.1, mm))
 }
 

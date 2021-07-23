@@ -20,7 +20,7 @@ prep_folds <- function(times, kfolds = 5){
 }
 
 #' @export
-prep_cca <- function(preds, obs, k_preds, k_obs, kfolds = 5, scaled = FALSE) {
+prep_cca <- function(preds, obs, k_preds, k_obs, kfolds = 5, scale = FALSE, rotate = FALSE) {
   # find the years of overlap between the response and predictor fields
   time_steps <- intersect(st_get_dimension_values(preds, 'time'),
                           st_get_dimension_values(obs, 'time'))
@@ -30,16 +30,17 @@ prep_cca <- function(preds, obs, k_preds, k_obs, kfolds = 5, scaled = FALSE) {
 
   # preprocess the training data for each fold
   train_obs <- purrr::map(folds, ~ filter(obs, !(time %in% .))  %>%
-                            get_patterns(k = k_obs, scale = scaled))
+                            get_patterns(k = k_obs, scale = scale, rotate = rotate))
 
   train_preds <- purrr::map(folds, ~ filter(preds, !(time %in% .)) %>%
-                              get_patterns(k = k_preds, scale = scaled))
+                              get_patterns(k = k_preds, scale = scale, rotate = rotate))
 
   # preprocess test data for each fold
   test <- purrr::map(folds, ~ filter(preds, time %in% .))
 
   tibble(train_obs, train_preds, test)
 }
+
 
 #' @export
 prep_eot <- function(preds, obs, k_preds, k_obs, k_cca){
