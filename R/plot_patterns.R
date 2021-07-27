@@ -47,7 +47,7 @@ plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
     ggplot(amps, aes(time, amplitude)) +
     geom_line() +
     geom_hline(yintercept = 0, linetype = 2) +
-    geom_vline(xintercept = events, color = 'red', lintetype = 2) +
+    geom_vline(xintercept = events, color = 'red', linetype = 2) +
     facet_wrap(~PC) +
     theme_bw()
 }
