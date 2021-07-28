@@ -30,10 +30,11 @@ plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
 #' @export
 plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
   if(!scaled) {
-    stopifnot(is.na(patterns$rotation)) # this won't work yet for rotated eofs
-    eigs <- patterns$eigenvalues %>%
-      dplyr::select(PC, std.dev) %>%
-      dplyr::mutate(PC = paste0('PC', PC))
+    eigs <- split(patterns$eofs) %>%
+      as_tibble() %>%
+      # get the sqrt of sum of squared loadings (works even if rotated)
+      dplyr::summarise(across(starts_with('PC'), ~sqrt(sum(.x^2)))) %>%
+      pivot_longer(everything(), names_to = 'PC', values_to = 'std.dev')
 
     amps <- patterns$amplitudes %>%
       pivot_longer(-time, names_to = 'PC', values_to = 'amplitude') %>%
