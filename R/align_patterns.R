@@ -1,38 +1,59 @@
 
-align_patterns <- function(patterns, ref) {
+#' Title
+#'
+#' @param patterns
+#'
+#' @return
+#' @export
+#'
+#' @examples
+align_patterns <- function(patterns) {
+  sums <- split(patterns$eofs) %>%
+    as_tibble() %>%
+    dplyr::summarise(across(starts_with('PC'), ~sign(sum(.x)))) %>%
+    unlist()
 
+    patterns$eofs <-  sweep(patterns$eofs, MARGIN = 3, STATS = sums, FUN = "*")
+
+
+    patterns$amplitudes <- patterns$amplitudes %>%
+      select(-time) %>%
+      sweep(MARGIN = 2, STATS = sums, FUN = '*') %>%
+      bind_cols(time = patterns$amplitudes$time, .)
+
+    return(patterns)
 }
 
-congruence <- function(x, y) {
-  # could check that both have the save dimensions
-  t1 <- as_tibble(x$eofs) %>%
-    pivot_wider(names_from = PC, values_from = weight) %>%
-    select(-x, -y) %>%
-    remove_missing() # not ideal but . . .
-
-  t2 <- as_tibble(y$eofs) %>%
-    pivot_wider(names_from = PC, values_from = weight) %>%
-    select(-x, -y) %>%
-    remove_missing()
-
-  psych::factor.congruence(t1, t2)
-}
-
-align <- function(x, y) {
-  t1 <- as_tibble(x$eofs) %>%
-    pivot_wider(names_from = PC, values_from = weight) %>%
-    select(-x, -y) %>%
-    remove_missing()
-
-  t2 <- as_tibble(y$eofs) %>%
-    pivot_wider(names_from = PC, values_from = weight) %>%
-    select(-x, -y) %>%
-    remove_missing()
-
-  vegan::procrustes(as.matrix(t1), as.matrix(t2), scale = FALSE)
-
-  #psych::factor.congruence(t1, t2)
-}
+# congruence <- function(x, y) {
+#   # could check that both have the save dimensions
+#   t1 <- as_tibble(x$eofs) %>%
+#     pivot_wider(names_from = PC, values_from = weight) %>%
+#     select(-x, -y) %>%
+#     remove_missing() # not ideal but . . .
+#
+#   t2 <- as_tibble(y$eofs) %>%
+#     pivot_wider(names_from = PC, values_from = weight) %>%
+#     select(-x, -y) %>%
+#     remove_missing()
+#
+#   psych::factor.congruence(t1, t2)
+# }
+#
+# align <- function(x, y) {
+#   t1 <- as_tibble(x$eofs) %>%
+#     pivot_wider(names_from = PC, values_from = weight) %>%
+#     select(-x, -y) %>%
+#     remove_missing()
+#
+#   t2 <- as_tibble(y$eofs) %>%
+#     pivot_wider(names_from = PC, values_from = weight) %>%
+#     select(-x, -y) %>%
+#     remove_missing()
+#
+#   vegan::procrustes(as.matrix(t1), as.matrix(t2), scale = FALSE)
+#
+#   #psych::factor.congruence(t1, t2)
+# }
 
 # congruence(ccsm_patterns_mon, era_patterns_mon) %>%
 #   as_tibble(rownames = 'ref') %>%
