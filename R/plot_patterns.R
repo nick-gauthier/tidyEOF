@@ -33,7 +33,7 @@ plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
     eigs <- split(patterns$eofs) %>%
       as_tibble() %>%
       # get the sqrt of sum of squared loadings (works even if rotated)
-      dplyr::summarise(across(starts_with('PC'), ~sqrt(sum(.x^2)))) %>%
+      dplyr::summarise(across(starts_with('PC'), ~sqrt(sum(.x^2, na.rm = TRUE)))) %>%
       pivot_longer(everything(), names_to = 'PC', values_to = 'std.dev')
 
     amps <- patterns$amplitudes %>%
