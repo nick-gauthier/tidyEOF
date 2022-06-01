@@ -18,10 +18,16 @@ get_climatology <- function(dat, fun = mean, monthly = FALSE) {
       aperm(c(2,3,1)) %>% # aggregate puts time dimension first
       st_set_dimensions('geometry', names = 'month')
   } else {
-    new <- st_apply(dat, 1:2, fun, na.rm = TRUE)
+    new <- st_apply(dat, 1:2, fun, na.rm = TRUE, rename = FALSE)
   }
-  # restore units that were stripped by st_apply
-  purrr::modify2(new, dat, ~units::set_units(.x, units(.y), mode = 'standard'))
+
+  if(any(map_lgl(dat, inherits, 'units'))) { # do any of the attr. have units?
+    # if so, restore units
+   new <- purrr::modify2(new, dat, ~units::set_units(.x, units(.y), mode = 'standard')) %>%
+     setNames(names(new)) %>%
+    st_as_stars(dimensions = st_dimensions(new))
+  }
+  return(new)
 }
 
 #' @export
