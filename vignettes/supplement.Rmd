@@ -1,7 +1,6 @@
 ---
-title: "Downscaling snowpack variability in western North America"
-subtitle: "Models and Observations"
-author: "Nick Gauthier"
+title: "R code for: 'Pattern-based downscaling of snowpack variability in the western United States'"
+author: "Nicolas Gauthier"
 date: "Last knit on: `r Sys.Date()`"
 output:
   tufte::tufte_html: default
@@ -14,7 +13,7 @@ output:
 link-citations: yes
 ---
 
-Downscaling snow water equivalent 
+Downscaling snow water equivalent in the western US.
 
 # Introduction
 
@@ -28,9 +27,10 @@ knitr::opts_chunk$set(fig.width = 6, fig.asp = 0.618)
 library(remote) # empirical orthogonal teleconnections
 library(tidyverse) # data manipulation and visualization
 library(mgcv) # flexible nonlinear regression models
-library(modelr)
-library(MuMIn)
-library(stars)
+library(modelr) # tidy modeling
+library(MuMIn) # mutli-model inference
+library(stars) # tidy spatio-temporal arrays
+library(R.matlab) # import SNOTEL data in Matlab format
 
 # plotting
 library(sf) # shapefiles and plotting
@@ -459,7 +459,7 @@ cv_gam <- expand_grid(kx = 1:10, ky = 1:10) %>%
 
 ```{r}
 cv_delta_mul <- prep_delta(cera_raw, prism) %>%
-   fit_cv(fun = delta, k = NULL, obs = prism) # poor performance because of multiplicative anomalies
+   fit_cv(fun = delta_mul, k = NULL, obs = prism) # poor performance because of multiplicative anomalies
 
 cv_delta_add <- prep_delta(cera_raw, prism) %>%
    fit_cv(fun = delta_add, k = NULL, obs = prism)
@@ -655,11 +655,26 @@ cera_baseline <- get_total(cera)
 
 recon_series <- get_total(recon_20c_time)
 
+#cera_baseline_ensemble <- map_dfr(1:10, ~slice(cera_ensemble, 'run', .) %>% 
+ #                                   get_total, .id = 'run') %>% 
+#  group_by(time) %>% 
+ # summarise(SWE.min = min(SWE), SWE.max = max(SWE))
+
+
+#recon_series_ensemble <- map_dfr(1:10, ~slice(cera_ensemble, 'run', .) %>% predict_cca(get_patterns(filter(., time >= 1982), 5), 
+ #           get_patterns(filter(prism, time <= 2010), 8), 
+#            .,
+#            k = 5) %>% get_total(), .id = 'run') %>%
+ #   group_by(time) %>% summarise(SWE.min = min(SWE), SWE.max = max(SWE))
+
+
 ccsm_series <- predict_cca(get_patterns(filter(cera, time >= 1982), 5), 
             get_patterns(filter(prism, time <= 2010), 8), 
             ccsm %>% filter(time >= 1700),
             k = 5) %>%
   get_total()
+
+
 
 ccsm_series_raw <- get_total(ccsm) %>% filter(time >= 1700)
 
@@ -745,18 +760,26 @@ bind_rows(cesm_series,
 ```{r fig.width=6.5}
 recon_series %>%
   ggplot(aes(time, as.numeric(SWE))) +
-    geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
-  geom_line(size = 1.1, aes(color = 'black')) +
+ # geom_line(data = cera_baseline_ensemble, aes(group = run, color = 'grey'), alpha = .3) +
+  #  geom_line(data = recon_series_ensemble, aes(group = run, color = 'black'), alpha = .3) +
+ geom_ribbon(data = cera_baseline_ensemble, aes(y = NA_real_, ymin = as.numeric(SWE.min), ymax = as.numeric(SWE.max), fill = 'grey'), alpha = .3) +
+    geom_ribbon(data = recon_series_ensemble, aes(y = NA_real_, ymin = as.numeric(SWE.min), ymax = as.numeric(SWE.max),  fill = 'black'), alpha = .3) +
+      geom_line(data = cera_baseline, aes(color = 'grey'), size = 1.1) +
+    geom_line(size = 1.1, aes(color = 'black')) +
   geom_line(data = wus_stats, aes(color = 'red'), size = 1.1, alpha = .7) +
   #uncomment to see delta approach
   #  geom_line(data = delta_baseline, aes(color = 'black'), size = 1.1, alpha = .7, linetype = 2) +
-  geom_line(data = noaa_series, color = 'orange') +
-    geom_line(data = noaa_baseline, color = 'blue') +
+ # geom_line(data = noaa_series, color = 'orange') +
+#    geom_line(data = noaa_baseline, color = 'blue') +
   #    geom_line(data = noaa_series_test, color = 'green') +
   scale_color_identity(name = NULL,
                           breaks = c("red", "grey", "black"),
                           labels = c("Observations", 'Reanalysis', 'Downscaled Reanalysis'),
                           guide = "legend") +
+    scale_fill_identity(name = NULL,
+                          breaks = c("red", "grey", "black"),
+                          labels = c("Observations", 'Reanalysis', 'Downscaled Reanalysis'),
+                          guide = "none") +
   labs(x = 'Year', y = 'Total SWE (TL)') +
   theme_bw() +
   theme(legend.position = 'bottom')
@@ -1051,6 +1074,368 @@ hot_years_space - filter(prism, time %in% c(1992, 1999, 2000, 2003, 2004, 2005))
 
 sqrt(mean(pull(hot_years_space - filter(prism, time %in% c(1992, 1999, 2000, 2003, 2004, 2005)))^2, na.rm = TRUE))
 ```
+
+## Comparison to SNOTEL data.
+
+What are these data . . . are they march mean or april 1st.
+```{r}
+mat <- readMat('../../snow-wna/data/snow.mat')
+
+site_dat <- mat$snow[c(2:6,10),1,1] %>% 
+  map_dfc(unlist) %>%
+  mutate(id = str_sub(id, 1, -2),
+         HUC = str_sub(HUC, 1, -2)) %>%
+  bind_cols(map_dfc(mat$snow[7:9,1,1], c)) %>%
+  st_as_sf(coords = c('lon', 'lat'), crs = 4326)
+plot(site_dat)
+
+years <- c(mat$snow[[11,1,1]])
+
+swe <- mat$snow[[1,1,1]][,-1597]  # the last column is a blank duplicated one
+#swe[is.nan(swe)] <- NA
+
+swe_dat <- swe %>% 
+  `rownames<-`(years) %>% 
+ # `colnames<-`(site_dat$name) %>%
+  t() %>%
+  as_tibble() %>%
+  bind_cols(select(site_dat, geometry), .) %>%
+  st_as_stars() %>%
+  merge(name = 'time') %>%
+  setNames('swe') %>%
+  st_set_dimensions('time', values = parse_number(st_get_dimension_values(., 'time'))) %>% 
+  filter(time >= 1910)
+```
+
+So there needs to be more dat cleaning . . . maybe some of the sites are overlapping and/or from a different network? ... yes it looks like there are 41 overlaps? or 103. wait. so there is the correct number of of unique site ids, but 103 fewer unique site names. ok got it. so some are names repeated at multiple sites with common names like bear basin. other are snow course snotel sites at the same location . . . look into this
+
+```{r}
+length(unique(site_dat$id)) == length(unique(site_dat$name))
+length(unique(site_dat$id)) - length(unique(site_dat$name))
+
+duplicate_names <- site_dat %>% st_drop_geometry %>% count(name) %>% filter(n > 1) %>% pull(name)
+site_dat %>% filter(name %in% duplicate_names) %>% arrange(name)
+```
+
+```{r}
+st_apply(swe_dat, 'geometry', function(x) all(is.na(x)), .fname = 'all_na') %>% 
+  st_as_sf() %>%
+  st_join(site_dat, join = st_equals_exact, par = .0000000001) %>% plot
+
+site_dat
+```
+
+
+
+Compare the raw SNOTEL and snow course data to the PRISM-based UA-SWE product.
+```{r}
+st_extract(prism, site_dat) %>% 
+  filter(between(time, 1982, 2015)) %>%
+  c(filter(swe_dat, between(time, 1982, 2015))) %>%
+  as_tibble() %>%
+  units::drop_units() %>%
+  ggplot(aes(SWE,swe)) +
+  geom_point(alpha = .1) +
+  geom_abline(color = 'red')
+```
+```{r}
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>%
+  units::drop_units() %>%
+  ggplot(aes(SWE,swe)) +
+  geom_point() +
+  geom_abline(color = 'red')
+```
+```{r}
+# when internet is available, google how do do this the stars way!
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>% 
+  st_apply('geometry', function(x) cor(x['SWE'], x['swe'], use = 'pairwise.complete.obs'))# %>% plot
+  mutate(SWE = units::drop_units(SWE)) %>%
+  st_apply('geometry', function(x) cor(x[1], x[2], use = 'pairwise.complete.obs'), .fname = 'cor', rename = TRUE) #%>%
+  plot
+  summarise(cor = cor(SWE, swe, use = 'complete.obs'))
+  ggplot(aes(SWE,swe)) +
+  geom_point() +
+  geom_abline(color = 'red')
+```
+```{r}
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(cor = cor(units::drop_units(SWE), swe, use = 'pairwise.complete.obs')) %>%
+  arrange(cor) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = cor)) +
+  scale_color_viridis_c() +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+```
+
+```{r}
+# this is delta method
+delta_add(filter(cera_raw, between(time, 1982, 2010)), 
+      filter(prism, between(time, 1982, 2010)),
+      cera_raw) %>%
+  st_extract(site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(cor = cor(units::drop_units(SWE), swe, use = 'pairwise.complete.obs')) %>%
+  arrange(cor) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = cor)) +
+  scale_color_viridis_c() +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+# we're getting some negative correlations here!so its important to compare to the baseline
+```
+```{r}
+left_join(
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(cor = cor(units::drop_units(SWE), swe, use = 'pairwise.complete.obs'), .groups = 'drop') ,
+
+delta_add(filter(cera_raw, between(time, 1982, 2010)), 
+      filter(prism, between(time, 1982, 2010)),
+      cera_raw) %>%
+  st_extract(site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(cor = cor(units::drop_units(SWE), swe, use = 'pairwise.complete.obs'), .groups = 'drop'),
+by = c('x', 'y')) %>%
+  mutate(test = cor.x - cor.y) %>% # there are 6 cases where the delta method is negatively correlated with the observations!, and none where the cca version is, so its ok to do this simple difference
+    arrange(abs(test)) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = test)) +
+  scale_color_viridis_c(option = 'magma', limits = c(-0.8, 0.8)) +
+  #scale_color_scico(palette = 'vik', limits = c(-0.8, 0.8)) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+# so ccamostly improves the correlations relative to the delta baseline, although not everywhere! is there something that seems to make a difference?
+```
+
+```{r}
+# so now do rmse
+
+left_join(
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+
+delta_add(filter(cera_raw, between(time, 1982, 2010)), 
+      filter(prism, between(time, 1982, 2010)),
+      cera_raw) %>%
+  st_extract(site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+by = c('x', 'y')) %>%
+  mutate(test = rmse.x - rmse.y) %>% # there are 6 cases where the delta method is negatively correlated with the observations!, and none where the cca version is, so its ok to do this simple difference
+    arrange(abs(test)) %>%
+  remove_missing() %>% 
+  ggplot() +
+  geom_point(aes(x, y, color = test)) +
+  scale_color_scico(palette = 'vik', limits = c(-204, 204), name = 'RMSE\nDifference') +
+  #scale_color_viridis_c(direction = -1, limits = c(-203.1, 0)) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+```
+```{r}
+ggsave('snotel_rmse.png', height = 6 * 0.618, width = 6, dpi = 300)
+```
+
+
+```{r}
+
+st_extract(prism, site_dat) %>% 
+  filter(between(time, 1982, 2010)) %>%
+  c(filter(swe_dat, between(time, 1982, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') %>%
+    arrange(rmse) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = rmse)) +
+  scale_color_viridis_c() +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1982, 2010)) %>%
+  c(filter(swe_dat, between(time, 1982, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') %>%
+    arrange(rmse) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = rmse)) +
+  scale_color_viridis_c() +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+
+left_join(
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1982, 2010)) %>%
+  c(filter(swe_dat, between(time, 1982, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+
+ st_extract(prism, site_dat) %>% 
+  filter(between(time, 1982, 2010)) %>%
+  c(filter(swe_dat, between(time, 1982, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+by = c('x', 'y')) %>%
+  mutate(test = rmse.x - rmse.y) %>% # there are 6 cases where the delta method is negatively correlated with the observations!, and none where the cca version is, so its ok to do this simple difference
+    arrange(abs(test)) %>%
+  remove_missing() %>%
+  ggplot() +
+  geom_point(aes(x, y, color = test)) +
+  scale_color_distiller(palette = 'RdBu', limits = c(-100, 100)) +
+  geom_sf(data = states_wus, fill = NA) +
+  theme_void()
+# this says that in almost all cases the rmse of the recon is more than the prism data -- but we know that because thats the nature of the modeling! . . . i suppose another analysis would minimize the rmse in the snotel measurements?
+```
+```{r}
+# number of non null observations over time
+swe_dat %>% st_as_sf %>% st_drop_geometry() %>%is.na %>% `!`(.) %>% colSums() %>% qplot(x = 1910:2015, y = ., geom = 'point')
+```
+```{r}
+swe %>% 
+  `rownames<-`(years) %>% 
+ # `colnames<-`(site_dat$name) %>%
+ # t() %>%
+  as_tibble(rownames = 'time') %>%
+  bind_cols(select(site_dat, geometry), .) %>%
+  st_as_stars() %>%
+  merge(name = 'time') %>%
+  setNames('swe') %>%
+  st_set_dimensions('time', values = parse_number(st_get_dimension_values(., 'time'))) %>% 
+  filter(time >= 1910)
+```
+```{r}
+
+left_join(
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+
+delta_add(filter(cera_raw, between(time, 1982, 2010)), 
+      filter(prism, between(time, 1982, 2010)),
+      cera_raw) %>%
+  st_extract(site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  group_by(x,y) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+by = c('x', 'y')) %>%
+  pivot_longer(-c(x, y)) %>%
+  ggplot() +
+  geom_density(aes(value, fill = name), alpha = .5) +
+  scale_x_log10()
+
+# no site level aggregation now -- why error?
+left_join(
+st_extract(recon_20c_space, site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+
+delta_add(filter(cera_raw, between(time, 1982, 2010)), 
+      filter(prism, between(time, 1982, 2010)),
+      cera_raw) %>%
+  st_extract(site_dat) %>% 
+  filter(between(time, 1910, 2010)) %>%
+  c(filter(swe_dat, between(time, 1910, 2010))) %>%
+  as_tibble() %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  select(-geometry) %>%
+  summarise(rmse = sqrt(mean((units::drop_units(SWE) - swe)^2, na.rm = TRUE)) , .groups = 'drop') ,
+by = c('x', 'y')) %>%
+  pivot_longer(-c(x, y)) %>%
+  ggplot() +
+  geom_density(aes(value, fill = name), alpha = .5) +
+  scale_x_log10()
+```
+
+
+```{r}
+all_na <- st_apply(swe_dat, 'geometry', function(x) all(is.na(x)), .fname = 'all_na')
+all_na %>% st_as_sf() %>% count(all_na)
+ggplot() +
+  geom_sf(data = st_as_sf(all_na), aes(color = swe)) +
+  scale_color_viridis_d() +
+  geom_sf(data = states_wus, fill = NA)
+```
+
 
 ## Save final reconstruction.
 ```{r}
