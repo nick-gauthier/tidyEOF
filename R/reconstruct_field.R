@@ -18,7 +18,7 @@ amplitudes %>%
   mutate(PCs = list(c_across(-time)), .keep = 'unused') %>%
   ungroup() %>%
   deframe() %>%
-  map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
+  purrr::map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
   do.call('c', .) %>%
   stars::st_apply(1:2, sum) %>%
   merge(name = 'time') %>%

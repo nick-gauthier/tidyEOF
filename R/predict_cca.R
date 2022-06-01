@@ -92,7 +92,7 @@ predict_gam <- function(preds, obs, newdata, k) {
     as_tibble(rownames = 'time')
 
 
-  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
+  purrr::map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
     bind_rows(.id = 'PC') %>%
     dplyr::select(time, PC, amplitude) %>%
     mutate(time = as.numeric(time)) %>%
@@ -128,7 +128,7 @@ predict_pcr <- function(preds, obs, newdata, k) {
     .[,1:k_preds, drop = FALSE] %>%
     as_tibble(rownames = 'time')
 
-  map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
+  purrr::map(mod$mod, ~add_predictions(new_pcs, ., var = 'amplitude', type = 'response')) %>%
     bind_rows(.id = 'PC') %>%
     dplyr::select(time, PC, amplitude) %>%
     mutate(time = as.numeric(time)) %>%
