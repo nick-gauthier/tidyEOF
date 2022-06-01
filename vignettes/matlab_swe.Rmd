@@ -1,0 +1,113 @@
+---
+title: "reading matlab"
+author: "Nick Gauthier"
+date: "9/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(R.matlab)
+library(tidyverse)
+library(sf)
+```
+
+```{r}
+mat <- readMat('../../snow-wna/data/snow.mat')
+```
+
+
+```{r}
+mat
+```
+
+```{r}
+mat$snow
+```
+
+```{r}
+mat$snow %>% dim
+```
+```{r}
+115 * 1597
+```
+
+
+```{r}
+mat$snow[1,1,1]$X %>% as.matrix %>% as_tibble %>% mutate(time = 1:n()) %>%pivot_longer(-time) %>%
+  ggplot(aes(time, value, group = name)) +
+  geom_line(alpha = .1)
+```
+```{r}
+mat$snow[[1,1,1]] %>% as_tibble
+mat$snow[[7,1,1]]  %>% c
+```
+```{r}
+mat$snow[[]] %>% as
+```
+
+```{r}
+mat$snow[7:9,1,1] %>% map_dfc(c)
+```
+```{r}
+dat <- mat$snow[c(2:6,10),1,1] %>% map_dfc(unlist) %>%
+  mutate(id = str_sub(id, 1, -2),
+         HUC = str_sub(HUC, 1, -2)) %>%
+  bind_cols(map_dfc(mat$snow[7:9,1,1], c)) %>%
+  st_as_sf(coords = c('lon', 'lat'), crs = 4326)
+plot(dat)
+```
+```{r}
+years <- c(mat$snow[[11,1,1]])
+```
+
+```{r}
+swe <- mat$snow[[1,1,1]][,-1597]  # the last column is a blank duplicated one
+swe[is.nan(swe)] <- NA
+
+
+swe_dat <- swe %>% 
+  `rownames<-`(years) %>% 
+  `colnames<-`(dat$name) %>%
+  as_tibble(rownames = 'year') %>%
+  mutate(year = as.numeric(year)) 
+```
+
+```{r}
+colSums(swe, na.rm = TRUE)
+```
+
+```{r}
+swe %>% t %>% duplicated
+swe_dat %>% select(where(function(x){sum(x, na.rm = TRUE) != 0})) %>%
+  select(-year) %>%
+  t %>% 
+  duplicated() %>%
+  sum
+```
+```{r}
+swe[,-1597]
+```
+
+## Clusters
+
+load the cluster excel file
+```{r}
+library(readxl)
+
+map_dfr(1:3, ~read_excel('../../snow-wna/Cluster_memberships.xlsx', sheet = .), .id = 'cluster')
+```
+so A) it looks like these clusters are for the tree ring data not the snow course data (duh, I guess) and b) the tree ring data don't have the raw site names attached. I'll have to try joining by coordinates.
+
+```{r}
+clusters <- map_dfr(1:3, ~read_excel('../../snow-wna/Cluster_memberships.xlsx', sheet = .), .id = 'cluster')
+
+clusters
+```
+
+so the above duplicated several rows, which means that there are rows in the clusters that have multiple matches in the coords
+
+```{r}
+dat
+```
+

@@ -1,0 +1,60 @@
+---
+title: "eraland"
+author: "Nick Gauthier"
+date: "8/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+era <- read_stars('~/Downloads/adaptor.mars.internal-1629233192.6501245-10484-5-39d92d1e-a87d-4901-a3d4-fe5345899e28.nc') %>%
+  setNames('SWE') %>%
+  mutate(SWE = units::set_units(SWE, m) %>% units::set_units(mm)) %>%
+  st_set_crs(4326) %>%
+  st_crop(states_wus) %>%
+  st_set_dimensions('time', values = as.numeric(lubridate::year(st_get_dimension_values(., 'time')))) %>%
+  filter(between(time, 1982, 2017))
+
+plot(era[,,,10])
+plot(prism[,,,8])
+```
+
+```{r}
+plot_scree(era, k = 4)
+era_pat <- get_patterns(era)
+plot_eofs(era_pat, scaled = TRUE, era)
+```
+```{r}
+plot_amps(era_pat)
+plot_amps(get_patterns(prism))
+```
+
+
+```{r}
+plot_eofs(get_patterns(prism), scaled = TRUE, prism)
+```
+```{r}
+plot(get_climatology(era));plot(get_climatology(prism))
+```
+
+
+```{r}
+ggplot() + geom_stars(data = (st_warp(era, prism) - prism))
+
+ggplot() + geom_stars(data = get_climatology((st_warp(era, prism, use_gdal = TRUE, method = 'bilinear'))) - get_climatology(prism)) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-1209, 1209), na.value = NA, direction= 1) +
+  coord_quickmap() +
+  theme_bw() +
+  ggtitle('Mean March SWE bias (mm)',  'ERA-Land - UA SWE')
+ggplot() + geom_stars(data = ((st_warp(era, prism))) - (prism)) +
+  scale_fill_distiller(palette = 'RdBu', limits = c(-2427, 2427), na.value = NA, direction= 1) +
+  coord_quickmap() +
+  facet_wrap(~time) +
+  theme_bw() +
+  ggtitle('Mean March SWE bias (mm)',  'ERA-Land - UA SWE')
+
+```
+
