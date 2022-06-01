@@ -86,6 +86,23 @@ cera <- (cera_raw * cera_mask) %>%
   st_crop(states_wus) %>%
   .[,2:23,2:18]
 
+# this verison is the full ensemble ... could compress with above
+cera_ensemble <- read_ncdf('data-raw/CERA-20c_snow.nc', var = 'sd') %>%
+  `*`(1000) %>% # convert from m water equivalent to mm
+  setNames('SWE') %>%
+  st_set_dimensions('time', values = 1901:2010, names = 'time') %>%
+  `*`(land_frac) %>%
+  `*`(cera_mask) %>%
+  st_crop(states_wus) %>%
+  .[,2:23,2:18] %>%
+  aperm(c(1,2,4,3)) %>%
+  st_set_dimensions(names = c('x', 'y', 'time', 'run')) %>%
+  mutate(SWE = units::set_units(SWE, mm))
+
+#test <- st_apply(cera_ensemble, c('x', 'y', 'time'), mean) %>%
+#  setNames('SWE') %>%
+#  mutate(SWE = units::set_units(SWE, mm))
+
 # cesm
 cesm_h2osno <- preprocess('data-raw/b.e11.BLMTRC5CN.f19_g16.001.clm2.h0.H2OSNO.085001-184912.nc',
                           var = 'H2OSNO',
