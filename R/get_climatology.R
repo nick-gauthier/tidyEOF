@@ -1,6 +1,7 @@
 #' Get annual or monthly climatologies, or rescale a grid using climatologies
 #'
 #' @param dat Input data.
+#' @param fun Function to calculate climatologies. Defaults to mean, but can also be sd.
 #' @param monthly Calculate mean and standard deviation for each month instead
 #' of the entire period? Defaults to FALSE.
 #'
@@ -11,35 +12,34 @@
 #' @export
 #'
 #' @examples
-get_climatology <- function(dat, monthly = FALSE) {
-
+get_climatology <- function(dat, fun = mean, monthly = FALSE) {
   if(monthly) {
-
-    mon_mean <- aggregate(dat, by_months, mean) %>%
+    new <- aggregate(dat, by_months, fun) %>%
       aperm(c(2,3,1)) %>% # aggregate puts time dimension first
-      st_set_dimensions('geometry', names = 'month') # bug(?) in stars names new time dimension "geometery"
-
-    mon_sd <- aggregate(dat, by_months, sd) %>%
-      aperm(c(2,3,1)) %>%
       st_set_dimensions('geometry', names = 'month')
-
-    c(mon_mean, mon_sd) %>%
-      setNames(c('mean', 'sd'))
   } else {
-    # unit <- units(dat[[1]])
-    c(st_apply(dat, 1:2, mean, na.rm = TRUE),
-      st_apply(dat, 1:2, sd, na.rm = TRUE)) #%>%
-    # only works if there's one attribute
-    # mutate(mean = units::set_units(mean, unit, mode = 'standard'),
-    #       sd = units::set_units(sd, unit, mode = 'standard'))
-
+    new <- st_apply(dat, 1:2, fun, na.rm = TRUE)
   }
+  # restore units that were stripped by st_apply
+  purrr::modify2(new, dat, ~units::set_units(.x, units(.y), mode = 'standard'))
 }
 
 #' @export
-get_anomalies <- function(dat, monthly = TRUE) {
-
-}
+# get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
+#   if(is.null(clim)) clim <- get_climatology(dat, monthly = monthly)
+#
+#   if(monthly) { # what if the months don't start with january or are uneven? does this still work?
+#     if(scale) {
+#       purrr::map(1:12, ~(filter(dat, lubridate::month(time) == .x) - filter(clim['mean'], month == .x)) / filter(clim['sd'], month == .x))
+#     } else {
+#       purrr::map(1:12, ~filter(dat, lubridate::month(time) == .x) - filter(clim['mean'], month == .x))
+#     }
+#
+#   } else {
+#     out <- dat  -  clim['mean']  # center the field
+#     if(scale) return(out / clim['sd']) else return(out)  ## scale the field (optional)
+#   }
+# }
 
 # convenience function for monthly aggregation, based on example in aggregate.stars
 by_months = function(x) {
@@ -48,5 +48,7 @@ by_months = function(x) {
 
 
 
-test <- read_ncdf('data-raw/sst.mnmean.nc')
-get_climatology(test[,,,1:100], monthly = TRUE)['sd'] %>% plot
+
+
+
+
