@@ -21,7 +21,7 @@ get_climatology <- function(dat, fun = mean, monthly = FALSE) {
     new <- st_apply(dat, 1:2, fun, na.rm = TRUE, rename = FALSE)
   }
 
-  if(any(map_lgl(dat, inherits, 'units'))) { # do any of the attr. have units?
+  if(any(purrr::map_lgl(dat, inherits, 'units'))) { # do any of the attr. have units?
     # if so, restore units
    new <- purrr::modify2(new, dat, ~units::set_units(.x, units(.y), mode = 'standard')) %>%
      setNames(names(new)) %>%
