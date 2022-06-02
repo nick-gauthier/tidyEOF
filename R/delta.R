@@ -9,33 +9,29 @@
 #' @export
 #'
 #' @examples
-delta_mul <- function(pred, obs, newdata = NULL, k = NULL) { # k is just aplaceholder
+delta_mul <- function(pred, obs, newdata = NULL, k = NULL, monthly = FALSE) { # k is just a placeholder
   if(is.null(newdata)) newdata <- pred
-  pred_clim <- get_climatology(pred)
-  obs_clim <- get_climatology(obs)
+  pred_clim <- get_climatology(pred, monthly = monthly)
+  obs_clim <- get_climatology(obs, monthly = monthly)
 
-  (newdata / pred_clim['mean']) %>%
+  (newdata / pred_clim) %>%
     st_warp(slice(obs, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
     setNames(names(newdata)) %>%
     mutate(across(everything(), ~units::set_units(.x, units(newdata[[1]]), mode = 'standard'))) %>%
     st_set_dimensions('band', values = st_get_dimension_values(newdata, 'time'), names = 'time') %>%
-    `*`(obs_clim['mean'])
+    `*`(obs_clim)
 }
 
 #' @export
-delta_add <- function(pred, obs, newdata = NULL, k = NULL) { # k is just aplaceholder
+delta_add <- function(pred, obs, newdata = NULL, k = NULL, monthly = NULL) {
   if(is.null(newdata)) newdata <- pred
-  pred_clim <- get_climatology(pred)
-  obs_clim <- get_climatology(obs)
+  pred_clim <- get_climatology(pred, monthly = monthly)
+  obs_clim <- get_climatology(obs, monthly = monthly)
 
-  # simplify units here!
-  (units::drop_units(newdata) - pred_clim['mean']) %>%
+  (newdata - pred_clim) %>%
     st_warp(slice(obs, 'time', 1), use_gdal = TRUE, method = 'bilinear') %>%
     setNames(names(newdata)) %>%
     mutate(across(everything(), ~units::set_units(.x, units(newdata[[1]]), mode = 'standard'))) %>%
     st_set_dimensions('band', values = st_get_dimension_values(newdata, 'time'), names = 'time') %>%
-    units::drop_units() %>%
-    `+`(obs_clim['mean']) %>%
-    # make varname generic!
-    mutate(SWE = units::set_units(if_else(SWE < 0, 0, SWE), mm))
+    `+`(obs_clim)
 }
