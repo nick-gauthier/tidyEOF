@@ -37,4 +37,6 @@ test_that('get_climatology() returns correct format', {
 })
 
 test_that("get_climatology() works", {
+  # random test that february averages are calculate correctly, could do more here
+  expect_equal(st_apply(prism[,,,c(2, 14, 26)], 1:2, mean, .fname = 'tmean'), abind::adrop(clim_mon_nounits[,,,2]))
 })
