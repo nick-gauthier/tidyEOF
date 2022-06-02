@@ -34,18 +34,25 @@ get_climatology <- function(dat, fun = mean, monthly = FALSE) {
 
 #' @export
 get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
-  if(is.null(clim)) clim <- get_climatology(dat, monthly = monthly)
+  if(is.null(clim)) { # but if clim is not null then it needs to be a list?
+    clim_mn <- get_climatology(dat, mean, monthly = monthly)
+    if(scale) clim_sd <- get_climatology(dat, sd, monthly = monthly)
+  }
 
   if(monthly) { # what if the months don't start with january or are uneven? does this still work?
     if(scale) {
-      purrr::map(1:12, ~(filter(dat, lubridate::month(time) == .x) - filter(clim['mean'], month == .x)) / filter(clim['sd'], month == .x))
+      purrr::map(1:12,
+                 ~(filter(dat, lubridate::month(time) == .x) - adrop(filter(clim_mn, month == month.name[[.x]]))) /
+                   filter(clim_sd, month == .x)) %>%
+        do.call(c, .)
     } else {
-      purrr::map(1:12, ~filter(dat, lubridate::month(time) == .x) - filter(clim['mean'], month == .x))
+      purrr::map(1:12, ~filter(dat, lubridate::month(time) == .x) - adrop(filter(clim_mn, month == month.name[.x]))) %>%
+        do.call(c, .)
     }
 
   } else {
-    out <- dat - clim['mean']  # center the field
-    if(scale) return(out / clim['sd']) else return(out)  ## scale the field (optional)
+    out <- dat - clim_mn  # center the field
+    if(scale) return(out / clim_sd) else return(out)  ## scale the field (optional)
   }
 }
 
@@ -53,10 +60,3 @@ get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
 by_months = function(x) {
   lubridate::month(x, label = TRUE, abbr = FALSE)
 }
-
-
-
-
-
-
-
