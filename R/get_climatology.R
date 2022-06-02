@@ -5,7 +5,7 @@
 #' @param monthly Calculate mean and standard deviation for each month instead
 #' of the entire period? Defaults to FALSE.
 #'
-#' Based on the `climatology()` and `localScaling()` functions from transformeR.
+#' Based on the `climatology()` and `scaleGrid()` functions from transformeR.
 #' These functions apply calculations per gridcell.
 #'
 #' @return
@@ -34,26 +34,23 @@ get_climatology <- function(dat, fun = mean, monthly = FALSE) {
 
 #' @export
 get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
+
   if(is.null(clim)) { # but if clim is not null then it needs to be a list?
     clim_mn <- get_climatology(dat, mean, monthly = monthly)
     if(scale) clim_sd <- get_climatology(dat, sd, monthly = monthly)
   }
 
   if(monthly) { # what if the months don't start with january or are uneven? does this still work?
+    out <- sweep_months(dat, clim_mn, '-')
     if(scale) {
-      purrr::map(1:12,
-                 ~(filter(dat, lubridate::month(time) == .x) - adrop(filter(clim_mn, month == month.name[[.x]]))) /
-                   filter(clim_sd, month == .x)) %>%
-        do.call(c, .)
-    } else {
-      purrr::map(1:12, ~filter(dat, lubridate::month(time) == .x) - adrop(filter(clim_mn, month == month.name[.x]))) %>%
-        do.call(c, .)
+      out <- sweep_months(out, clim_sd, '/')
     }
 
   } else {
     out <- dat - clim_mn  # center the field
-    if(scale) return(out / clim_sd) else return(out)  ## scale the field (optional)
+    if(scale) out <- out / clim_sd  ## scale the field (optional)
   }
+  return(out)
 }
 
 # convenience function for monthly aggregation, based on example in aggregate.stars

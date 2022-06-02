@@ -13,9 +13,16 @@ delta_mul <- function(pred, obs, newdata = NULL, monthly = FALSE) {
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
 
+  if(monthly) {
+    sweep_months(newdata, pred_clim, '/') %>%
+      delta_interp(obs, newdata) %>%
+      sweep_months(obs_clim, '*')
+  } else {
+
   (newdata / pred_clim) %>%
     delta_interp(obs, newdata) %>%
     `*`(obs_clim)
+  }
 }
 
 #' @export
@@ -24,10 +31,25 @@ delta_add <- function(pred, obs, newdata = NULL, monthly = FALSE) {
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
 
-  (newdata - pred_clim) %>%
-    delta_interp(obs, newdata) %>%
-    `+`(obs_clim)
+  if(monthly) {
+    sweep_months(newdata, pred_clim, '-') %>%
+      delta_interp(obs, newdata) %>%
+      sweep_months(obs_clim, '+')
+  } else {
+    (newdata - pred_clim) %>%
+      delta_interp(obs, newdata) %>%
+      `+`(obs_clim)
+  }
+
 }
+
+# convenience functions for sweeping monthly summary statistics.
+sweep_months <- function(e1, e2, FUN) {
+  FUN <- match.fun(FUN)
+  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), adrop(filter(e2, month == month.name[.x])))) %>%
+    do.call(c, .)
+}
+
 
 #convenience function to interpolate to a higher grid and restore units and dimensions
 delta_interp <- function(anom, obs, newdata) {
