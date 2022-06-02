@@ -3,13 +3,12 @@
 #' @param pred
 #' @param obs
 #' @param newdata
-#' @param k A placeholder, must be NULL.
 #'
 #' @return
 #' @export
 #'
 #' @examples
-delta_mul <- function(pred, obs, newdata = NULL, k = NULL, monthly = FALSE) { # k is just a placeholder
+delta_mul <- function(pred, obs, newdata = NULL, monthly = FALSE) {
   if(is.null(newdata)) newdata <- pred
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
@@ -23,7 +22,7 @@ delta_mul <- function(pred, obs, newdata = NULL, k = NULL, monthly = FALSE) { # 
 }
 
 #' @export
-delta_add <- function(pred, obs, newdata = NULL, k = NULL, monthly = NULL) {
+delta_add <- function(pred, obs, newdata = NULL, monthly = NULL) {
   if(is.null(newdata)) newdata <- pred
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
