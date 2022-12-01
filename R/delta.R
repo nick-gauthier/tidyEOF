@@ -10,6 +10,7 @@
 #' @examples
 delta_mul <- function(pred, obs, newdata = NULL, monthly = FALSE) {
   if(is.null(newdata)) newdata <- pred
+
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
 
@@ -18,7 +19,6 @@ delta_mul <- function(pred, obs, newdata = NULL, monthly = FALSE) {
       delta_interp(obs, newdata) %>%
       sweep_months(obs_clim, '*')
   } else {
-
   (newdata / pred_clim) %>%
     delta_interp(obs, newdata) %>%
     `*`(obs_clim)
@@ -28,6 +28,7 @@ delta_mul <- function(pred, obs, newdata = NULL, monthly = FALSE) {
 #' @export
 delta_add <- function(pred, obs, newdata = NULL, monthly = FALSE) {
   if(is.null(newdata)) newdata <- pred
+
   pred_clim <- get_climatology(pred, monthly = monthly)
   obs_clim <- get_climatology(obs, monthly = monthly)
 
@@ -41,13 +42,6 @@ delta_add <- function(pred, obs, newdata = NULL, monthly = FALSE) {
       `+`(obs_clim)
   }
 
-}
-
-# convenience functions for sweeping monthly summary statistics.
-sweep_months <- function(e1, e2, FUN) {
-  FUN <- match.fun(FUN)
-  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), adrop(filter(e2, month == month.name[.x])))) %>%
-    do.call(c, .)
 }
 
 
