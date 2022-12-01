@@ -24,11 +24,15 @@ amplitudes %>%
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
-  {if(target_patterns$scaled) . * target_patterns$climatology['sd'] else .} %>%
-  `+`(target_patterns$climatology['mean']) %>%
+  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) %>%
+  {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
+  `+`(slice(target_patterns$climatology, 'var', 1)) %>%
+  units::drop_units() %>% # hacky doing this twice . . .
   {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
   mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
 }
 
 
-
+# this doesn't respect monthly inputs yet! need something like this . . .
+#sweep_months(newdata, slice(target_patterns$climatology, 'var', 2), '*') %>%
+#  sweep_months(slice(target_patterns$climatology, 'var', 1), '+')

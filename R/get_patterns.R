@@ -10,10 +10,10 @@
 #'
 #' @examples
 #'
-get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
+get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE){
 
-  climatology <- get_climatology(dat)
-  pca <- get_pcs(dat, scale = scale, clim = climatology)
+  climatology <- get_climatology(dat, monthly = monthly)
+  pca <- get_pcs(dat, scale = scale, clim = climatology, monthly = monthly)
   eigenvalues <- get_eigenvalues(pca)
   eofs <- get_eofs(dat, pca, k, rotate)
 
@@ -34,8 +34,9 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
        eigenvalues = eigenvalues,
        rotation = if(rotate & k > 1) eofs$rotation_matrix else NA,
        units = units(dat[[1]]), # only units of the 1st dataset
-        names = names(dat),
-       scaled = scale)
+       names = names(dat),
+       scaled = scale,
+       monthly = monthly)
 
   class(patterns) <- 'patterns'
   return(patterns)
