@@ -17,14 +17,14 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
   eigenvalues <- get_eigenvalues(pca)
   eofs <- get_eofs(dat, pca, k, rotate)
 
-  times <- st_get_dimension_values(dat, 3)
+  times <- st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
 
   amplitudes <- pca$x %>%
     .[,1:k, drop = FALSE] %>%
     scale() %>% # too strict? just divide by sqrt(eigenvalue)?
     {if(rotate & k > 1) . %*% eofs$rotation_matrix else .} %>%
-    as_tibble(rownames = 'time') %>%
-    mutate(time = as.numeric(time))
+    as_tibble() %>%
+    mutate(time = times, .before = 1)
    # note that this object still has scale and center attributes
 
   patterns <- list(eofs = eofs$eofs,
