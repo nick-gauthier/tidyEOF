@@ -30,14 +30,16 @@ get_climatology <- function(dat, monthly = FALSE) {
     new_sd <- st_apply(dat, 1:2, FUN = sd, na.rm = TRUE, rename = FALSE)
   }
 
-  new <- c(mean = new_mn, stdev = new_sd, along = 'var')
+  new <- c(mean = new_mn, stdev = new_sd, along = 'var') %>%
+    mutate()
+   #for some reason c.stars(,, along = 'var') drops dimnames from the underlying array, mutate restores them
 
   if (any(purrr::map_lgl(dat, inherits, 'units'))) {
     # do any of the attr. have units? if so, restore units
-    new <-
-      purrr::modify2(new, dat, ~ units::set_units(.x, units(.y), mode = 'standard')) %>%
-      setNames(names(new)) %>%
-      st_as_stars(dimensions = st_dimensions(new))
+    new <-  mutate(new, across(everything(),
+                               ~units::set_units(.x, units(dat[[1]]),
+                                                               mode = 'standard')))
+
   }
 
   return(new)
