@@ -24,7 +24,8 @@ anomalies <- amplitudes %>%
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
-  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
+  {if(!target_patterns$scaled) mutate(., across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) else .}
+  # if scaled is false, then we just add units below so it needs units, otherwise not. is it worth it to keep units at all?
 
 if(target_patterns$monthly) {
   final <- anomalies %>%
