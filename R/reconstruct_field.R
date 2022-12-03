@@ -13,7 +13,7 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE)
   # check (ncol(amplitudes) - 1) == number of PCs in eofs?
   # check margin 3 is time?
 
-amplitudes %>%
+anomalies <- amplitudes %>%
   rowwise() %>%
   mutate(PCs = list(c_across(-time)), .keep = 'unused') %>%
   ungroup() %>%
@@ -24,15 +24,22 @@ amplitudes %>%
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', values = amplitudes$time) %>%
   setNames(target_patterns$names) %>%
-  mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) %>%
-  {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
-  `+`(slice(target_patterns$climatology, 'var', 1)) %>%
-  units::drop_units() %>% # hacky doing this twice . . .
-  {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
   mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
+
+if(target_patterns$monthly) {
+  anomalies %>%
+    {if(target_patterns$scaled) sweep_months(., slice(target_patterns$climatology, 'var', 2), '*') else . } %>%
+      sweep_months(slice(target_patterns$climatology, 'var', 1), '+') %>%
+    units::drop_units() %>% # hacky doing this twice . . .
+    {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
+    mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) # replace with modify2 for multiple variables?
+} else {
+  anomalies %>%
+    {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
+    `+`(slice(target_patterns$climatology, 'var', 1)) %>%
+    units::drop_units() %>% # hacky doing this twice . . .
+    {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
+    mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
 }
 
-
-# this doesn't respect monthly inputs yet! need something like this . . .
-#sweep_months(newdata, slice(target_patterns$climatology, 'var', 2), '*') %>%
-#  sweep_months(slice(target_patterns$climatology, 'var', 1), '+')
+}
