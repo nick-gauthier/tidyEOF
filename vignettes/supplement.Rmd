@@ -42,8 +42,6 @@ library(smoothr) # smooth contours on maps
 # this package
 devtools::load_all()
 
-sf_use_s2(TRUE) # use s2 spherical geometry
-
 load('../R/sysdata.rda')
 ```
  
@@ -53,26 +51,26 @@ First plot March SWE climatology from observations and reanalysis data. We immed
 
 ```{r, fig.width = 7, fig.asp = .7, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
 a <- ggplot() +
-  geom_stars(data = get_climatology(prism)) +
+  geom_stars(data = get_climatology(prism)[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)') +
   labs(x = 'Longitude', y = 'Latitude') +
   theme_bw()
 
 b <- ggplot() +
-  geom_stars(data = get_climatology(filter(cera, time > 1980))) +
+  geom_stars(data = get_climatology(filter(cera, time > 1980))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
   theme_void()
 
 c <- ggplot() +
-  geom_stars(data = get_climatology(filter(cesm, time > 1980))) +
+  geom_stars(data = get_climatology(filter(cesm, time > 1980))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
   theme_void() 
 
 d <- ggplot() +
-  geom_stars(data = get_climatology(filter(ccsm, time > 1980))) +
+  geom_stars(data = get_climatology(filter(ccsm, time > 1980))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +
   theme_void() 
@@ -83,7 +81,7 @@ d <- ggplot() +
 
 ```{r}
 e <- ggplot() +
-  geom_stars(data = get_climatology(filter(noaa, between( time, 1980, 2010)))) +
+  geom_stars(data = get_climatology(filter(noaa, between(time, 1980, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
   scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 343)) +  theme_void()  + ggtitle('NOAA-20C', 'Mean March SWE, 1980-2010')
 
@@ -93,42 +91,43 @@ ggsave('noaa_cera_comparison_space.png', height = 4, width = 6)
 
 ```{r, fig.width = 7, fig.asp = .7, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
 a <- ggplot() +
-  geom_stars(data = get_climatology(filter(prism, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(prism, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)') +
   labs(x = 'Longitude', y = 'Latitude') +
 theme_void()
 
 b <- ggplot() +
-  geom_stars(data = get_climatology(filter(cera, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(cera, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 333)) +
   theme_void()
 
 c <- ggplot() +
-  geom_stars(data = get_climatology(filter(ccsm, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(ccsm, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_distiller(palette = 'Blues', direction = 1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 333)) +
   theme_void() 
 
 (a + (b / c + plot_layout(guides = 'collect') )) + plot_layout( widths = c(1.5,1)) +  plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')& theme(legend.position = 'bottom')
 ```
+
 ```{r, fig.width = 7, fig.asp = .7, echo = FALSE, fig.cap="A) Mean March SWE from PRISM/SNOTEL observations, 1982-2017. B) Mean March SWE from CERA-20C Reanalysis, 1901-2010."}
 a <- ggplot() +
-  geom_stars(data = get_climatology(filter(prism, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(prism, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_scico(palette = 'davos', direction = -1, na.value = NA, name = 'SWE\n(mm)') +
   labs(x = 'Longitude', y = 'Latitude') +
 theme_void()
 
 b <- ggplot() +
-  geom_stars(data = get_climatology(filter(cera, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(cera, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_scico(palette = 'davos', direction = -1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 333)) +
   theme_void()
 
 c <- ggplot() +
-  geom_stars(data = get_climatology(filter(ccsm, between(time, 1982, 2010)))) +
+  geom_stars(data = get_climatology(filter(ccsm, between(time, 1982, 2010)))[,,,1]) +
   geom_sf(data = states_wus, fill = NA, color = 'black') +
    scale_fill_scico(palette = 'davos', direction = -1, na.value = NA, name = 'SWE\n(mm)', limits = c(0, 333)) +
   theme_void() 
@@ -139,7 +138,6 @@ c <- ggplot() +
 ```{r}
 ggsave('swe_comparison.png', width = 7, height = .7 * 7, dpi = 600)
 ```
-
 
 Next we'll look at how SWE has varied over time and space.
 
@@ -170,7 +168,6 @@ ggsave('eigenvalues.png', width = 8, height = 3.2)
 ```{r}
 plot_scree(noaa, k = 4, kmax = 10)
 ```
-
 
 ## EOFs
 
