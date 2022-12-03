@@ -27,19 +27,16 @@ anomalies <- amplitudes %>%
   mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
 
 if(target_patterns$monthly) {
-  anomalies %>%
+  final <- anomalies %>%
     {if(target_patterns$scaled) sweep_months(., slice(target_patterns$climatology, 'var', 2), '*') else . } %>%
-      sweep_months(slice(target_patterns$climatology, 'var', 1), '+') %>%
+      sweep_months(slice(target_patterns$climatology, 'var', 1), '+')
+} else {
+  final <- anomalies %>%
+    {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
+    `+`(slice(target_patterns$climatology, 'var', 1))
+}
+  final %>%
     units::drop_units() %>% # hacky doing this twice . . .
     {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
     mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) # replace with modify2 for multiple variables?
-} else {
-  anomalies %>%
-    {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
-    `+`(slice(target_patterns$climatology, 'var', 1)) %>%
-    units::drop_units() %>% # hacky doing this twice . . .
-    {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
-    mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard')))
-}
-
 }
