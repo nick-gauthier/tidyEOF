@@ -74,6 +74,7 @@ by_months = function(x) {
 # convenience functions for sweeping monthly summary statistics.
 sweep_months <- function(e1, e2, FUN) {
   FUN <- match.fun(FUN)
-  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), abind::adrop(filter(e2, month == month.name[.x])))) %>%
-    do.call(c, .)
+  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), stars::adrop(filter(e2, month == month.name[.x])))) %>%
+    do.call(c, .) %>%
+    slice(., 'time', order(time(.))) # reshuffle so months/years in right order
 }
