@@ -10,7 +10,7 @@
 #'
 #' @examples
 predict_cca <- function(preds, obs, newdata, k) {
-  #c should heck if both preds and obs are both scaled/rotated and fail if not
+  #should check if both preds and obs are both scaled/rotated and fail if not
   obs_amps <- obs$amplitudes %>%
     select(-time) %>%
     as.matrix()
@@ -27,9 +27,8 @@ predict_cca <- function(preds, obs, newdata, k) {
 
   # get PCs from newdata
   new_pcs <- newdata %>%
+    get_anomalies(preds$climatology, scale = preds$scaled, monthly = preds$monthly) %>%
     units::drop_units() %>%
-    `-`(preds$climatology['mean']) %>%
-    {if(preds$scaled) . / preds$climatology['sd'] else .} %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension # this fails when folds = 1
     setNames(new_times) %>%
@@ -77,8 +76,8 @@ predict_gam <- function(preds, obs, newdata, k) {
     fit_model()
 
   new_pcs <- newdata %>%
+    get_anomalies(preds$climatology, scale = FALSE, monthly = preds$monthly) %>% # should this scale too?
     units::drop_units() %>%
-    `-`(preds$climatology['mean']) %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(new_times) %>%
@@ -115,7 +114,7 @@ predict_pcr <- function(preds, obs, newdata, k) {
 
   new_pcs <- newdata %>%
     units::drop_units() %>%
-    `-`(preds$climatology['mean']) %>%
+    get_anomalies(preds$clmatology, monthly = preds$monthly) %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(new_times) %>%

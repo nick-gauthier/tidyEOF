@@ -45,20 +45,20 @@ get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
     select(-time)
 
   suppressWarnings( # suppress warnings that sd is zero
-   fdr_rast <- filter(dat, time %in% times_cor) %>%
+    fdr_rast <- filter(dat, time %in% times_cor) %>%
       st_apply(c('x', 'y'), fdr_fun, amps = amps, .fname = 'PC') %>%
-     aperm(c(2,3,1)) %>%
+      aperm(c(2,3,1)) %>%
       st_apply('PC', adjust) %>%
-    setNames('FDR')
+      setNames('FDR')
   )
 
-fdr_rast %>%
- st_get_dimension_values('PC') %>%
-seq_along() %>%
-map(~slice(fdr_rast, 'PC', .x) %>%
-      st_contour(contour_lines = TRUE, breaks = fdr) %>%
-      transmute(PC = paste0('PC', .x))) %>%
-do.call(rbind, .)
+  fdr_rast %>%
+    st_get_dimension_values('PC') %>%
+    seq_along() %>%
+    map(~slice(fdr_rast, 'PC', .x) %>%
+          st_contour(contour_lines = TRUE, breaks = fdr) %>%
+          transmute(PC = paste0('PC', .x))) %>%
+    do.call(rbind, .)
 }
 
 fdr_fun <- function(x, amps) {

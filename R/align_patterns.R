@@ -15,7 +15,6 @@ align_patterns <- function(patterns) {
 
     patterns$eofs <-  sweep(patterns$eofs, MARGIN = 3, STATS = sums, FUN = "*")
 
-
     patterns$amplitudes <- patterns$amplitudes %>%
       select(-time) %>%
       sweep(MARGIN = 2, STATS = sums, FUN = '*') %>%

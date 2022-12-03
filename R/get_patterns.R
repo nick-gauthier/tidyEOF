@@ -10,21 +10,21 @@
 #'
 #' @examples
 #'
-get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
+get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE){
 
-  climatology <- get_climatology(dat)
-  pca <- get_pcs(dat, scale = scale, clim = climatology)
+  climatology <- get_climatology(dat, monthly = monthly)
+  pca <- get_pcs(dat, scale = scale, clim = climatology, monthly = monthly)
   eigenvalues <- get_eigenvalues(pca)
   eofs <- get_eofs(dat, pca, k, rotate)
 
-  times <- st_get_dimension_values(dat, 3)
+  times <- st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
 
   amplitudes <- pca$x %>%
     .[,1:k, drop = FALSE] %>%
     scale() %>% # too strict? just divide by sqrt(eigenvalue)?
     {if(rotate & k > 1) . %*% eofs$rotation_matrix else .} %>%
-    as_tibble(rownames = 'time') %>%
-    mutate(time = as.numeric(time))
+    as_tibble() %>%
+    mutate(time = times, .before = 1)
    # note that this object still has scale and center attributes
 
   patterns <- list(eofs = eofs$eofs,
@@ -34,29 +34,10 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE){
        eigenvalues = eigenvalues,
        rotation = if(rotate & k > 1) eofs$rotation_matrix else NA,
        units = units(dat[[1]]), # only units of the 1st dataset
-        names = names(dat),
-       scaled = scale)
+       names = names(dat),
+       scaled = scale,
+       monthly = monthly)
 
   class(patterns) <- 'patterns'
   return(patterns)
 }
-
-#' @export
-get_climatology <- function(dat) {
-
- # unit <- units(dat[[1]])
-  c(st_apply(dat, 1:2, mean, na.rm = TRUE),
-    st_apply(dat, 1:2, sd, na.rm = TRUE)) #%>%
-    # only works if there's one attribute
-  # mutate(mean = units::set_units(mean, unit, mode = 'standard'),
-   #       sd = units::set_units(sd, unit, mode = 'standard'))
-}
-
-# combine these?
-#get_anomalies <- function(dat, scale = FALSE) {
-#  dat %>%
-#    dplyr::group_by(x,y) %>%
-#    dplyr::mutate(SWE = SWE - mean(SWE)) %>% # anomalize before weighting
-#   {if(scale) dplyr::mutate(., SWE = SWE / sd(SWE)) else .} %>%
-#    dplyr::ungroup()
-#}

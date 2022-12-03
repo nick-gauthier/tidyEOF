@@ -9,15 +9,10 @@
 #'
 #' @examples
 
-get_pcs <- function(dat, scale = FALSE, clim = NULL) {
-
-  # get climatologies if not supplied
-  if(is.null(clim)) clim <- get_climatology(dat)
+get_pcs <- function(dat, scale = FALSE, clim = NULL, monthly = FALSE) {
 
   dat %>%
-    units::drop_units() %>%
-    {. -  clim['mean']} %>% # center the field
-    {if(scale) . /  clim['sd'] else .} %>% # scale the field (optional)
+    get_anomalies(clim = clim, scale = scale, monthly = monthly) %>%
     area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(st_get_dimension_values(dat, 'time')) %>%
