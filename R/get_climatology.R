@@ -48,9 +48,7 @@ get_climatology <- function(dat, monthly = FALSE) {
 #' @export
 get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
 
-  if(is.null(clim)) {
-    clim <- get_climatology(dat, monthly = monthly)
-  }
+  if(is.null(clim)) clim <- get_climatology(dat, monthly = monthly)
 
   mn <- slice(clim, 'var', 1) # using slice instead of filter here because filter resets offset
   stdev <- slice(clim, 'var', 2)
@@ -76,6 +74,6 @@ by_months = function(x) {
 # convenience functions for sweeping monthly summary statistics.
 sweep_months <- function(e1, e2, FUN) {
   FUN <- match.fun(FUN)
-  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), adrop(filter(e2, month == month.name[.x])))) %>%
+  purrr::map(1:12, ~ FUN(filter(e1, lubridate::month(time) == .x), abind::adrop(filter(e2, month == month.name[.x])))) %>%
     do.call(c, .)
 }

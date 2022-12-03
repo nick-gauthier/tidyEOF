@@ -3,7 +3,7 @@ Type: Package
 Title: Tidy Empirical Orthogonal Functions and Spatial Downscaling
 Version: 0.1.0
 Author: Nicolas Gauthier
-Maintainer: Nicolas Gauthier <ngauthier@arizona.edu>
+Maintainer: Nicolas Gauthier <nicolas.gauthier@ufl.edu>
 Description: An R package for conducting empirical orthogonal function (EOF) analysis in the tidyverse framework. Functions to isolate modes of variability from spatiotemporal data, run various diagnostics, and use these patterns for spatial downscaling.
 License: mit
 Encoding: UTF-8

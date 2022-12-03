@@ -17,7 +17,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
   eigenvalues <- get_eigenvalues(pca)
   eofs <- get_eofs(dat, pca, k, rotate)
 
-  times <- st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
+  times <- stars::st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
 
   amplitudes <- pca$x %>%
     .[,1:k, drop = FALSE] %>%

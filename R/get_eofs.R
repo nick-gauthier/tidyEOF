@@ -29,6 +29,7 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
       eofs <- unclass(reofs$loadings) %>%
         `colnames<-`(paste0('PC', 1:k))
+
     } else {
       rotation_matrix <- NULL
     }
@@ -39,7 +40,7 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     dplyr::select(x, y) %>%
   bind_cols(as_tibble(eofs)) %>%
     stars::st_as_stars() %>%
-    sf::st_set_crs(st_crs(dat)) %>%
+    sf::st_set_crs(sf::st_crs(dat)) %>%
     mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
     merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
     .[,,,1:k] %>%
