@@ -13,31 +13,32 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE)
   # check (ncol(amplitudes) - 1) == number of PCs in eofs?
   # check margin 3 is time?
 
-anomalies <- amplitudes %>%
-  rowwise() %>%
-  mutate(PCs = list(c_across(-time)), .keep = 'unused') %>%
-  ungroup() %>%
-  deframe() %>%
-  purrr::map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
-  do.call('c', .) %>%
-  stars::st_apply(1:2, sum) %>%
-  merge(name = 'time') %>%
-  stars::st_set_dimensions('time', values = amplitudes$time) %>%
-  setNames(target_patterns$names) %>%
-  {if(!target_patterns$scaled) mutate(., across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) else .}
-  # if scaled is false, then we just add units below so it needs units, otherwise not. is it worth it to keep units at all?
+  target_mean <- slice(target_patterns$climatology, 'var', 1) %>%
+    units::drop_units()
+  target_sd <- slice(target_patterns$climatology, 'var', 2) %>%
+    units::drop_units()
 
-if(target_patterns$monthly) {
-  final <- anomalies %>%
-    {if(target_patterns$scaled) sweep_months(., slice(target_patterns$climatology, 'var', 2), '*') else . } %>%
-      sweep_months(slice(target_patterns$climatology, 'var', 1), '+')
-} else {
-  final <- anomalies %>%
-    {if(target_patterns$scaled) . * slice(target_patterns$climatology, 'var', 2) else .} %>%
-    `+`(slice(target_patterns$climatology, 'var', 1))
-}
+  anomalies <- amplitudes %>%
+    rowwise() %>%
+    mutate(PCs = list(c_across(-time)), .keep = 'unused') %>%
+    ungroup() %>%
+    deframe() %>%
+    purrr::map(~sweep(target_patterns$eofs, MARGIN = 3, STATS = .x, FUN = "*")) %>%
+    do.call('c', .) %>%
+    stars::st_apply(1:2, sum) %>%
+    merge(name = 'time') %>%
+    stars::st_set_dimensions('time', values = amplitudes$time) %>%
+    setNames(target_patterns$names)
+
+  if(target_patterns$monthly) {
+      if(target_patterns$scaled) anomalies <- sweep_months(anomalies, target_sd, '*')
+      final <- sweep_months(anomalies, target_mean, '+')
+    } else {
+      if(target_patterns$scaled) anomalies <- anomalies * target_sd
+      final <- anomalies + target_mean
+    }
+
   final %>%
-    units::drop_units() %>% # hacky doing this twice . . .
     {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
     mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) # replace with modify2 for multiple variables?
 }
