@@ -36,8 +36,16 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
        units = units(dat[[1]]), # only units of the 1st dataset
        names = names(dat),
        scaled = scale,
-       monthly = monthly)
+       monthly = monthly,
+       rotate = rotate,
+       k = k)
 
   class(patterns) <- 'patterns'
   return(patterns)
+}
+
+print.patterns <- function(obj) {
+  print(paste0('A patterns object with k = ', obj$k, ', scale = ', obj$scale,
+               ', monthly = ', obj$monthly, ', and rotate = ', obj$rotate))
+  print(obj$eofs)
 }
