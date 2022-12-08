@@ -44,6 +44,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
   return(patterns)
 }
 
+#' @export
 print.patterns <- function(obj) {
   print(paste0('A patterns object with k = ', obj$k, ', scale = ', obj$scale,
                ', monthly = ', obj$monthly, ', and rotate = ', obj$rotate))
