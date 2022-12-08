@@ -9,11 +9,12 @@
 #'
 #' @examples
 
-get_pcs <- function(dat, scale = FALSE, clim = NULL, monthly = FALSE) {
+get_pcs <- function(dat, scale = FALSE, clim = NULL, monthly = FALSE, weight = TRUE) {
+
+  if(weight) dat <- dat * lat_weights(dat) # weight by sqrt cosine latitude, in radians
 
   dat %>%
     get_anomalies(clim = clim, scale = scale, monthly = monthly) %>%
-    area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension
     setNames(st_get_dimension_values(dat, 'time')) %>%
     as_tibble() %>%
@@ -23,13 +24,12 @@ get_pcs <- function(dat, scale = FALSE, clim = NULL, monthly = FALSE) {
     prcomp(center = FALSE)
 }
 
-
-area_weight <- function(dat) {
-  st_dim_to_attr(dat, which = 2) %>% # get the y coordinates # this is brittle!
-    `*`(pi / 180) %>% # convert to radians
-    cos() %>% # cosine weighting
-    sqrt() %>% # sqrt so the covariance matrix is weighted by cosine latitude
-    `*`(dat, .)
+#' @export
+lat_weights <- function(dat) {
+  lats <- st_dim_to_attr(dat, which = 2) # get the y coordinates -- this is brittle if not in x, y, time order
+    # convert to radians then apply cosine weighting
+    # sqrt so the covariance matrix is weighted by cosine latitude
+  sqrt(cos(lats * pi / 180))
 }
 
 #' @export

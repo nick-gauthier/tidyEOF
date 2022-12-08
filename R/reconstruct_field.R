@@ -38,7 +38,9 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE)
       final <- anomalies + target_mean
     }
 
+  if(target_patterns$weight) final <- final / lat_weights(final)
+  if(nonneg) final <- mutate(final, across(everything(), ~if_else(.x < 0, 0, .x)))
+
   final %>%
-    {if(nonneg) mutate(., across(everything(), ~if_else(.x < 0, 0, .x))) else .} %>%
     mutate(across(everything(), ~units::set_units(.x, target_patterns$units, mode = 'standard'))) # replace with modify2 for multiple variables?
 }
