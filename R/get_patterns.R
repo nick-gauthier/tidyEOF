@@ -20,12 +20,11 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
   times <- stars::st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
 
   amplitudes <- pca$x %>%
+    sweep(2, pca$sdev, '/') %>%
     .[,1:k, drop = FALSE] %>%
-    scale() %>% # too strict? just divide by sqrt(eigenvalue)?
     {if(rotate & k > 1) . %*% eofs$rotation_matrix else .} %>%
     as_tibble() %>%
     mutate(time = times, .before = 1)
-   # note that this object still has scale and center attributes
 
   patterns <- list(eofs = eofs$eofs,
        amplitudes = amplitudes,
