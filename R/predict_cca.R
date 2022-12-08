@@ -18,7 +18,7 @@ predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
     select(-time) %>%
     as.matrix()
 
-  new_times <-  st_get_dimension_values(newdata, 'time')
+  new_times <- st_get_dimension_values(newdata, 'time')
 
   k_preds <- ncol(preds_amps)
 
@@ -31,7 +31,6 @@ predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
   new_pcs <- newdata %>%
     get_anomalies(preds$climatology, scale = preds$scaled, monthly = preds$monthly) %>%
     units::drop_units() %>%
-    area_weight() %>% # weight by sqrt cosine latitude, in radians
     split('time') %>% # split along the time dimension # this fails when folds = 1
     setNames(new_times) %>%
     as_tibble() %>%
@@ -51,10 +50,9 @@ predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
     cca$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
     diag(cca$cor, nrow = k) %*%  # nrow likewise prevents weird behavior when k = 1
     solve(cca$ycoef)[1:k,,drop = FALSE] %>%
-    `rownames<-`(new_times) %>%
-    as_tibble(rownames = 'time') %>%
-    mutate(time = as.numeric(time)) %>%
-    reconstruct_field(obs, amplitudes = .)
+    as_tibble() %>%
+    mutate(time = new_times, .before = 1) %>%
+    reconstruct_field(obs, amplitudes = ., nonneg = FALSE) # better nonneg handling needed!
 }
 
 predict_eot <- function(cv, k) {
