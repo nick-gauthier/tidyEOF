@@ -9,7 +9,7 @@
 #' @export
 #'
 #' @examples
-predict_cca <- function(preds, obs, newdata, k) {
+predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
   #should check if both preds and obs are both scaled/rotated and fail if not
   obs_amps <- obs$amplitudes %>%
     select(-time) %>%
@@ -24,6 +24,8 @@ predict_cca <- function(preds, obs, newdata, k) {
 
   # train CCA on training data
   cca <- cancor(preds_amps, obs_amps, xcenter = FALSE, ycenter = FALSE)
+
+  if(preds$weight) newdata <- newdata * lat_weights(newdata) # weight by sqrt cosine latitude, in radians
 
   # get PCs from newdata
   new_pcs <- newdata %>%
