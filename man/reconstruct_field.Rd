@@ -9,9 +9,6 @@ reconstruct_field(target_patterns, amplitudes = NULL, nonneg = TRUE)
 \arguments{
 \item{amplitudes}{}
 }
-\value{
-
-}
 \description{
 Title
 }

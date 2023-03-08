@@ -4,13 +4,10 @@
 \alias{get_pcs}
 \title{Calculate principal components}
 \usage{
-get_pcs(dat, scale = FALSE, clim = NULL)
+get_pcs(dat, scale = FALSE, clim = NULL, monthly = FALSE, weight = TRUE)
 }
 \arguments{
 \item{scale}{}
-}
-\value{
-
 }
 \description{
 Calculate principal components

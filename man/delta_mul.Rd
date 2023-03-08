@@ -4,13 +4,10 @@
 \alias{delta_mul}
 \title{Delta change methods}
 \usage{
-delta_mul(pred, obs, newdata = NULL, k = NULL)
+delta_mul(pred, obs, newdata = NULL, monthly = FALSE)
 }
 \arguments{
-\item{k}{A placeholder, must be NULL.}
-}
-\value{
-
+\item{newdata}{}
 }
 \description{
 Delta change methods

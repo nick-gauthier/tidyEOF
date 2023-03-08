@@ -9,9 +9,6 @@ predict_patterns(coupled_patterns, predictors)
 \arguments{
 \item{new_amps}{}
 }
-\value{
-
-}
 \description{
 Title
 }

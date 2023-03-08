@@ -9,9 +9,6 @@ plot_eofs(patterns, scaled = FALSE, rawdata = NULL)
 \arguments{
 \item{normalized}{}
 }
-\value{
-
-}
 \description{
 Title
 }

@@ -9,9 +9,6 @@ get_correlation(dat, patterns, amplitudes = NULL)
 \arguments{
 \item{patterns}{}
 }
-\value{
-
-}
 \description{
 The function will check if there are any overlapping time steps between the
 raster field and the PC amplitudes.

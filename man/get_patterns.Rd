@@ -4,7 +4,14 @@
 \alias{get_patterns}
 \title{Get EOFs and PCs from observations}
 \usage{
-get_patterns(dat, k = 4, scale = FALSE, rotate = FALSE)
+get_patterns(
+  dat,
+  k = 4,
+  scale = FALSE,
+  rotate = FALSE,
+  monthly = FALSE,
+  weight = TRUE
+)
 }
 \arguments{
 \item{dat}{A `stars` object containing spatial and temporal dimensions.}
@@ -18,7 +25,4 @@ object with EOF spatial patterns, and a `stars` object with the mean and
 }
 \description{
 Get EOFs and PCs from observations
-}
-\examples{
-
 }

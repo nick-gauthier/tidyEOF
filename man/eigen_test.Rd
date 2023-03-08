@@ -9,9 +9,6 @@ eigen_test(lambdas, k, M, n)
 \arguments{
 \item{n}{}
 }
-\value{
-
-}
 \description{
 Title
 }

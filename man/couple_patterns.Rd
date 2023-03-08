@@ -9,9 +9,6 @@ couple_patterns(patterns.x, patterns.y)
 \arguments{
 \item{patterns.y}{}
 }
-\value{
-
-}
 \description{
 Title
 }

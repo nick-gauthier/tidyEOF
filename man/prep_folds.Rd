@@ -9,9 +9,6 @@ prep_folds(times, kfolds = 5)
 \arguments{
 \item{kfolds}{}
 }
-\value{
-
-}
 \description{
 Title
 }

@@ -9,9 +9,6 @@ align_patterns(patterns)
 \arguments{
 \item{patterns}{}
 }
-\value{
-
-}
 \description{
 Title
 }

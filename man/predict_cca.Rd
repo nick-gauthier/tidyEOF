@@ -9,9 +9,6 @@ predict_cca(preds, obs, newdata, k)
 \arguments{
 \item{k}{}
 }
-\value{
-
-}
 \description{
 Title
 }

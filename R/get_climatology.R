@@ -37,7 +37,7 @@ get_climatology <- function(dat, monthly = FALSE) {
   if (any(purrr::map_lgl(dat, inherits, 'units'))) {
     # do any of the attr. have units? if so, restore units
     new <-  mutate(new, across(everything(),
-                               ~units::set_units(.x, units(dat[[1]]),
+                               ~units::set_units(.x, units(dat[[1]]), # this fails if there are multiple units for diff variables
                                                                mode = 'standard')))
 
   }
