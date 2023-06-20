@@ -9,6 +9,7 @@
 #' @examples
 reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE) {
   if(is.null(amplitudes)) amplitudes <- target_patterns$amplitudes
+  if(class(amplitudes) == 'stars') amplitudes <- project_patterns(target_patterns, amplitudes)
   # is there a more robust way to do nonneg?
   # check (ncol(amplitudes) - 1) == number of PCs in eofs?
   # check margin 3 is time?
