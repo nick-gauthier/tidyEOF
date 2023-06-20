@@ -13,10 +13,7 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE)
   # check (ncol(amplitudes) - 1) == number of PCs in eofs?
   # check margin 3 is time?
 
-  target_mean <- slice(target_patterns$climatology, 'var', 1) %>%
-    units::drop_units()
-  target_sd <- slice(target_patterns$climatology, 'var', 2) %>%
-    units::drop_units()
+  # this should work on new -raw- data and get the pc projection like cca
 
   anomalies <- amplitudes %>%
     rowwise() %>%
@@ -30,13 +27,10 @@ reconstruct_field <- function(target_patterns, amplitudes = NULL, nonneg = TRUE)
     stars::st_set_dimensions('time', values = amplitudes$time) %>%
     setNames(target_patterns$names)
 
-  if(target_patterns$monthly) {
-      if(target_patterns$scaled) anomalies <- sweep_months(anomalies, target_sd, '*')
-      final <- sweep_months(anomalies, target_mean, '+')
-    } else {
-      if(target_patterns$scaled) anomalies <- anomalies * target_sd
-      final <- anomalies + target_mean
-    }
+  final <- restore_climatology(anomalies,
+                               clim = target_patterns$climatology,
+                               scale = target_patterns$scaled,
+                               monthly = target_patterns$monthly)
 
   if(target_patterns$weight) final <- final / lat_weights(final)
   if(nonneg) final <- mutate(final, across(everything(), ~if_else(.x < 0, 0, .x)))

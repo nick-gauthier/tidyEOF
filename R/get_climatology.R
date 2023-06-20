@@ -66,6 +66,26 @@ get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
   return(out)
 }
 
+#' @export
+restore_climatology <- function(anomalies, clim, scale = FALSE, monthly = FALSE) {
+  target_mean <- slice(clim, 'var', 1) %>%
+    units::drop_units()
+  target_sd <- slice(clim, 'var', 2) %>%
+    units::drop_units()
+
+  if(monthly) {
+    if(scale) anomalies <- sweep_months(anomalies, target_sd, '*')
+
+    final <- sweep_months(anomalies, target_mean, '+')
+  } else {
+    if(scale) anomalies <- anomalies * target_sd
+
+    final <- anomalies + target_mean
+  }
+
+  return(final)
+}
+
 # convenience function for monthly aggregation, based on example in aggregate.stars
 by_months = function(x) {
   lubridate::month(x, label = TRUE, abbr = FALSE)
