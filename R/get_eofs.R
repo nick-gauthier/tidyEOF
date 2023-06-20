@@ -34,14 +34,22 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
       rotation_matrix <- NULL
     }
 
-  eof_maps <- dat[,,,1] %>%
+  # so you can't just merge by row becuase you may have lost values.
+  # you could join by x and y but that'd be slow
+  # but then you could use the old dimensions as is which is ideal
+  ref <- dat[,,,1, drop = TRUE]
+
+  y_dec <- st_get_dimension_values(ref, 'y') %>%
+    is.unsorted(strictly = TRUE)
+
+  eof_maps <- ref %>%
     as_tibble() %>%
     na.omit() %>% # can introduce issues if there are entire null rows/columns
     dplyr::select(x, y) %>%
   bind_cols(as_tibble(eofs)) %>%
-    stars::st_as_stars() %>%
+    stars::st_as_stars(y_decreasing = y_dec) %>% # match ordering of y axis to original
     sf::st_set_crs(sf::st_crs(dat)) %>%
-    mutate(dummy = 1) %>% # hacky way to get around 1 pc issue bellow
+    mutate(dummy = 1) %>% # hacky way to get around 1 pc issue below
     merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
     .[,,,1:k] %>%
     setNames('weight')
