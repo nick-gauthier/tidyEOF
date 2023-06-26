@@ -7,7 +7,7 @@
 #' @param eigenvalues
 #' @param rotate
 #'
-#'scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)
+#'scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007).
 #'
 #' @return
 #' @export
@@ -26,6 +26,11 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
       loadings <- unclass(reofs$loadings)
       rotation_matrix <- reofs$rotmat # save the rotation matrix to use later on the amplitudes
 
+      # reorder everything by explained variance, from psych::principal()
+      ev.rotated <- diag(t(loadings) %*% loadings)
+      ev.order <- order(ev.rotated, decreasing = TRUE)
+      loadings <- loadings[, ev.order]
+      rotation_matrix <- rotation_matrix[, ev.order]
 
       colnames(rotation_matrix) <- pc_names
       eofs <- loadings
@@ -35,7 +40,7 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
       rotation_matrix <- NULL
     }
 
-  # so you can't just merge by row becuase you may have lost values.
+  # so you can't just merge by row because you may have lost values.
   # you could join by x and y but that'd be slow
   # but then you could use the old dimensions as is which is ideal
   ref <- dat[,,,1, drop = TRUE]
