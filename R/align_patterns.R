@@ -7,7 +7,9 @@
 #' @export
 #'
 #' @examples
-align_patterns <- function(patterns) {
+flip_patterns <- function(patterns) {
+  # this function tries to make sure all the patterns have roughly the same major sign, which makes plotting easier
+  # alternatively could try to align to original time series variable as well
   sums <- split(patterns$eofs) %>%
     as_tibble() %>%
     dplyr::summarise(across(starts_with('PC'), ~sign(sum(.x)))) %>%
@@ -24,10 +26,10 @@ align_patterns <- function(patterns) {
 }
 
 # congruence <- function(x, y) {
-#   # could check that both have the save dimensions
+#   # could check that both have the same dimensions
 #   t1 <- as_tibble(x$eofs) %>%
-#     pivot_wider(names_from = PC, values_from = weight) %>%
-#     select(-x, -y) %>%
+#     tidyr::pivot_wider(names_from = PC, values_from = weight) %>%
+#     dplyr::select(-x, -y) %>%
 #     remove_missing() # not ideal but . . .
 #
 #   t2 <- as_tibble(y$eofs) %>%

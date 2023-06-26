@@ -45,6 +45,9 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
        k = k,
        weight = weight)
 
+  # aligns patterns so EOFs have rougly similar dominant signs, helps for plotting
+  patterns <- flip_patterns(patterns)
+
   class(patterns) <- 'patterns'
   return(patterns)
 }
