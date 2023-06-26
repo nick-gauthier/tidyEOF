@@ -27,7 +27,7 @@ predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
 
     # get PCs from newdata
   project_patterns(preds, newdata) %>%
-    column_to_rownames('time') %>%
+    tibble::column_to_rownames('time') %>%
     # predict CCA on newdata
     as.matrix() %*%
     cca$xcoef[,1:k, drop = FALSE] %*% # drop = FALSE prevents a vector returning when k = 1
@@ -58,6 +58,7 @@ project_patterns <- function(patterns, newdata) {
     .[,1:patterns$k, drop = FALSE] %>%
     {if(is.matrix(patterns$rotation)) . %*% patterns$rotation else .} %>%
     as_tibble() %>%
+    setNames(names0(patterns$k, 'PC')) %>%
     mutate(time = new_times, .before = 1) # add times this way rather than with rownames above to preserve POSIXct class
 }
 

@@ -16,19 +16,20 @@
 #'
 get_eofs <-  function(dat, pca, k, rotate = FALSE) {
 
+  pc_names <- names0(k, 'PC')
   eofs <- pca$rotation[, 1:k, drop = FALSE] %>% # drop = FALSE preserves PC names when there's only 1 PC
     `%*%`(diag(pca$sdev, k, k)) %>% # scale by sdev (sqrt(eigenvalues)) for more robust rotation
-    `colnames<-`(paste0('PC', 1:k))
+    `colnames<-`(pc_names)
 
     if(rotate == TRUE & k > 1) {
       reofs <- varimax(eofs)
+      loadings <- unclass(reofs$loadings)
+      rotation_matrix <- reofs$rotmat # save the rotation matrix to use later on the amplitudes
 
-      # save the rotation matrix to use later on the amplitudes
-      rotation_matrix <- reofs$rotmat %>%
-        `colnames<-`(paste0('PC', 1:k))
 
-      eofs <- unclass(reofs$loadings) %>%
-        `colnames<-`(paste0('PC', 1:k))
+      colnames(rotation_matrix) <- pc_names
+      eofs <- loadings
+      colnames(eofs) <- pc_names
 
     } else {
       rotation_matrix <- NULL

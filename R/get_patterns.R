@@ -21,11 +21,14 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
 
   times <- stars::st_get_dimension_values(dat, 3) # brittle if time isn't 3rd dimension
 
+  pc_names <- names0(k, 'PC')
+
   amplitudes <- pca$x %>%
     sweep(2, pca$sdev, '/') %>%
     .[,1:k, drop = FALSE] %>%
     {if(rotate & k > 1) . %*% eofs$rotation_matrix else .} %>%
     as_tibble() %>%
+    setNames(pc_names) %>%
     mutate(time = times, .before = 1)
 
   patterns <- list(eofs = eofs$eofs,
@@ -51,4 +54,14 @@ print.patterns <- function(obj) {
   print(paste0('A `pattern` object with k = ', obj$k, ', scale = ', obj$scale,
                ', monthly = ', obj$monthly, ', and rotate = ', obj$rotate))
   print(obj$eofs)
+}
+
+# from tidymodels/recipes
+names0 <- function(num, prefix = "PC") {
+  if (num < 1) {
+    rlang::abort("`k` should be > 0.")
+  }
+  ind <- format(seq_len(num))
+  ind <- gsub(" ", "0", ind)
+  paste0(prefix, ind)
 }
