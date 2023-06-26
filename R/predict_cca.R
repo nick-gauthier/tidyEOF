@@ -9,7 +9,7 @@
 #' @export
 #'
 #' @examples
-predict_cca <- function(preds, obs, newdata, k, weight = TRUE) {
+predict_cca <- function(preds, obs, newdata, k) { # is weight used anywhere?
   #should check if both preds and obs are both scaled/rotated and fail if not
   obs_amps <- obs$amplitudes %>%
     select(-time) %>%

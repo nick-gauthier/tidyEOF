@@ -57,10 +57,12 @@ get_eofs <-  function(dat, pca, k, rotate = FALSE) {
     sf::st_set_crs(sf::st_crs(dat)) %>%
     mutate(dummy = 1) %>% # hacky way to get around 1 pc issue below
     merge(name = 'PC') %>% # the problem with this is that it doesn't work if there is only 1 pc!
-    .[,,,1:k] %>%
+    .[,,,1:k] %>% # why is this necessary? for the hack above
     setNames('weight')
     #slice('PC', 1:k)
 
   list(eofs = eof_maps,
        rotation_matrix = rotation_matrix)
 }
+
+
