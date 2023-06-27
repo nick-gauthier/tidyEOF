@@ -54,7 +54,9 @@ plot_amps <- function(patterns, scaled = TRUE, events = NULL) {
 }
 
 #' @export
-plot_scree <- function(dat, k = NULL, kmax = 10, scale = FALSE, monthly = FALSE){
+plot_scree <- function(dat, k = NULL, kmax = 10, scale = FALSE, monthly = FALSE, weight = TRUE){
+  if(weight) dat <- dat * lat_weights(dat) # weight by sqrt cosine latitude, in radians
+
   get_pcs(dat, scale = scale, monthly = monthly) %>%
     get_eigenvalues() %>%
     dplyr::mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
