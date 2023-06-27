@@ -12,7 +12,7 @@ flip_patterns <- function(patterns) {
   # alternatively could try to align to original time series variable as well
   sums <- split(patterns$eofs) %>%
     as_tibble() %>%
-    dplyr::summarise(across(starts_with('PC'), ~sign(sum(.x)))) %>%
+    dplyr::summarise(across(starts_with('PC'), ~sign(sum(.x, na.rm = TRUE)))) %>%
     unlist()
 
     patterns$eofs <-  sweep(patterns$eofs, MARGIN = 3, STATS = sums, FUN = "*")
