@@ -36,10 +36,7 @@ get_climatology <- function(dat, monthly = FALSE) {
 
   if (any(purrr::map_lgl(dat, inherits, 'units'))) {
     # do any of the attr. have units? if so, restore units
-    new <-  mutate(new, across(everything(),
-                               ~units::set_units(.x, units(dat[[1]]), # this fails if there are multiple units for diff variables
-                                                               mode = 'standard')))
-
+    new <- restore_units(new, dat)
   }
 
   return(new)
@@ -69,7 +66,7 @@ get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
 #' @export
 restore_climatology <- function(anomalies, clim, scale = FALSE, monthly = FALSE) {
   target_mean <- slice(clim, 'var', 1) %>%
-    units::drop_units()
+    units::drop_units() # is this necessary
   target_sd <- slice(clim, 'var', 2) %>%
     units::drop_units()
 
@@ -82,7 +79,7 @@ restore_climatology <- function(anomalies, clim, scale = FALSE, monthly = FALSE)
 
     final <- anomalies + target_mean
   }
-
+# should restore units here?
   return(final)
 }
 
@@ -99,4 +96,13 @@ sweep_months <- function(e1, e2, FUN) {
     do.call(c, .) %>%
     slice(., 'time', order(time(.))) %>% # reshuffle so months/years in right order
   st_set_dimensions(., 'time', values = time(.)) # the lubridate command above results in interval times not dates
+}
+
+# convenience function to add back units . . . there has to be a better way!
+restore_units <- function(new, ref) {
+  old_units <- purrr::map(ref, purrr::possibly(units))
+  apply_units <- function(x, y) purrr::modify_in(x, names(old_units)[y], ~units::set_units(.x, old_units[[y]], mode = 'standard'))
+
+  seq_along(new) %>%
+    purrr::reduce(apply_units, .init = new)
 }
