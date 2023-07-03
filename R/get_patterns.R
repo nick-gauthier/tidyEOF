@@ -37,7 +37,7 @@ get_patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FA
        pca = pca,
        eigenvalues = eigenvalues,
        rotation = if(rotate & k > 1) eofs$rotation_matrix else NA,
-       units = units(dat[[1]]), # only units of the 1st dataset
+       units = purrr::map(dat, purrr::possibly(units)), # only units of the 1st dataset
        names = names(dat),
        scaled = scale,
        monthly = monthly,

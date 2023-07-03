@@ -1,5 +1,4 @@
-
-#' Title
+#' Domain alignment for climate patterns
 #'
 #' @param patterns
 #'

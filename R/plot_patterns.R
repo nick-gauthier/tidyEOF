@@ -1,4 +1,5 @@
-#' Title
+#' Plotting functions for patterns objects
+#'
 #'
 #' @param patterns
 #' @param palette
@@ -17,7 +18,7 @@ plot_eofs <- function(patterns, scaled = FALSE, rawdata = NULL){
       coord_quickmap() +
       theme_void()
   } else {
-    max_weight <- max(abs(patterns$eofs$weight))
+    max_weight <- max(abs(patterns$eofs$weight), na.rm = TRUE)
     ggplot() +
       geom_stars(data = patterns$eofs) +
       facet_wrap(~ PC) +

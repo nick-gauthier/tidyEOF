@@ -7,7 +7,7 @@
 get_eofs(dat, pca, k, rotate = FALSE)
 }
 \arguments{
-\item{rotate}{scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007)}
+\item{rotate}{scale by stdev (i.e. sqrt(eigenvalues)) for more robust rotation (Hannachi et al 2007).}
 }
 \description{
 Title

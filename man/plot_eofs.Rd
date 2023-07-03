@@ -2,7 +2,7 @@
 % Please edit documentation in R/plot_patterns.R
 \name{plot_eofs}
 \alias{plot_eofs}
-\title{Title}
+\title{Plotting functions for patterns objects}
 \usage{
 plot_eofs(patterns, scaled = FALSE, rawdata = NULL)
 }
@@ -10,5 +10,5 @@ plot_eofs(patterns, scaled = FALSE, rawdata = NULL)
 \item{normalized}{}
 }
 \description{
-Title
+Plotting functions for patterns objects
 }
