@@ -181,12 +181,12 @@ test_that("print and summary methods work for coupled_patterns", {
   expect_no_error(print(coupled))
   expect_no_error(summary(coupled))
 
-  # cli writes to message connection, so capture both stdout and stderr
-  print_output <- capture.output(print(coupled), type = "message")
+  # cli_fmt captures cli output reliably (capture.output misses it)
+  print_output <- cli::cli_fmt(print(coupled))
   expect_true(any(grepl("Coupled Patterns Object", print_output)))
   expect_true(any(grepl("Method: cca", print_output)))
 
-  summary_output <- capture.output(summary(coupled), type = "message")
+  summary_output <- cli::cli_fmt(summary(coupled))
   expect_true(any(grepl("Coupled Patterns Summary", summary_output)))
 })
 
@@ -221,4 +221,29 @@ test_that("truncated CCA prediction is the regression onto retained canonical va
     expect_equal(unname(as.matrix(predicted[, -1])), unname(ols_fit),
                  tolerance = 1e-8)
   }
+})
+
+test_that("couple centers by default so prediction matches regression with intercept", {
+  # When predictor/response patterns are fit on different periods and then
+  # filtered to a common period, the common-period amplitudes are no longer
+  # zero-mean. Retaining all CCA modes must then equal ordinary multivariate
+  # regression *with an intercept*; an uncentered fit forces the line through
+  # the origin and is biased.
+  set.seed(3)
+  n <- 50; p <- 4; q <- 3
+  X <- sweep(matrix(rnorm(n * p), n), 2, c(5, -3, 4, 2), "+")
+  Y <- sweep(X %*% matrix(rnorm(p * q), p) + matrix(rnorm(n * q), n),
+             2, c(10, -6, 8), "+")
+  times <- seq(as.Date("2000-01-01"), by = "year", length.out = n)
+  Xdf <- tibble::as_tibble(X, .name_repair = ~ paste0("PC", 1:p)) %>%
+    dplyr::mutate(time = times, .before = 1)
+  Ydf <- tibble::as_tibble(Y, .name_repair = ~ paste0("PC", 1:q)) %>%
+    dplyr::mutate(time = times, .before = 1)
+
+  ols_fitted <- stats::lm(Y ~ X)$fitted.values
+
+  coupled <- couple(Xdf, Ydf, k = q)  # default centering
+  predicted <- as.matrix(apply_cca_prediction(Xdf, coupled$cca, k = q)[, -1])
+
+  expect_equal(unname(predicted), unname(ols_fitted), tolerance = 1e-8)
 })

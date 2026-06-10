@@ -184,3 +184,25 @@ test_that("project_patterns() works on geometry stars", {
   expect_equal(nrow(proj), 12)
   expect_equal(ncol(proj), 4)  # time + 3 PCs
 })
+
+# ---- area weights guard for zero-area (point) geometries ---------------------
+
+make_point_stars <- function(n_geom = 20, n_time = 24, seed = 7) {
+  set.seed(seed)
+  pts <- st_sfc(lapply(seq_len(n_geom), function(i) st_point(c(i, i %% 5))))
+  pts <- st_set_crs(pts, 4326)
+  times <- seq(as.Date("2000-01-01"), length.out = n_time, by = "month")
+  arr <- array(rnorm(n_geom * n_time, mean = 20, sd = 5), dim = c(n_geom, n_time))
+  st_as_stars(list(values = arr),
+              dimensions = st_dimensions(geometry = pts, time = times))
+}
+
+test_that("area_weights errors clearly for zero-area (point) geometries", {
+  expect_error(area_weights(make_point_stars()), class = "tidyeof_zero_area")
+})
+
+test_that("patterns guides users to weight = FALSE for point geometries", {
+  dat <- make_point_stars()
+  expect_error(patterns(dat, k = 3), class = "tidyeof_zero_area")
+  expect_no_error(patterns(dat, k = 3, weight = FALSE))
+})

@@ -61,20 +61,25 @@ calc_rmse <- function(pred_matrix, obs_matrix) {
   sqrt(mean(error^2, na.rm = TRUE))
 }
 
-#' Calculate spatial correlation (averaged over time)
+#' Calculate spatial anomaly correlation (averaged over time)
 #'
 #' For each time step, compute correlation across spatial locations,
-#' then average across all time steps.
+#' then average across all time steps. Each cell's temporal mean is removed
+#' first so the correlation measures agreement of the anomaly patterns rather
+#' than the shared climatology, which is constant in time and would otherwise
+#' inflate the correlation toward one regardless of skill.
 #'
 #' @param pred_matrix Predicted values matrix (time x space)
 #' @param obs_matrix Observed values matrix (time x space)
 #'
-#' @return Mean spatial correlation across time steps
+#' @return Mean spatial anomaly correlation across time steps
 #' @keywords internal
 calc_cor_spatial <- function(pred_matrix, obs_matrix) {
-  n_times <- nrow(pred_matrix)
+  pred_anom <- sweep(pred_matrix, 2, colMeans(pred_matrix, na.rm = TRUE))
+  obs_anom <- sweep(obs_matrix, 2, colMeans(obs_matrix, na.rm = TRUE))
+  n_times <- nrow(pred_anom)
   cors <- vapply(seq_len(n_times), function(t) {
-    cor(pred_matrix[t, ], obs_matrix[t, ], use = "pairwise.complete.obs")
+    cor(pred_anom[t, ], obs_anom[t, ], use = "pairwise.complete.obs")
   }, numeric(1))
   mean(cors, na.rm = TRUE)
 }

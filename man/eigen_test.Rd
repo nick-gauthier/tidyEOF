@@ -27,11 +27,27 @@ Logical, TRUE if eigenvalue is significant at level p
 }
 \description{
 Tests whether the k-th eigenvalue is significantly different from noise
-using a modified Rule N approach based on Tracy-Widom distribution.
+using a modified Rule N approach based on the Tracy-Widom distribution.
 }
 \details{
-Based on the gamma approximation to the Tracy-Widom distribution described
-in Cheng & Wallace (1993) and implemented following Overland & Preisendorfer
-(1982). Constants (shape = 46.4, scale factor = 0.186, location = 9.85)
-derive from fitting the gamma CDF to the Tracy-Widom Type 1 distribution.
+Follows the Rule N significance framework for EOFs of Overland &
+Preisendorfer (1982), comparing each eigenvalue against the noise null given
+by the Tracy-Widom Type-1 law for the largest eigenvalue of a white-noise
+covariance matrix (Johnstone 2001). The Tracy-Widom CDF is evaluated through
+the gamma approximation of Chiani (2014); its constants (shape = 46.4,
+scale factor = 0.186, location = 9.85) come from fitting a gamma CDF to the
+Tracy-Widom Type-1 distribution. Because the null assumes independent noise,
+the test tends to be liberal for spatially correlated geophysical fields.
+}
+\references{
+Overland, J.E. & Preisendorfer, R.W. (1982). A significance test for
+principal components applied to a cyclone climatology. \emph{Monthly Weather
+Review}, 110(1), 1-4.
+
+Johnstone, I.M. (2001). On the distribution of the largest eigenvalue in
+principal components analysis. \emph{Annals of Statistics}, 29(2), 295-327.
+
+Chiani, M. (2014). Distribution of the largest eigenvalue for real Wishart
+and Gaussian random matrices and a simple approximation for the Tracy-Widom
+distribution. \emph{Journal of Multivariate Analysis}, 129, 69-81.
 }

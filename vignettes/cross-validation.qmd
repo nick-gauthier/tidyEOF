@@ -55,7 +55,7 @@ eof_results
 Three metrics are computed by default, all on the hidden cells:
 
 - **RMSE** -- root mean square error (lower is better)
-- **cor_spatial** -- mean spatial correlation per time step (higher is better)
+- **cor_spatial** -- mean spatial *anomaly* correlation per time step, i.e. computed after removing each cell's temporal mean so it reflects pattern skill rather than the static climatology (higher is better)
 - **cor_temporal** -- mean temporal correlation per grid cell (higher is better)
 
 Summarize across folds to find the optimal `k`:

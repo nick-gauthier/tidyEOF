@@ -357,7 +357,18 @@ area_weights <- function(dat) {
 
   # Normalize by mean area and take sqrt
   # sqrt so the covariance matrix is weighted by area
-  sqrt(area_values / mean(area_values, na.rm = TRUE))
+  mean_area <- mean(area_values, na.rm = TRUE)
+  if (!is.finite(mean_area) || mean_area <= 0) {
+    cli::cli_abort(
+      c(
+        "Cannot compute area weights: geometries have zero or undefined area.",
+        "i" = "This is expected for POINT or LINESTRING geometries (e.g., station data).",
+        "i" = "Use {.code weight = FALSE} for data without areal grid cells."
+      ),
+      class = "tidyeof_zero_area"
+    )
+  }
+  sqrt(area_values / mean_area)
 }
 
 #' Tidy PCA standard deviations into a tibble

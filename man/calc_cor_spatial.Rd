@@ -2,7 +2,7 @@
 % Please edit documentation in R/metrics.R
 \name{calc_cor_spatial}
 \alias{calc_cor_spatial}
-\title{Calculate spatial correlation (averaged over time)}
+\title{Calculate spatial anomaly correlation (averaged over time)}
 \usage{
 calc_cor_spatial(pred_matrix, obs_matrix)
 }
@@ -12,10 +12,13 @@ calc_cor_spatial(pred_matrix, obs_matrix)
 \item{obs_matrix}{Observed values matrix (time x space)}
 }
 \value{
-Mean spatial correlation across time steps
+Mean spatial anomaly correlation across time steps
 }
 \description{
 For each time step, compute correlation across spatial locations,
-then average across all time steps.
+then average across all time steps. Each cell's temporal mean is removed
+first so the correlation measures agreement of the anomaly patterns rather
+than the shared climatology, which is constant in time and would otherwise
+inflate the correlation toward one regardless of skill.
 }
 \keyword{internal}

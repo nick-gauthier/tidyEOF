@@ -64,3 +64,20 @@ test_that("project_patterns reproduces rotated amplitudes", {
                  tolerance = 1e-8)
   }
 })
+
+# Sign-orientation must never multiply a mode by zero. A perfectly balanced
+# pattern (loadings summing to exactly zero) previously got sign(0) = 0, which
+# zeroed the EOF, its amplitudes, and the projection matrix.
+test_that("balanced EOFs (zero-sum loadings) get sign +1, not 0", {
+  arr <- array(0, dim = c(2, 2, 2))
+  arr[, , 1] <- 1                          # PC1: sums positive
+  arr[, , 2] <- matrix(c(1, -1, 1, -1), 2) # PC2: sums to exactly zero
+  eofs <- stars::st_as_stars(arr) %>%
+    stars::st_set_dimensions(1, names = "x") %>%
+    stars::st_set_dimensions(2, names = "y") %>%
+    stars::st_set_dimensions(3, values = c("PC1", "PC2"), names = "PC")
+
+  signs <- compute_eof_signs(eofs)
+  expect_setequal(unique(signs), c(1))   # both modes oriented +1
+  expect_false(any(signs == 0))
+})

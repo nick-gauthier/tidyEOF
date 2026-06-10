@@ -9,7 +9,7 @@ couple(
   response_patterns,
   k = NULL,
   method = "cca",
-  center = FALSE,
+  center = TRUE,
   validate = TRUE
 )
 }
@@ -22,7 +22,13 @@ couple(
 
 \item{method}{Coupling method. Currently only "cca" is supported}
 
-\item{center}{Logical, whether to center the data before CCA (default: FALSE)}
+\item{center}{Logical, whether to center the amplitudes before CCA
+(default: TRUE). Centering is the statistically standard choice and makes
+retaining all modes equivalent to multivariate regression with an
+intercept. It is a no-op when the amplitudes are already zero-mean over
+the coupled period (the usual case), but is essential when the predictor
+and response patterns were fit on different periods and then filtered to a
+common one, which leaves the common-period amplitudes with a nonzero mean.}
 
 \item{validate}{Logical, whether to validate input patterns compatibility}
 }

@@ -11,7 +11,13 @@
 #' @param response_patterns A patterns object containing response patterns (e.g., from patterns())
 #' @param k Number of CCA modes to retain. If NULL, uses min(ncol(predictor), ncol(response))
 #' @param method Coupling method. Currently only "cca" is supported
-#' @param center Logical, whether to center the data before CCA (default: FALSE)
+#' @param center Logical, whether to center the amplitudes before CCA
+#'   (default: TRUE). Centering is the statistically standard choice and makes
+#'   retaining all modes equivalent to multivariate regression with an
+#'   intercept. It is a no-op when the amplitudes are already zero-mean over
+#'   the coupled period (the usual case), but is essential when the predictor
+#'   and response patterns were fit on different periods and then filtered to a
+#'   common one, which leaves the common-period amplitudes with a nonzero mean.
 #' @param validate Logical, whether to validate input patterns compatibility
 #'
 #' @return A coupled_patterns object containing:
@@ -36,7 +42,7 @@
 #' predictions <- predict(coupled, new_predictor_data)
 #' }
 couple <- function(predictor_patterns, response_patterns, k = NULL,
-                  method = "cca", center = FALSE, validate = TRUE) {
+                  method = "cca", center = TRUE, validate = TRUE) {
 
   # Validate inputs and get common times
   common_times <- if (validate) {

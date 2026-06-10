@@ -8,14 +8,17 @@
 #' @return Named numeric vector of +1/-1 values, one per PC
 #' @keywords internal
 compute_eof_signs <- function(eofs) {
+  # Orient so the dominant loading is positive. A zero-sum (perfectly balanced)
+  # pattern maps to +1 rather than sign(0) = 0, which would zero out the mode.
+  orient <- function(x) if (sum(x, na.rm = TRUE) >= 0) 1 else -1
   if (has_geometry_dimension(eofs)) {
     eof_data <- eofs[[1]]
-    sums <- apply(eof_data, 2, function(x) sign(sum(x, na.rm = TRUE)))
+    sums <- apply(eof_data, 2, orient)
     names(sums) <- paste0("PC", seq_along(sums))
   } else {
     sums <- split(eofs) %>%
       as_tibble() %>%
-      dplyr::summarise(across(starts_with('PC'), ~sign(sum(.x, na.rm = TRUE)))) %>%
+      dplyr::summarise(across(starts_with('PC'), ~orient(.x))) %>%
       unlist()
   }
   sums
