@@ -35,7 +35,11 @@ patterns(
 
 - rotate:
 
-  Logical, whether to apply Varimax rotation
+  Logical, whether to apply Varimax rotation. Rotation follows the
+  standard REOF convention (Hannachi et al. 2007): varimax operates on
+  sqrt(eigenvalue)-scaled EOFs, the stored patterns are the rotated
+  loadings (unit norm, not mutually orthogonal), and amplitudes remain
+  uncorrelated with sd = sqrt(rotated eigenvalue)
 
 - monthly:
 

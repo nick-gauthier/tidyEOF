@@ -29,6 +29,7 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/dot-plot_eofs_internal.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/dot-simple_smart_layout.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/eigen_test.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/eof_loading_matrix.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/evaluate_eof_fold.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/evaluate_fold.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/extract_amplitudes_matrix.html</loc></url>
@@ -76,5 +77,6 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/tune_cca.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/tune_eof.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/validate_patterns.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/with_seed.html</loc></url>
 </urlset>
 

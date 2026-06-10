@@ -41,9 +41,19 @@ coarse <- fine |>
 
 [`tune_eof()`](https://nick-gauthier.github.io/tidyEOF/reference/tune_eof.md)
 evaluates reconstruction skill across a range of `k` values. For each
-fold, it extracts patterns from training data, projects test data onto
-those patterns, reconstructs the test field, and compares against the
-held-out observations.
+held-out fold it uses a *speckled holdout*: a random scatter of grid
+cells is hidden, the mode amplitudes are estimated from the visible
+cells only, and the hidden cells are then predicted. Because the hidden
+cells play no part in estimating the amplitudes, the prediction is
+genuinely out-of-sample, and skill stops improving once `k` exceeds the
+number of modes the data actually support. This is what lets the RMSE
+curve have a true minimum.
+
+(Simply projecting the whole held-out field onto the EOFs would not
+work: the projection is least-squares optimal for the very data being
+scored, so error would fall monotonically with `k` and the “best” `k`
+would always be the largest. `hidden_fraction` and `n_reps` control the
+size and number of the random masks.)
 
 ``` r
 eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
@@ -51,7 +61,7 @@ eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [476ms]
+    ✔ Computing patterns for 3 folds [479ms]
 
     Evaluating 8 k values across 3 folds
 
@@ -62,19 +72,19 @@ eof_results
     # A tibble: 24 × 5
            k  fold  rmse cor_spatial cor_temporal
        <int> <int> <dbl>       <dbl>        <dbl>
-     1     1     1 0.807       0.790        0.998
-     2     1     2 0.657       0.930        0.998
-     3     1     3 0.671       0.922        0.997
-     4     2     1 0.389       0.931        0.999
-     5     2     2 0.308       0.971        0.999
-     6     2     3 0.308       0.974        1.000
-     7     3     1 0.353       0.940        1.000
-     8     3     2 0.290       0.976        1.000
-     9     3     3 0.292       0.976        1.000
-    10     4     1 0.336       0.944        1.000
+     1     1     1 0.809      0.249         0.998
+     2     1     2 0.657      0.0782        0.998
+     3     1     3 0.663      0.261         0.998
+     4     2     1 0.391      0.770         0.999
+     5     2     2 0.310      0.828         0.999
+     6     2     3 0.310      0.759         1.000
+     7     3     1 0.354      0.836         1.000
+     8     3     2 0.290      0.851         1.000
+     9     3     3 0.295      0.787         1.000
+    10     4     1 0.338      0.847         1.000
     # ℹ 14 more rows
 
-Three metrics are computed by default:
+Three metrics are computed by default, all on the hidden cells:
 
 - **RMSE** – root mean square error (lower is better)
 - **cor_spatial** – mean spatial correlation per time step (higher is
@@ -92,14 +102,14 @@ eof_summary
     # A tibble: 8 × 8
           k rmse_mean rmse_sd cor_spatial_mean cor_spatial_sd cor_temporal_mean
       <int>     <dbl>   <dbl>            <dbl>          <dbl>             <dbl>
-    1     8     0.241  0.0443            0.975         0.0206             1.000
-    2     7     0.250  0.0413            0.974         0.0205             1.000
-    3     6     0.258  0.0410            0.973         0.0198             1.000
-    4     5     0.266  0.0410            0.972         0.0196             1.000
-    5     4     0.284  0.0456            0.969         0.0210             1.000
-    6     3     0.311  0.0359            0.964         0.0207             1.000
-    7     2     0.335  0.0466            0.959         0.0242             0.999
-    8     1     0.711  0.0828            0.881         0.0786             0.998
+    1     8     0.244  0.0452            0.906         0.0146             1.000
+    2     7     0.252  0.0422            0.897         0.0206             1.000
+    3     6     0.261  0.0425            0.889         0.0227             1.000
+    4     5     0.268  0.0423            0.880         0.0236             1.000
+    5     4     0.286  0.0462            0.849         0.0395             1.000
+    6     3     0.313  0.0358            0.825         0.0333             1.000
+    7     2     0.337  0.0466            0.786         0.0369             0.999
+    8     1     0.710  0.0859            0.196         0.102              0.998
     # ℹ 2 more variables: cor_temporal_sd <dbl>, n_folds <int>
 
 ``` r
@@ -150,7 +160,7 @@ cv_folds <- prep_cv_folds(
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [509ms]
+    ✔ Computing patterns for 3 folds [492ms]
 
 ``` r
 cv_folds
@@ -189,9 +199,9 @@ cca_results <- tune_cca(
 ```
 
     Evaluating 25 parameter combinations across 3 folds
-     ■■■■■■■■■■■■■■                    44% |  ETA:  4s
+     ■■■■■■■■■■■■■■■                   48% |  ETA:  4s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■■■■       88% |  ETA:  1s
+     ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■     92% |  ETA:  1s
 
 ``` r
 cca_results
@@ -203,13 +213,13 @@ cca_results
      1      1      1     1     1 0.808       0.790        0.998
      2      1      1     1     2 0.658       0.930        0.998
      3      1      1     1     3 0.671       0.922        0.997
-     4      1      2     1     1 1.00        0.761        0.998
-     5      1      2     1     2 0.605       0.934        0.998
-     6      1      2     1     3 0.669       0.913        0.997
-     7      1      3     1     1 1.07        0.737        0.998
-     8      1      3     1     2 0.622       0.931        0.998
-     9      1      3     1     3 0.727       0.893        0.997
-    10      1      4     1     1 1.07        0.731        0.998
+     4      1      2     1     1 0.808       0.790        0.998
+     5      1      2     1     2 0.657       0.930        0.998
+     6      1      2     1     3 0.671       0.922        0.997
+     7      1      3     1     1 0.808       0.790        0.998
+     8      1      3     1     2 0.657       0.930        0.998
+     9      1      3     1     3 0.671       0.922        0.997
+    10      1      4     1     1 0.808       0.790        0.998
     # ℹ 65 more rows
 
 Summarize to find the best parameter combination:
@@ -225,9 +235,9 @@ head(cca_summary)
     1      5      5     5     0.270  0.0416            0.971         0.0199
     2      5      4     4     0.287  0.0459            0.968         0.0212
     3      4      4     4     0.288  0.0453            0.968         0.0210
-    4      5      3     3     0.313  0.0366            0.964         0.0208
-    5      4      3     3     0.314  0.0363            0.963         0.0207
-    6      3      3     3     0.316  0.0350            0.963         0.0207
+    4      4      5     4     0.289  0.0471            0.968         0.0213
+    5      3      4     3     0.311  0.0387            0.964         0.0213
+    6      3      5     3     0.312  0.0395            0.964         0.0215
     # ℹ 3 more variables: cor_temporal_mean <dbl>, cor_temporal_sd <dbl>,
     #   n_folds <int>
 
@@ -260,9 +270,9 @@ cca_results_3d <- tune_cca(
 ```
 
     Evaluating 22 parameter combinations across 3 folds
-     ■■■■■■■■■                         27% |  ETA:  4s
+     ■■■■■■■■■■■                       32% |  ETA:  4s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■          77% |  ETA:  1s
+     ■■■■■■■■■■■■■■■■■■■■■■■■■■        82% |  ETA:  1s
 
 ``` r
 cca_results_3d |>
@@ -275,16 +285,16 @@ cca_results_3d |>
     # A tibble: 10 × 4
        k_pred k_resp k_cca  rmse
         <int>  <int> <int> <dbl>
-     1      4      3     3 0.314
-     2      3      3     3 0.316
-     3      3      4     3 0.324
-     4      4      2     2 0.336
-     5      3      2     2 0.336
-     6      2      2     2 0.337
-     7      4      4     3 0.385
-     8      2      3     2 0.404
-     9      3      3     2 0.420
-    10      2      4     2 0.429
+     1      3      4     3 0.311
+     2      4      3     3 0.314
+     3      3      3     3 0.316
+     4      4      4     3 0.318
+     5      4      2     2 0.336
+     6      3      2     2 0.336
+     7      2      4     2 0.337
+     8      2      3     2 0.337
+     9      2      2     2 0.337
+    10      4      4     2 0.337
 
 ## Fold construction
 

@@ -82,7 +82,11 @@ computation when the irlba package is available.</p>
 
 
 <dt id="arg-rotate">rotate<a class="anchor" aria-label="anchor" href="#arg-rotate"></a></dt>
-<dd><p>Logical, whether to apply Varimax rotation</p></dd>
+<dd><p>Logical, whether to apply Varimax rotation. Rotation follows
+the standard REOF convention (Hannachi et al. 2007): varimax operates on
+sqrt(eigenvalue)-scaled EOFs, the stored patterns are the rotated
+loadings (unit norm, not mutually orthogonal), and amplitudes remain
+uncorrelated with sd = sqrt(rotated eigenvalue)</p></dd>
 
 
 <dt id="arg-monthly">monthly<a class="anchor" aria-label="anchor" href="#arg-monthly"></a></dt>

@@ -1,9 +1,13 @@
 # Cross-validate EOF truncation for a single field
 
 Evaluates reconstruction skill for different numbers of EOFs using
-k-fold cross-validation. For each fold, EOFs are fit on training data,
-test data is projected onto those EOFs, and the reconstruction is
-compared to the original test data.
+k-fold cross-validation with a speckled holdout. For each held-out fold
+a random scatter of grid cells is hidden, mode amplitudes are estimated
+from the visible cells, and the hidden cells are predicted. Because the
+hidden cells are not used to estimate the amplitudes, prediction error
+is genuinely out-of-sample and stops improving once \`k\` exceeds the
+field's effective rank – so the RMSE-minimising \`k\` is a meaningful
+estimate of how many modes the data support (Bro et al. 2008).
 
 ## Usage
 
@@ -16,7 +20,10 @@ tune_eof(
   metrics = c("rmse", "cor_spatial", "cor_temporal"),
   scale = FALSE,
   monthly = FALSE,
-  weight = TRUE
+  weight = TRUE,
+  hidden_fraction = 0.2,
+  n_reps = 5,
+  seed = 1L
 )
 ```
 
@@ -41,7 +48,8 @@ tune_eof(
 - metrics:
 
   Character vector of metrics to compute. Options: "rmse",
-  "cor_spatial", "cor_temporal" (default: all three)
+  "cor_spatial", "cor_temporal" (default: all three). Metrics are
+  computed on the hidden cells only.
 
 - scale:
 
@@ -55,9 +63,33 @@ tune_eof(
 
   Logical, whether to apply area weighting (default TRUE)
 
+- hidden_fraction:
+
+  Fraction of grid cells to hide in each held-out fold (default 0.2).
+  Hidden cells are predicted from the visible ones.
+
+- n_reps:
+
+  Number of random hidden-cell masks to average over per fold (default
+  5). More replicates give smoother, more stable estimates.
+
+- seed:
+
+  Base random seed for hidden-cell masks (default 1). Masks depend only
+  on the fold and replicate, not on \`k\`, so all \`k\` are compared on
+  the same hidden cells. The global RNG is left undisturbed.
+
 ## Value
 
 A tibble with columns: k, fold, and one column per metric.
+
+## Details
+
+Naively projecting the full held-out field onto the EOFs and scoring the
+reconstruction (the approach used before tidyeof 0.1.0) does NOT work:
+the projection is least-squares optimal for the very data being scored,
+so error decreases monotonically with \`k\` and the "best" \`k\` is
+always the largest.
 
 ## Examples
 
