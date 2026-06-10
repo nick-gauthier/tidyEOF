@@ -192,3 +192,33 @@ test_that("print and summary methods work for coupled_patterns", {
 
 # NOTE: show_migration_guide() tests removed - function has been archived
 # See archive/legacy_wrappers.R for reference implementation
+test_that("truncated CCA prediction is the regression onto retained canonical variates", {
+  # Standard CCA prediction (Glahn 1968; Barnett & Preisendorfer 1987):
+  # response amplitudes are regressed onto the retained canonical variates.
+  # cancor's variates are orthonormal so the OLS fit is computable
+  # independently; apply_cca_prediction() on the training data must match it.
+  set.seed(7)
+  n <- 40
+  times <- seq(as.Date("2000-01-01"), by = "year", length.out = n)
+  pred_mat <- scale(matrix(rnorm(n * 5), n), scale = FALSE)
+  resp_mat <- scale(pred_mat %*% matrix(rnorm(5 * 4), 5) + rnorm(n * 4),
+                    scale = FALSE)
+
+  pred_df <- as_tibble(pred_mat, .name_repair = ~ paste0("PC", 1:5)) %>%
+    mutate(time = times, .before = 1)
+  resp_df <- as_tibble(resp_mat, .name_repair = ~ paste0("PC", 1:4)) %>%
+    mutate(time = times, .before = 1)
+
+  # k = 4 is the full set (already correct before the fix); k = 1, 2 are the
+  # truncated "regularization" cases where the back-transform matters
+  for (k in c(1, 2, 4)) {
+    coupled <- couple(pred_df, resp_df, k = k)
+    predicted <- apply_cca_prediction(pred_df, coupled$cca, k = k)
+
+    canonical_variates <- pred_mat %*% coupled$cca$xcoef[, seq_len(k), drop = FALSE]
+    ols_fit <- canonical_variates %*% qr.solve(canonical_variates, resp_mat)
+
+    expect_equal(unname(as.matrix(predicted[, -1])), unname(ols_fit),
+                 tolerance = 1e-8)
+  }
+})

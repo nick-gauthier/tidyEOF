@@ -118,7 +118,7 @@ test_that("CCA centering is honored in prediction and canonical variables", {
   expect_equal(as.matrix(canonical_vars[, -1]), expected_cv, tolerance = 1e-8)
 })
 
-test_that("CCA truncation uses truncated pseudo-inverse of ycoef", {
+test_that("CCA truncation uses leading rows of the full ycoef inverse", {
   set.seed(99)
   n <- 25
   predictor_matrix <- matrix(rnorm(n * 3), nrow = n, ncol = 3)
@@ -136,9 +136,10 @@ test_that("CCA truncation uses truncated pseudo-inverse of ycoef", {
   canonical_predictors <- pred_centered %*% cca_result$xcoef[, 1:k, drop = FALSE]
   canonical_responses <- canonical_predictors %*% diag(cca_result$cor[1:k], nrow = k)
 
-  # Use truncated ycoef pseudo-inverse (matching implementation)
-  ycoef_k <- cca_result$ycoef[, 1:k, drop = FALSE]
-  expected_resp <- canonical_responses %*% MASS::ginv(ycoef_k)
+  # Regression of response PCs on the retained canonical variates =
+  # leading k rows of the full ycoef (pseudo)inverse
+  expected_resp <- canonical_responses %*%
+    MASS::ginv(cca_result$ycoef)[1:k, , drop = FALSE]
   expected_resp <- sweep(expected_resp, 2, cca_result$ycenter, "+")
 
   expect_equal(unname(as.matrix(predicted[, -1])), unname(expected_resp), tolerance = 1e-8)

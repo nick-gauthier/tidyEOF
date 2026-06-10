@@ -41,7 +41,11 @@ check_k_valid <- function(k, max_k, arg = rlang::caller_arg(k), call = rlang::ca
 #' @param dat A `stars` object containing spatial and temporal dimensions
 #' @param k The number of PC/EOF modes to retain
 #' @param scale Logical, whether to scale before PCA
-#' @param rotate Logical, whether to apply Varimax rotation
+#' @param rotate Logical, whether to apply Varimax rotation. Rotation follows
+#'   the standard REOF convention (Hannachi et al. 2007): varimax operates on
+#'   sqrt(eigenvalue)-scaled EOFs, the stored patterns are the rotated
+#'   loadings (unit norm, not mutually orthogonal), and amplitudes remain
+#'   uncorrelated with sd = sqrt(rotated eigenvalue)
 #' @param monthly Logical, whether to use monthly climatology
 #' @param weight Logical, whether to apply area weighting
 #' @param irlba_threshold Minimum number of data elements to trigger IRLBA usage
@@ -99,6 +103,12 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
 }
 
 #' Matrix-centric rotation helper that keeps all components synchronized
+#'
+#' Standard REOF convention (Hannachi et al. 2007): varimax operates on the
+#' sqrt(eigenvalue)-scaled loadings, and the rotated scaled loadings ARE the
+#' rotated patterns. They are stored unit-norm with the variance carried by
+#' the scores, mirroring the unrotated convention (score sd = sqrt(eigenvalue));
+#' rotated patterns are not mutually orthogonal, but scores stay uncorrelated.
 #' @keywords internal
 rotate_pca_components <- function(loadings_matrix, scores_matrix, sdev_vector) {
   # Kaiser-normalise eigenvectors before rotation (Hannachi et al. 2007)
@@ -110,18 +120,26 @@ rotate_pca_components <- function(loadings_matrix, scores_matrix, sdev_vector) {
 
   # Compute explained variance in rotated space for ordering
   rotated_eigenvals <- colSums(rotated_scaled_loadings^2)
+  rotated_sdev <- sqrt(rotated_eigenvals)
   ev_order <- order(rotated_eigenvals, decreasing = TRUE)
 
-  # Apply rotation to scores and orthonormal eigenvectors
-  rotated_scores <- scores_matrix %*% rotation_matrix
-  rotated_loadings <- loadings_matrix %*% rotation_matrix
+  rotated_loadings <- sweep(rotated_scaled_loadings, 2, rotated_sdev, `/`)
+
+  # Scores transform as Z R diag(rotated_sdev), with Z the standardized
+  # scores: reconstruction scores %*% t(loadings) is preserved, and the same
+  # matrix maps (weighted) anomalies to amplitudes — it is the least-squares
+  # dual basis of the non-orthogonal rotated patterns.
+  amplitude_transform <- sweep(sweep(rotation_matrix, 1, sdev_vector, `/`),
+                               2, rotated_sdev, `*`)
+  rotated_scores <- scores_matrix %*% amplitude_transform
 
   list(
     loadings = rotated_loadings[, ev_order, drop = FALSE],
     scores = rotated_scores[, ev_order, drop = FALSE],
-    sdev = sqrt(rotated_eigenvals[ev_order]),
+    sdev = rotated_sdev[ev_order],
     eigenvalues = rotated_eigenvals[ev_order],
-    rotation_matrix = rotation_matrix[, ev_order, drop = FALSE]
+    rotation_matrix = rotation_matrix[, ev_order, drop = FALSE],
+    amplitude_transform = amplitude_transform[, ev_order, drop = FALSE]
   )
 }
 
@@ -187,11 +205,15 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     rotation_matrix <- rotation_result$rotation_matrix
     component_sdev <- rotation_result$sdev
     component_variance <- rotation_result$eigenvalues
+    # Rotated patterns are not orthogonal, so projection onto them uses the
+    # least-squares dual basis rather than the patterns themselves
+    proj_weighted <- loadings_matrix %*% rotation_result$amplitude_transform
   } else {
     loadings_weighted <- loadings_matrix
     amplitudes <- scores_matrix
     component_sdev <- sdev_vector
     component_variance <- sdev_vector^2
+    proj_weighted <- loadings_matrix
   }
 
   # Convert loadings back to physical space so EOFs carry interpretable units
@@ -273,8 +295,9 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     valid_pixels = valid_pixels,
     spatial_dims = flattened$spatial_dims,
     spatial_shape = flattened$spatial_shape,
-    # proj_matrix: weighted loadings with rotation applied, ready for projection
-    proj_matrix = loadings_weighted
+    # proj_matrix maps weighted anomalies to amplitudes (the dual basis of the
+    # patterns; equal to the patterns themselves only when unrotated)
+    proj_matrix = proj_weighted
   )
 }
 

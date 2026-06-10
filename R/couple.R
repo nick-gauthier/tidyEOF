@@ -288,11 +288,14 @@ apply_cca_prediction <- function(new_amplitudes, cca_result, k) {
   canonical_predictors <- pred_matrix %*% cca_result$xcoef[, 1:k, drop = FALSE]
   canonical_responses <- canonical_predictors %*% diag(cca_result$cor[1:k], nrow = k)
 
-  # Transform canonical responses back to PC space
-  # Use pseudo-inverse of TRUNCATED ycoef, not subset of full inverse
-  # (full inverse has cross-contributions from unused modes)
-  ycoef_k <- cca_result$ycoef[, 1:k, drop = FALSE]
-  response_amplitudes <- canonical_responses %*% MASS::ginv(ycoef_k)
+  # Transform canonical responses back to PC space: regression of response
+  # amplitudes on the retained canonical variates (Glahn 1968). The variates
+  # are orthonormal, so the regression coefficients are the leading k rows of
+  # the pseudo-inverse of the FULL ycoef. (A pseudo-inverse of the truncated
+  # ycoef would give a minimum-norm preimage instead of the regression,
+  # degrading predictions whenever k < ncol(ycoef).)
+  response_amplitudes <- canonical_responses %*%
+    MASS::ginv(cca_result$ycoef)[seq_len(k), , drop = FALSE]
 
   # Add back response centering if used during training
   if (!identical(cca_result$ycenter, FALSE)) {
