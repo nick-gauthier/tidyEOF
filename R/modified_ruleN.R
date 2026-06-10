@@ -13,11 +13,22 @@
 #' @param M Number of spatial points (grid cells)
 #' @param n Number of time steps
 #' @param p Significance level (default 0.05)
+#' @param total_var Total variance of the data (sum of all eigenvalues).
+#'   Required when `lambdas` contains only the leading modes (e.g., from
+#'   IRLBA); the remaining noise variance is then `total_var` minus the
+#'   eigenvalues above `k`. If NULL (default), all eigenvalues must be present.
 #'
 #' @return Logical, TRUE if eigenvalue is significant at level p
 #' @export
-eigen_test <- function(lambdas, k, M, n, p = 0.05){
+eigen_test <- function(lambdas, k, M, n, p = 0.05, total_var = NULL){
   nrank <- min(n - 1, M)
+
+  if (is.null(total_var) && length(lambdas) < nrank) {
+    cli::cli_abort(
+      "{.arg lambdas} has only {length(lambdas)} of {nrank} eigenvalues. Supply {.arg total_var} when the spectrum is truncated (e.g., IRLBA).",
+      class = "tidyeof_truncated_spectrum"
+    )
+  }
 
   kstar <- M - k + 1
   nk <- n - k + 1
@@ -26,7 +37,12 @@ eigen_test <- function(lambdas, k, M, n, p = 0.05){
   shape <- 46.4
   beta <- (0.186 * sigma) / max(nk, kstar)
   zeta <- (mu - 9.85 * sigma) / max(nk, kstar)
-  lambda_star <- lambdas[k] / ((1 / (nrank - k + 1)) * sum(lambdas[k:nrank]))
+  noise_sum <- if (is.null(total_var)) {
+    sum(lambdas[k:nrank])
+  } else {
+    total_var - sum(lambdas[seq_len(k - 1)])
+  }
+  lambda_star <- lambdas[k] / (noise_sum / (nrank - k + 1))
 
   (1 - pgamma(((lambda_star - zeta) / beta), shape)) < p
 }
@@ -49,7 +65,8 @@ rule_n_cutoff <- function(x, p = 0.05) {
   max_test <- min(length(lambdas), n_times - 1)
 
   significant <- vapply(seq_len(max_test), function(k) {
-    eigen_test(lambdas, k = k, M = n_valid, n = n_times, p = p)
+    eigen_test(lambdas, k = k, M = n_valid, n = n_times, p = p,
+               total_var = x$total_variance)
   }, logical(1))
 
   # Last TRUE in contiguous sequence from the start

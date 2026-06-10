@@ -6,6 +6,9 @@
 #' @param eofs A stars object containing EOF spatial patterns
 #' @param amplitudes A data.frame/tibble with time column and PC amplitudes
 #' @param eigenvalues A data.frame/tibble with eigenvalue statistics
+#' @param total_variance Total variance of the data (sum of all eigenvalues).
+#'   Needed for variance summaries and Rule N when the stored eigenvalue
+#'   table is truncated (e.g., IRLBA)
 #' @param k Number of components retained
 #' @param proj_matrix Projection matrix for new data
 #' @param rotation Rotation matrix if varimax was applied (or NULL)
@@ -23,7 +26,8 @@
 new_patterns <- function(eofs, amplitudes, eigenvalues, k, proj_matrix,
                          rotation = NULL, climatology = NULL, units = NULL,
                          names = NULL, scaled = FALSE, monthly = FALSE,
-                         rotate = FALSE, weight = TRUE, valid_pixels = NULL) {
+                         rotate = FALSE, weight = TRUE, valid_pixels = NULL,
+                         total_variance = NULL) {
   stopifnot(inherits(eofs, "stars"))
   stopifnot(is.data.frame(amplitudes))
   stopifnot(is.data.frame(eigenvalues))
@@ -36,6 +40,7 @@ new_patterns <- function(eofs, amplitudes, eigenvalues, k, proj_matrix,
       amplitudes = amplitudes,
       climatology = climatology,
       eigenvalues = eigenvalues,
+      total_variance = total_variance,
       rotation = rotation,
       units = units,
       names = names,
@@ -70,7 +75,7 @@ print.patterns <- function(x, ...) {
 
   cli::cli_h2("Eigenvalues (% variance)")
   top_eigs <- head(x$eigenvalues, x$k)
-  variance_pct <- round(top_eigs$eigenvalues / sum(x$eigenvalues$eigenvalues) * 100, 1)
+  variance_pct <- round(top_eigs$percent, 1)
   cli::cli_text("{.val {variance_pct}}")
 
   invisible(x)

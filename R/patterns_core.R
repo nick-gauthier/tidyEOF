@@ -78,6 +78,7 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
     eofs = eofs$spatial_patterns,
     amplitudes = eofs$amplitudes,
     eigenvalues = eofs$eigenvalues,
+    total_variance = eofs$total_variance,
     k = k,
     proj_matrix = eofs$proj_matrix,
     rotation = eofs$rotation_matrix,
@@ -232,22 +233,26 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     mutate(time = times, .before = 1)
 
   # Calculate eigenvalues - always use original unrotated values for scree plot
-  n <- length(pca_result$sdev)
-  eigenvalues <- tidy_pca_sdev(pca_result) |>
+  # prcomp_irlba returns only the leading k singular values, so percent/low/hi
+  # must use the true total variance ($totalvar), and the North et al. (1982)
+  # sampling error needs the number of temporal samples, not length(sdev)
+  total_var <- pca_result$totalvar
+  if (is.null(total_var)) total_var <- sum(pca_result$sdev^2)
+  n_times <- length(times)
+  eigenvalues <- tidy_pca_sdev(pca_result, total_var) |>
     mutate(eigenvalues = std.dev ^ 2,
            percent = percent * 100,
            cumulative = cumulative * 100,
-           error = sqrt(2 / n),
-           low =  eigenvalues * (1 - error) * 100 / sum(eigenvalues),
-           hi = eigenvalues * (1 + error) * 100 / sum(eigenvalues),
+           error = sqrt(2 / n_times),
+           low =  eigenvalues * (1 - error) * 100 / total_var,
+           hi = eigenvalues * (1 + error) * 100 / total_var,
            cumvar_line = hi + 0.02 * max(hi))
 
   if (rotate && k > 1) {
     # Replace variance stats for the retained modes with the rotated values so
     # downstream scaling/plots stay in sync with the reordered amplitudes.
     # (See Hannachi et al. 2007 re. Kaiser-normalised rotation preserving total variance.)
-    total_variance <- sum(pca_result$sdev^2)
-    rotated_percent <- component_variance / total_variance * 100
+    rotated_percent <- component_variance / total_var * 100
     rotated_cumulative <- cumsum(rotated_percent)
 
     eigenvalues <- eigenvalues %>%
@@ -263,6 +268,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     spatial_patterns = spatial_patterns,
     amplitudes = amplitudes,
     eigenvalues = eigenvalues,
+    total_variance = total_var,
     rotation_matrix = rotation_matrix,
     valid_pixels = valid_pixels,
     spatial_dims = flattened$spatial_dims,
@@ -334,16 +340,19 @@ area_weights <- function(dat) {
 #' Tidy PCA standard deviations into a tibble
 #'
 #' Replaces `broom::tidy(pca, matrix = "pcs")` with a dependency-free version.
-#' Returns a tibble with columns PC, std.dev, percent, cumulative — identical
-#' to the broom output.
+#' Returns a tibble with columns PC, std.dev, percent, cumulative.
 #'
 #' @param pca_result A prcomp (or prcomp_irlba) result
+#' @param total_var Total variance of the data (sum of all eigenvalues).
+#'   Defaults to `sum(pca_result$sdev^2)`, which is only correct when the
+#'   full spectrum is present; pass `pca_result$totalvar` for truncated
+#'   (IRLBA) results.
 #' @return Tibble with PC, std.dev, percent, cumulative
 #' @keywords internal
-tidy_pca_sdev <- function(pca_result) {
+tidy_pca_sdev <- function(pca_result, total_var = NULL) {
   sdev <- pca_result$sdev
   variance <- sdev^2
-  total_var <- sum(variance)
+  if (is.null(total_var)) total_var <- sum(variance)
   pct <- variance / total_var
   tibble::tibble(
     PC = seq_along(sdev),

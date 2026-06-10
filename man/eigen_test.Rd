@@ -4,7 +4,7 @@
 \alias{eigen_test}
 \title{Test EOF significance using modified Rule N}
 \usage{
-eigen_test(lambdas, k, M, n, p = 0.05)
+eigen_test(lambdas, k, M, n, p = 0.05, total_var = NULL)
 }
 \arguments{
 \item{lambdas}{Vector of eigenvalues from PCA}
@@ -16,6 +16,11 @@ eigen_test(lambdas, k, M, n, p = 0.05)
 \item{n}{Number of time steps}
 
 \item{p}{Significance level (default 0.05)}
+
+\item{total_var}{Total variance of the data (sum of all eigenvalues).
+Required when `lambdas` contains only the leading modes (e.g., from
+IRLBA); the remaining noise variance is then `total_var` minus the
+eigenvalues above `k`. If NULL (default), all eigenvalues must be present.}
 }
 \value{
 Logical, TRUE if eigenvalue is significant at level p

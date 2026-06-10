@@ -4,17 +4,21 @@
 \alias{tidy_pca_sdev}
 \title{Tidy PCA standard deviations into a tibble}
 \usage{
-tidy_pca_sdev(pca_result)
+tidy_pca_sdev(pca_result, total_var = NULL)
 }
 \arguments{
 \item{pca_result}{A prcomp (or prcomp_irlba) result}
+
+\item{total_var}{Total variance of the data (sum of all eigenvalues).
+Defaults to `sum(pca_result$sdev^2)`, which is only correct when the
+full spectrum is present; pass `pca_result$totalvar` for truncated
+(IRLBA) results.}
 }
 \value{
 Tibble with PC, std.dev, percent, cumulative
 }
 \description{
 Replaces `broom::tidy(pca, matrix = "pcs")` with a dependency-free version.
-Returns a tibble with columns PC, std.dev, percent, cumulative — identical
-to the broom output.
+Returns a tibble with columns PC, std.dev, percent, cumulative.
 }
 \keyword{internal}
