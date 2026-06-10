@@ -1,7 +1,10 @@
-# Calculate spatial correlation (averaged over time)
+# Calculate spatial anomaly correlation (averaged over time)
 
 For each time step, compute correlation across spatial locations, then
-average across all time steps.
+average across all time steps. Each cell's temporal mean is removed
+first so the correlation measures agreement of the anomaly patterns
+rather than the shared climatology, which is constant in time and would
+otherwise inflate the correlation toward one regardless of skill.
 
 ## Usage
 
@@ -21,4 +24,4 @@ calc_cor_spatial(pred_matrix, obs_matrix)
 
 ## Value
 
-Mean spatial correlation across time steps
+Mean spatial anomaly correlation across time steps

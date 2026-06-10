@@ -61,7 +61,7 @@ eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [479ms]
+    ✔ Computing patterns for 3 folds [469ms]
 
     Evaluating 8 k values across 3 folds
 
@@ -72,23 +72,24 @@ eof_results
     # A tibble: 24 × 5
            k  fold  rmse cor_spatial cor_temporal
        <int> <int> <dbl>       <dbl>        <dbl>
-     1     1     1 0.809      0.249         0.998
-     2     1     2 0.657      0.0782        0.998
-     3     1     3 0.663      0.261         0.998
-     4     2     1 0.391      0.770         0.999
-     5     2     2 0.310      0.828         0.999
-     6     2     3 0.310      0.759         1.000
-     7     3     1 0.354      0.836         1.000
-     8     3     2 0.290      0.851         1.000
-     9     3     3 0.295      0.787         1.000
-    10     4     1 0.338      0.847         1.000
+     1     1     1 0.809       0.230        0.998
+     2     1     2 0.657       0.145        0.998
+     3     1     3 0.663       0.282        0.998
+     4     2     1 0.391       0.741        0.999
+     5     2     2 0.310       0.829        0.999
+     6     2     3 0.310       0.791        1.000
+     7     3     1 0.354       0.833        1.000
+     8     3     2 0.290       0.853        1.000
+     9     3     3 0.295       0.824        1.000
+    10     4     1 0.338       0.847        1.000
     # ℹ 14 more rows
 
 Three metrics are computed by default, all on the hidden cells:
 
 - **RMSE** – root mean square error (lower is better)
-- **cor_spatial** – mean spatial correlation per time step (higher is
-  better)
+- **cor_spatial** – mean spatial *anomaly* correlation per time step,
+  i.e. computed after removing each cell’s temporal mean so it reflects
+  pattern skill rather than the static climatology (higher is better)
 - **cor_temporal** – mean temporal correlation per grid cell (higher is
   better)
 
@@ -102,14 +103,14 @@ eof_summary
     # A tibble: 8 × 8
           k rmse_mean rmse_sd cor_spatial_mean cor_spatial_sd cor_temporal_mean
       <int>     <dbl>   <dbl>            <dbl>          <dbl>             <dbl>
-    1     8     0.244  0.0452            0.906         0.0146             1.000
-    2     7     0.252  0.0422            0.897         0.0206             1.000
-    3     6     0.261  0.0425            0.889         0.0227             1.000
-    4     5     0.268  0.0423            0.880         0.0236             1.000
-    5     4     0.286  0.0462            0.849         0.0395             1.000
-    6     3     0.313  0.0358            0.825         0.0333             1.000
-    7     2     0.337  0.0466            0.786         0.0369             0.999
-    8     1     0.710  0.0859            0.196         0.102              0.998
+    1     8     0.244  0.0452            0.910         0.0120             1.000
+    2     7     0.252  0.0422            0.902         0.0167             1.000
+    3     6     0.261  0.0425            0.894         0.0196             1.000
+    4     5     0.268  0.0423            0.887         0.0205             1.000
+    5     4     0.286  0.0462            0.864         0.0269             1.000
+    6     3     0.313  0.0358            0.837         0.0150             1.000
+    7     2     0.337  0.0466            0.787         0.0440             0.999
+    8     1     0.710  0.0859            0.219         0.0691             0.998
     # ℹ 2 more variables: cor_temporal_sd <dbl>, n_folds <int>
 
 ``` r
@@ -160,7 +161,7 @@ cv_folds <- prep_cv_folds(
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [492ms]
+    ✔ Computing patterns for 3 folds [484ms]
 
 ``` r
 cv_folds
@@ -199,9 +200,9 @@ cca_results <- tune_cca(
 ```
 
     Evaluating 25 parameter combinations across 3 folds
-     ■■■■■■■■■■■■■■■                   48% |  ETA:  4s
+     ■■■■■■■■■■■■                      36% |  ETA:  5s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■■■■■■     92% |  ETA:  1s
+     ■■■■■■■■■■■■■■■■■■■■■■■■■■        84% |  ETA:  1s
 
 ``` r
 cca_results
@@ -210,16 +211,16 @@ cca_results
     # A tibble: 75 × 7
        k_pred k_resp k_cca  fold  rmse cor_spatial cor_temporal
         <int>  <int> <int> <int> <dbl>       <dbl>        <dbl>
-     1      1      1     1     1 0.808       0.790        0.998
-     2      1      1     1     2 0.658       0.930        0.998
-     3      1      1     1     3 0.671       0.922        0.997
-     4      1      2     1     1 0.808       0.790        0.998
-     5      1      2     1     2 0.657       0.930        0.998
-     6      1      2     1     3 0.671       0.922        0.997
-     7      1      3     1     1 0.808       0.790        0.998
-     8      1      3     1     2 0.657       0.930        0.998
-     9      1      3     1     3 0.671       0.922        0.997
-    10      1      4     1     1 0.808       0.790        0.998
+     1      1      1     1     1 0.808       0.240        0.998
+     2      1      1     1     2 0.658       0.140        0.998
+     3      1      1     1     3 0.671       0.281        0.997
+     4      1      2     1     1 0.808       0.238        0.998
+     5      1      2     1     2 0.657       0.141        0.998
+     6      1      2     1     3 0.671       0.281        0.997
+     7      1      3     1     1 0.808       0.238        0.998
+     8      1      3     1     2 0.657       0.141        0.998
+     9      1      3     1     3 0.671       0.281        0.997
+    10      1      4     1     1 0.808       0.238        0.998
     # ℹ 65 more rows
 
 Summarize to find the best parameter combination:
@@ -232,12 +233,12 @@ head(cca_summary)
     # A tibble: 6 × 10
       k_pred k_resp k_cca rmse_mean rmse_sd cor_spatial_mean cor_spatial_sd
        <int>  <int> <int>     <dbl>   <dbl>            <dbl>          <dbl>
-    1      5      5     5     0.270  0.0416            0.971         0.0199
-    2      5      4     4     0.287  0.0459            0.968         0.0212
-    3      4      4     4     0.288  0.0453            0.968         0.0210
-    4      4      5     4     0.289  0.0471            0.968         0.0213
-    5      3      4     3     0.311  0.0387            0.964         0.0213
-    6      3      5     3     0.312  0.0395            0.964         0.0215
+    1      5      5     5     0.270  0.0416            0.885        0.0196
+    2      5      4     4     0.287  0.0459            0.864        0.0247
+    3      4      4     4     0.288  0.0453            0.862        0.0255
+    4      4      5     4     0.289  0.0471            0.860        0.0273
+    5      3      4     3     0.311  0.0387            0.838        0.00797
+    6      3      5     3     0.312  0.0395            0.836        0.00950
     # ℹ 3 more variables: cor_temporal_mean <dbl>, cor_temporal_sd <dbl>,
     #   n_folds <int>
 
@@ -270,9 +271,9 @@ cca_results_3d <- tune_cca(
 ```
 
     Evaluating 22 parameter combinations across 3 folds
-     ■■■■■■■■■■■                       32% |  ETA:  4s
+     ■■■■■■■■                          23% |  ETA:  5s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■■■        82% |  ETA:  1s
+     ■■■■■■■■■■■■■■■■■■■■■■■           73% |  ETA:  2s
 
 ``` r
 cca_results_3d |>

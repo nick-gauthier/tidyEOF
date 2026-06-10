@@ -56,7 +56,7 @@ maximize correlation between them.</p>
 <span>  <span class="va">response_patterns</span>,</span>
 <span>  k <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  method <span class="op">=</span> <span class="st">"cca"</span>,</span>
-<span>  center <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  center <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  validate <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -82,7 +82,13 @@ maximize correlation between them.</p>
 
 
 <dt id="arg-center">center<a class="anchor" aria-label="anchor" href="#arg-center"></a></dt>
-<dd><p>Logical, whether to center the data before CCA (default: FALSE)</p></dd>
+<dd><p>Logical, whether to center the amplitudes before CCA
+(default: TRUE). Centering is the statistically standard choice and makes
+retaining all modes equivalent to multivariate regression with an
+intercept. It is a no-op when the amplitudes are already zero-mean over
+the coupled period (the usual case), but is essential when the predictor
+and response patterns were fit on different periods and then filtered to a
+common one, which leaves the common-period amplitudes with a nonzero mean.</p></dd>
 
 
 <dt id="arg-validate">validate<a class="anchor" aria-label="anchor" href="#arg-validate"></a></dt>
