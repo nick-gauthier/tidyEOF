@@ -1,4 +1,4 @@
-#' @import stars dplyr tidyr
+#' @import stars dplyr tidyr cubelyr
 #' @importFrom stats screeplot aggregate cancor cor cor.test p.adjust pgamma prcomp predict sd setNames time varimax
 #' @importFrom utils head data
 #' @importFrom sf st_crs

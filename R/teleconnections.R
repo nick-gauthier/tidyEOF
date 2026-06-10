@@ -14,13 +14,21 @@ get_correlation <- function(dat, patterns, amplitudes = NULL) {
   if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
 
   matched <- match_times(amplitudes, dat)
+  k <- ncol(matched$amps)
+  dat_filtered <- dplyr::filter(dat, time %in% matched$times)
 
-  # BUG (pre-existing): when k=1, st_apply drops the PC dimension entirely,
-  # so st_set_dimensions(., 'PC', ...) fails with "not an existing dimension".
-  # Affects both raster and geometry paths. Needs a k=1 guard or merge_dim.
-  suppressWarnings( # suppress warnings that sd is zero
-    result <- filter(dat, time %in% matched$times) %>%
-      st_apply(get_spatial_dimensions(.), function(x) cor(x, matched$amps), .fname = 'PC') %>%
+  if (k == 1) {
+    # k=1: st_apply drops the PC dimension, so compute directly
+    suppressWarnings(
+      result <- st_apply(dat_filtered, get_spatial_dimensions(dat_filtered),
+                         function(x) cor(x, matched$amps[[1]]))
+    )
+    return(setNames(result, "PC1"))
+  }
+
+  suppressWarnings(
+    result <- st_apply(dat_filtered, get_spatial_dimensions(dat_filtered),
+                       function(x) cor(x, matched$amps), .fname = 'PC') %>%
       st_set_dimensions(., 'PC', values = paste0('PC', st_get_dimension_values(., 'PC')))
   )
   # Move PC (first dim) to last: works for both 2D (PC, geometry) and 3D (PC, x, y)
@@ -44,6 +52,7 @@ get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
   if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
 
   matched <- match_times(amplitudes, dat)
+  k <- ncol(matched$amps)
 
   if (has_geometry_dimension(dat)) {
     cli::cli_abort(
@@ -52,9 +61,28 @@ get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
     )
   }
 
-  suppressWarnings( # suppress warnings that sd is zero
-    fdr_rast <- filter(dat, time %in% matched$times) %>%
-      st_apply(get_spatial_dimensions(.), fdr_fun, amps = matched$amps, .fname = 'PC') %>%
+  dat_filtered <- dplyr::filter(dat, time %in% matched$times)
+
+  if (k == 1) {
+    # k=1: st_apply drops the PC dimension, so compute directly.
+    # FDR correction across PCs is trivial with one PC.
+    suppressWarnings(
+      fdr_rast <- st_apply(dat_filtered, get_spatial_dimensions(dat_filtered),
+                           function(x) {
+                             if (!any(is.na(x))) cor.test(x, matched$amps[[1]])$p.value else NA
+                           }) %>%
+        setNames('FDR')
+    )
+    return(
+      fdr_rast %>%
+        st_contour(contour_lines = TRUE, breaks = fdr) %>%
+        dplyr::transmute(PC = "PC1")
+    )
+  }
+
+  suppressWarnings(
+    fdr_rast <- st_apply(dat_filtered, get_spatial_dimensions(dat_filtered),
+                         fdr_fun, amps = matched$amps, .fname = 'PC') %>%
       aperm(c(2,3,1)) %>%
       st_apply('PC', adjust) %>%
       setNames('FDR')
@@ -79,7 +107,7 @@ match_times <- function(amplitudes, dat) {
   times_amps <- amplitudes$time
   times_dat <- st_get_dimension_values(dat, 'time')
   # Use subsetting to preserve Date/POSIXct class (intersect can strip it)
-  times_cor <- times_amps[times_amps %in% times_dat]
+  times_cor <- sort(times_amps[times_amps %in% times_dat])
 
   if(length(times_cor) < 2) cli::cli_abort("Need at least two time steps in common.")
   if(!(identical(times_cor, times_amps) & identical(times_cor, times_dat))) {
@@ -87,6 +115,7 @@ match_times <- function(amplitudes, dat) {
   }
 
   amps <- dplyr::filter(amplitudes, time %in% times_cor) %>%
+    dplyr::arrange(time) %>%
     dplyr::select(-time)
 
   list(times = times_cor, amps = amps)

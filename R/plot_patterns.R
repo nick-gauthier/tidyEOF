@@ -29,10 +29,11 @@ screeplot.patterns <- function(x, k = NULL, kmax = 10, rule_n = FALSE, ...) {
     ggplot2::geom_text(aes(x = PC, y = cumvar_line, label = glue::glue("{round(cumulative, 0)}%")), size = 2.5, vjust = 0) +
     ggplot2::labs(x = "Principal Component", y = "Normalized Eigenvalue") +
     { if (!is.null(k)) ggplot2::geom_vline(xintercept = k + .5, linetype = 2, color = 'red', alpha = .7) } +
-    { if (!is.null(rule_n_k) && rule_n_k > 0) ggplot2::geom_vline(xintercept = rule_n_k + .5, linetype = 2, color = 'blue', alpha = .7) } +
+    { if (!is.null(rule_n_k) && rule_n_k > 0 && rule_n_k <= kmax) ggplot2::geom_vline(xintercept = rule_n_k + .5, linetype = 2, color = 'blue', alpha = .7) } +
+    { if (!is.null(rule_n_k) && rule_n_k > kmax) ggplot2::annotate("text", x = kmax, y = Inf, label = glue::glue("All shown modes significant\n(Rule N cutoff: {rule_n_k})"), hjust = 1, vjust = 1.5, size = 3, color = 'blue') } +
     ggplot2::theme_bw() +
     ggplot2::guides(color = 'none') +
-    ggplot2::scale_x_continuous(breaks = seq(0, 25, 5)) +
+    ggplot2::scale_x_continuous(breaks = seq_len(kmax)) +
     ggplot2::scale_color_brewer(palette = 'Spectral')
 }
 

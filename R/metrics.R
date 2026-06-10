@@ -21,10 +21,12 @@ compute_spatial_metrics <- function(predicted, observed, metrics = c("rmse", "co
   }
 
 
-  # Sort common times and filter both to ensure alignment
+  # Filter to common times and sort both to ensure alignment
   common_times <- sort(common_times)
   predicted <- dplyr::filter(predicted, time %in% common_times)
   observed <- dplyr::filter(observed, time %in% common_times)
+  predicted <- dplyr::slice(predicted, "time", order(stars::st_get_dimension_values(predicted, "time")))
+  observed <- dplyr::slice(observed, "time", order(stars::st_get_dimension_values(observed, "time")))
 
   # Flatten to matrices for comparison
   pred_flat <- flatten_time_space(predicted)

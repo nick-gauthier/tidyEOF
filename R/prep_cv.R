@@ -12,6 +12,7 @@
 #' @seealso [tune_cca()] for hyperparameter grid search
 #' @export
 prep_folds <- function(times, kfolds = 5){
+  if (kfolds < 2) cli::cli_abort("{.arg kfolds} must be at least 2, not {kfolds}.")
   # divide years into kfolds contiguous folds
   n <- length(times)
   r <- n %% kfolds
