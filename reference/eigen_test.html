@@ -48,7 +48,7 @@ using a modified Rule N approach based on Tracy-Widom distribution.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">eigen_test</span><span class="op">(</span><span class="va">lambdas</span>, <span class="va">k</span>, <span class="va">M</span>, <span class="va">n</span>, p <span class="op">=</span> <span class="fl">0.05</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">eigen_test</span><span class="op">(</span><span class="va">lambdas</span>, <span class="va">k</span>, <span class="va">M</span>, <span class="va">n</span>, p <span class="op">=</span> <span class="fl">0.05</span>, total_var <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -73,6 +73,13 @@ using a modified Rule N approach based on Tracy-Widom distribution.</p>
 
 <dt id="arg-p">p<a class="anchor" aria-label="anchor" href="#arg-p"></a></dt>
 <dd><p>Significance level (default 0.05)</p></dd>
+
+
+<dt id="arg-total-var">total_var<a class="anchor" aria-label="anchor" href="#arg-total-var"></a></dt>
+<dd><p>Total variance of the data (sum of all eigenvalues).
+Required when `lambdas` contains only the leading modes (e.g., from
+IRLBA); the remaining noise variance is then `total_var` minus the
+eigenvalues above `k`. If NULL (default), all eigenvalues must be present.</p></dd>
 
 </dl></div>
     <div class="section level2">

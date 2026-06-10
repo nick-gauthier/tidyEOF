@@ -20,7 +20,8 @@ new_patterns(
   monthly = FALSE,
   rotate = FALSE,
   weight = TRUE,
-  valid_pixels = NULL
+  valid_pixels = NULL,
+  total_variance = NULL
 )
 ```
 
@@ -81,6 +82,12 @@ new_patterns(
 - valid_pixels:
 
   Indices of valid (non-NA) pixels
+
+- total_variance:
+
+  Total variance of the data (sum of all eigenvalues). Needed for
+  variance summaries and Rule N when the stored eigenvalue table is
+  truncated (e.g., IRLBA)
 
 ## Value
 

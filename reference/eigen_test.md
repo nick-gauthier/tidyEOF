@@ -6,7 +6,7 @@ using a modified Rule N approach based on Tracy-Widom distribution.
 ## Usage
 
 ``` r
-eigen_test(lambdas, k, M, n, p = 0.05)
+eigen_test(lambdas, k, M, n, p = 0.05, total_var = NULL)
 ```
 
 ## Arguments
@@ -30,6 +30,13 @@ eigen_test(lambdas, k, M, n, p = 0.05)
 - p:
 
   Significance level (default 0.05)
+
+- total_var:
+
+  Total variance of the data (sum of all eigenvalues). Required when
+  \`lambdas\` contains only the leading modes (e.g., from IRLBA); the
+  remaining noise variance is then \`total_var\` minus the eigenvalues
+  above \`k\`. If NULL (default), all eigenvalues must be present.
 
 ## Value
 

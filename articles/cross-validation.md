@@ -51,7 +51,7 @@ eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [473ms]
+    ✔ Computing patterns for 3 folds [476ms]
 
     Evaluating 8 k values across 3 folds
 
@@ -150,7 +150,7 @@ cv_folds <- prep_cv_folds(
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [495ms]
+    ✔ Computing patterns for 3 folds [509ms]
 
 ``` r
 cv_folds

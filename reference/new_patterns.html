@@ -62,7 +62,8 @@ components are present and have the correct types.</p>
 <span>  monthly <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  rotate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  weight <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  valid_pixels <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  valid_pixels <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  total_variance <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -124,6 +125,12 @@ components are present and have the correct types.</p>
 
 <dt id="arg-valid-pixels">valid_pixels<a class="anchor" aria-label="anchor" href="#arg-valid-pixels"></a></dt>
 <dd><p>Indices of valid (non-NA) pixels</p></dd>
+
+
+<dt id="arg-total-variance">total_variance<a class="anchor" aria-label="anchor" href="#arg-total-variance"></a></dt>
+<dd><p>Total variance of the data (sum of all eigenvalues).
+Needed for variance summaries and Rule N when the stored eigenvalue
+table is truncated (e.g., IRLBA)</p></dd>
 
 </dl></div>
     <div class="section level2">
