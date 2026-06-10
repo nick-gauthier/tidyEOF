@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Cross-Validation and Tuning • tidyeof</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><script src="cross-validation_files/libs/quarto-html/popper.min.js"></script><script src="cross-validation_files/libs/quarto-html/tippy.umd.min.js"></script><link href="cross-validation_files/libs/quarto-html/tippy.css" rel="stylesheet">
 <link href="cross-validation_files/libs/quarto-html/light-border.css" rel="stylesheet">
@@ -111,7 +111,7 @@
 <pre><code>ℹ Computing patterns for 3 folds</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>✔ Computing patterns for 3 folds [547ms]</code></pre>
+<pre><code>✔ Computing patterns for 3 folds [473ms]</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code></code></pre>
@@ -216,7 +216,7 @@
 <pre><code>ℹ Computing patterns for 3 folds</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
-<pre><code>✔ Computing patterns for 3 folds [536ms]</code></pre>
+<pre><code>✔ Computing patterns for 3 folds [495ms]</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code></code></pre>
@@ -277,9 +277,9 @@
 <span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>Evaluating 25 parameter combinations across 3 folds
- ■■■■■■■■■■■■                      36% |  ETA:  5s
+ ■■■■■■■■■■■■■■                    44% |  ETA:  4s
 
- ■■■■■■■■■■■■■■■■■■■■■■■■■         80% |  ETA:  1s</code></pre>
+ ■■■■■■■■■■■■■■■■■■■■■■■■■■■       88% |  ETA:  1s</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb34"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cca_results</span></span></code></pre></div>
@@ -350,9 +350,9 @@
 <span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>Evaluating 22 parameter combinations across 3 folds
- ■■■■■■                            18% |  ETA:  5s
+ ■■■■■■■■■                         27% |  ETA:  4s
 
- ■■■■■■■■■■■■■■■■■■■■■             68% |  ETA:  2s</code></pre>
+ ■■■■■■■■■■■■■■■■■■■■■■■■          77% |  ETA:  1s</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb41"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cca_results_3d</span> <span class="op">|&gt;</span></span>
@@ -395,7 +395,7 @@
 <p>For large grids or many parameter combinations, <code><a href="../reference/tune_cca.html">tune_cca()</a></code> supports parallel execution via <code>furrr</code>:</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb45"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/DavisVaughan/furrr" class="external-link">furrr</a></span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/futureverse/furrr" class="external-link">furrr</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://future.futureverse.org/reference/plan.html" class="external-link">plan</a></span><span class="op">(</span><span class="va">multisession</span>, workers <span class="op">=</span> <span class="fl">4</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tune_cca.html">tune_cca</a></span><span class="op">(</span><span class="va">cv_folds</span>, k_pred <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, k_resp <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>, parallel <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>

@@ -48,10 +48,13 @@ dat <- stars::st_as_stars(array(rnorm(10*10*36), c(10, 10, 36))) %>%
   st_set_dimensions(1, values = x, name = "x") %>%
   st_set_dimensions(2, values = y, name = "y") %>%
   st_set_dimensions(3, values = times, name = "time")
+#> Error in stars::st_as_stars(array(rnorm(10 * 10 * 36), c(10, 10, 36))) %>%     st_set_dimensions(1, values = x, name = "x") %>% st_set_dimensions(2,     values = y, name = "y") %>% st_set_dimensions(3, values = times,     name = "time"): could not find function "%>%"
 
 # Calculate annual climatology
 clim <- get_climatology(dat)
+#> Error: object 'dat' not found
 
 # Calculate monthly climatology
 monthly_clim <- get_climatology(dat, monthly = TRUE)
+#> Error: object 'dat' not found
 ```
