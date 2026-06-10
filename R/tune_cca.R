@@ -422,19 +422,36 @@ print.cv_folds <- function(x, ...) {
 #' Cross-validate EOF truncation for a single field
 #'
 #' Evaluates reconstruction skill for different numbers of EOFs using k-fold
-#' cross-validation. For each fold, EOFs are fit on training data, test data
-#' is projected onto those EOFs, and the reconstruction is compared to the
-#' original test data.
+#' cross-validation with a speckled holdout. For each held-out fold a random
+#' scatter of grid cells is hidden, mode amplitudes are estimated from the
+#' visible cells, and the hidden cells are predicted. Because the hidden cells
+#' are not used to estimate the amplitudes, prediction error is genuinely
+#' out-of-sample and stops improving once `k` exceeds the field's effective
+#' rank -- so the RMSE-minimising `k` is a meaningful estimate of how many
+#' modes the data support (Bro et al. 2008).
+#'
+#' Naively projecting the full held-out field onto the EOFs and scoring the
+#' reconstruction (the approach used before tidyeof 0.1.0) does NOT work: the
+#' projection is least-squares optimal for the very data being scored, so error
+#' decreases monotonically with `k` and the "best" `k` is always the largest.
 #'
 #' @param data A stars object with spatial-temporal data
 #' @param k Vector of EOF counts to evaluate (default 1:10)
 #' @param kfolds Number of cross-validation folds (default 5)
 #' @param max_k Maximum EOFs to compute per fold (default max(k))
 #' @param metrics Character vector of metrics to compute. Options:
-#'   "rmse", "cor_spatial", "cor_temporal" (default: all three)
+#'   "rmse", "cor_spatial", "cor_temporal" (default: all three). Metrics are
+#'   computed on the hidden cells only.
 #' @param scale Logical, whether to scale data before EOF extraction (default FALSE)
 #' @param monthly Logical, whether to compute monthly climatology (default FALSE)
 #' @param weight Logical, whether to apply area weighting (default TRUE)
+#' @param hidden_fraction Fraction of grid cells to hide in each held-out fold
+#'   (default 0.2). Hidden cells are predicted from the visible ones.
+#' @param n_reps Number of random hidden-cell masks to average over per fold
+#'   (default 5). More replicates give smoother, more stable estimates.
+#' @param seed Base random seed for hidden-cell masks (default 1). Masks depend
+#'   only on the fold and replicate, not on `k`, so all `k` are compared on the
+#'   same hidden cells. The global RNG is left undisturbed.
 #'
 #' @return A tibble with columns: k, fold, and one column per metric.
 #'
@@ -460,7 +477,10 @@ tune_eof <- function(data,
                      metrics = c("rmse", "cor_spatial", "cor_temporal"),
                      scale = FALSE,
                      monthly = FALSE,
-                     weight = TRUE) {
+                     weight = TRUE,
+                     hidden_fraction = 0.2,
+                     n_reps = 5,
+                     seed = 1L) {
 
   times <- stars::st_get_dimension_values(data, "time")
 
@@ -501,7 +521,10 @@ tune_eof <- function(data,
       evaluate_eof_fold(
         fold = fold,
         k = k_val,
-        metrics = metrics
+        metrics = metrics,
+        hidden_fraction = hidden_fraction,
+        n_reps = n_reps,
+        seed = seed
       )
     })
 
@@ -512,29 +535,106 @@ tune_eof <- function(data,
   dplyr::bind_rows(results)
 }
 
-#' Evaluate EOF reconstruction for a single fold
+#' Evaluate one tuning argument with the global RNG temporarily seeded
+#'
+#' Runs `code` after `set.seed(seed)` and restores the previous RNG state on
+#' exit, so cross-validation masks are reproducible without disturbing the
+#' caller's random stream.
+#' @keywords internal
+with_seed <- function(seed, code) {
+  if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+    old_seed <- get(".Random.seed", envir = globalenv(), inherits = FALSE)
+    on.exit(assign(".Random.seed", old_seed, envir = globalenv()), add = TRUE)
+  } else {
+    on.exit(
+      if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+        rm(".Random.seed", envir = globalenv())
+      },
+      add = TRUE
+    )
+  }
+  set.seed(seed)
+  force(code)
+}
+
+#' Extract the EOF loading matrix (space x PC) from a patterns object
+#'
+#' Returns loadings in the same flattened spatial order used by
+#' [flatten_time_space()], so columns align with `valid_pixels`.
+#' @keywords internal
+eof_loading_matrix <- function(patterns) {
+  eof_array <- patterns$eofs[[1]]
+  spatial_sizes <- dim(eof_array)[-length(dim(eof_array))]
+  matrix(eof_array, nrow = prod(spatial_sizes), ncol = patterns$k)
+}
+
+#' Evaluate EOF reconstruction for a single fold via speckled holdout
+#'
+#' Hides a random scatter of grid cells in the held-out data, estimates mode
+#' amplitudes from the visible cells by least squares, and scores the
+#' prediction on the hidden cells. This makes reconstruction skill a genuine
+#' out-of-sample quantity, so over-fitting with too many EOFs is penalised
+#' (Bro et al. 2008). Masks depend only on the fold and replicate, not on `k`,
+#' so every `k` is scored on the same hidden cells.
 #'
 #' @param fold A fold list containing train_patterns and test_data
 #' @param k Number of EOFs to use
 #' @param metrics Metrics to compute
+#' @param hidden_fraction Fraction of valid grid cells to hide per replicate
+#' @param n_reps Number of random hidden-cell masks to average over
+#' @param seed Base seed; combined with the fold id so masks are reproducible
 #'
 #' @return Tibble with fold_id and metric values
 #' @keywords internal
-evaluate_eof_fold <- function(fold, k, metrics) {
-  # Truncate patterns to k
+evaluate_eof_fold <- function(fold, k, metrics, hidden_fraction = 0.2,
+                              n_reps = 5, seed = 1L) {
   patterns_k <- fold$train_patterns[1:k]
 
-  # Project test data and reconstruct
-  reconstructed <- reconstruct(patterns_k,
-                                     amplitudes = fold$test_data)
+  # Held-out anomalies in the space the patterns were fit in (own climatology)
+  anomalies <- get_anomalies(fold$test_data, patterns_k$climatology,
+                             scale = patterns_k$scaled, monthly = patterns_k$monthly)
+  anom_mat <- flatten_time_space(units::drop_units(anomalies)[1])$matrix
 
-  # Compute metrics
-  metric_values <- compute_spatial_metrics(reconstructed, fold$test_data, metrics)
+  valid <- patterns_k$valid_pixels
+  n_valid <- length(valid)
+  obs <- anom_mat[, valid, drop = FALSE]               # time x valid cells
 
-  # Return as single-row tibble
+  # Area weights applied during fitting must also weight the LS estimate
+  w <- if (isTRUE(patterns_k$weight)) area_weights(fold$test_data)[valid] else rep(1, n_valid)
+
+  weighted_loadings <- eof_loading_matrix(patterns_k)[valid, , drop = FALSE] * w
+  weighted_obs <- sweep(obs, 2, w, `*`)                # time x valid cells
+
+  n_hidden <- max(2L, round(hidden_fraction * n_valid))
+  if (n_valid - n_hidden < k) {
+    cli::cli_abort(
+      "hidden_fraction = {hidden_fraction} leaves fewer than k = {k} visible cells.",
+      class = "tidyeof_insufficient_cells"
+    )
+  }
+
+  rep_metrics <- purrr::map(seq_len(n_reps), function(rep) {
+    hidden <- with_seed(seed + fold$fold_id * 1000L + rep,
+                        sample.int(n_valid, n_hidden))
+    visible <- setdiff(seq_len(n_valid), hidden)
+
+    # Estimate amplitudes from visible cells, predict the hidden ones
+    amps <- t(qr.solve(weighted_loadings[visible, , drop = FALSE],
+                       t(weighted_obs[, visible, drop = FALSE])))
+    pred_hidden <- sweep(amps %*% t(weighted_loadings[hidden, , drop = FALSE]),
+                         2, w[hidden], `/`)
+    obs_hidden <- obs[, hidden, drop = FALSE]
+
+    vals <- list()
+    if ("rmse" %in% metrics)        vals$rmse <- calc_rmse(pred_hidden, obs_hidden)
+    if ("cor_spatial" %in% metrics) vals$cor_spatial <- calc_cor_spatial(pred_hidden, obs_hidden)
+    if ("cor_temporal" %in% metrics) vals$cor_temporal <- calc_cor_temporal(pred_hidden, obs_hidden)
+    vals
+  })
+
   result <- tibble::tibble(fold = fold$fold_id)
-  for (m in names(metric_values)) {
-    result[[m]] <- metric_values[[m]]
+  for (m in metrics) {
+    result[[m]] <- mean(vapply(rep_metrics, function(v) v[[m]], numeric(1)), na.rm = TRUE)
   }
   result
 }

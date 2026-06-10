@@ -42,7 +42,9 @@ coarse <- fine |>
 
 ## Tuning EOF truncation
 
-`tune_eof()` evaluates reconstruction skill across a range of `k` values. For each fold, it extracts patterns from training data, projects test data onto those patterns, reconstructs the test field, and compares against the held-out observations.
+`tune_eof()` evaluates reconstruction skill across a range of `k` values. For each held-out fold it uses a *speckled holdout*: a random scatter of grid cells is hidden, the mode amplitudes are estimated from the visible cells only, and the hidden cells are then predicted. Because the hidden cells play no part in estimating the amplitudes, the prediction is genuinely out-of-sample, and skill stops improving once `k` exceeds the number of modes the data actually support. This is what lets the RMSE curve have a true minimum.
+
+(Simply projecting the whole held-out field onto the EOFs would not work: the projection is least-squares optimal for the very data being scored, so error would fall monotonically with `k` and the "best" `k` would always be the largest. `hidden_fraction` and `n_reps` control the size and number of the random masks.)
 
 ```{r}
 #| label: tune-eof
@@ -50,7 +52,7 @@ eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
 eof_results
 ```
 
-Three metrics are computed by default:
+Three metrics are computed by default, all on the hidden cells:
 
 - **RMSE** -- root mean square error (lower is better)
 - **cor_spatial** -- mean spatial correlation per time step (higher is better)

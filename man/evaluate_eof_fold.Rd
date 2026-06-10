@@ -2,9 +2,16 @@
 % Please edit documentation in R/tune_cca.R
 \name{evaluate_eof_fold}
 \alias{evaluate_eof_fold}
-\title{Evaluate EOF reconstruction for a single fold}
+\title{Evaluate EOF reconstruction for a single fold via speckled holdout}
 \usage{
-evaluate_eof_fold(fold, k, metrics)
+evaluate_eof_fold(
+  fold,
+  k,
+  metrics,
+  hidden_fraction = 0.2,
+  n_reps = 5,
+  seed = 1L
+)
 }
 \arguments{
 \item{fold}{A fold list containing train_patterns and test_data}
@@ -12,11 +19,22 @@ evaluate_eof_fold(fold, k, metrics)
 \item{k}{Number of EOFs to use}
 
 \item{metrics}{Metrics to compute}
+
+\item{hidden_fraction}{Fraction of valid grid cells to hide per replicate}
+
+\item{n_reps}{Number of random hidden-cell masks to average over}
+
+\item{seed}{Base seed; combined with the fold id so masks are reproducible}
 }
 \value{
 Tibble with fold_id and metric values
 }
 \description{
-Evaluate EOF reconstruction for a single fold
+Hides a random scatter of grid cells in the held-out data, estimates mode
+amplitudes from the visible cells by least squares, and scores the
+prediction on the hidden cells. This makes reconstruction skill a genuine
+out-of-sample quantity, so over-fitting with too many EOFs is penalised
+(Bro et al. 2008). Masks depend only on the fold and replicate, not on `k`,
+so every `k` is scored on the same hidden cells.
 }
 \keyword{internal}
