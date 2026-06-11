@@ -33,3 +33,34 @@ test_that("flatten_dim_space concatenates attributes", {
   expect_type(m, "double")
   expect_false(inherits(m, "units"))
 })
+
+test_that("multivariate anomalies equal per-variable anomalies (annual and monthly)", {
+  for (m in c(FALSE, TRUE)) {
+    anom_mv <- get_anomalies(prism_mv, scale = TRUE, monthly = m)
+    anom_t <- get_anomalies(prism_mv["tmean"], scale = TRUE, monthly = m)
+    anom_p <- get_anomalies(prism_mv["ppt"], scale = TRUE, monthly = m)
+    expect_named(anom_mv, c("tmean", "ppt"))
+    expect_equal(units::drop_units(anom_mv)[["tmean"]],
+                 units::drop_units(anom_t)[[1]], tolerance = 1e-12)
+    expect_equal(units::drop_units(anom_mv)[["ppt"]],
+                 units::drop_units(anom_p)[[1]], tolerance = 1e-12)
+  }
+})
+
+test_that("multivariate climatology round-trips through restore_climatology", {
+  for (m in c(FALSE, TRUE)) {
+    clim <- get_climatology(prism_mv, monthly = m)
+    expect_named(clim$mean, c("tmean", "ppt"))
+    anom <- get_anomalies(prism_mv, clim, scale = TRUE, monthly = m)
+    restored <- restore_climatology(anom, clim, scale = TRUE, monthly = m)
+    expect_equal(units::drop_units(restored[["tmean"]]),
+                 units::drop_units(prism_mv[["tmean"]]), tolerance = 1e-8)
+    expect_equal(units::drop_units(restored[["ppt"]]),
+                 units::drop_units(prism_mv[["ppt"]]), tolerance = 1e-8)
+  }
+})
+
+test_that("get_anomalies rejects climatology with mismatched attribute count", {
+  clim <- get_climatology(prism_mv["tmean"])
+  expect_error(get_anomalies(prism_mv, clim), class = "tidyeof_attribute_mismatch")
+})

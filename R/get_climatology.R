@@ -114,7 +114,7 @@ get_climatology <- function(dat, monthly = FALSE) {
     # per-calendar-month statistics, and rebuild with a month dimension that
     # is always 1:12 so month number doubles as the array index.
     spatial <- setdiff(names(st_dimensions(dat)), "time")
-    mat <- flatten_dim_space(dat[1], "time")
+    mat <- flatten_dim_space(dat, "time")
     n_space <- ncol(mat)
 
     month_stat <- function(stat_fn) {
@@ -135,13 +135,18 @@ get_climatology <- function(dat, monthly = FALSE) {
     new_dims$month <- month_dimension()
     class(new_dims) <- "dimensions"
     spatial_shape <- dim(dat)[spatial]
+    n_cells <- prod(spatial_shape)
 
     to_stars <- function(values) {
-      stars::st_as_stars(
-        array(values, dim = c(spatial_shape, month = 12L)),
-        dimensions = new_dims
-      ) %>%
-        setNames(names(dat)[1])
+      per_var <- purrr::map(seq_along(names(dat)), function(i) {
+        block <- values[((i - 1L) * n_cells + 1L):(i * n_cells), , drop = FALSE]
+        stars::st_as_stars(
+          array(block, dim = c(spatial_shape, month = 12L)),
+          dimensions = new_dims
+        ) %>%
+          setNames(names(dat)[i])
+      })
+      do.call(c, per_var)
     }
 
     mean_result <- to_stars(mean_mat)
@@ -197,8 +202,12 @@ apply_monthly_climatology <- function(dat, clim, scale,
 
   spatial <- setdiff(names(st_dimensions(dat)), "time")
   permuted <- aperm(units::drop_units(dat), c("time", spatial))
-  arr <- permuted[[1]]
-  mat <- matrix(arr, nrow = length(times))
+  blocks <- purrr::map(seq_along(names(dat)), function(i) {
+    arr <- permuted[[i]]
+    matrix(arr, nrow = length(times))
+  })
+  mat <- do.call(cbind, blocks)
+  n_cells <- ncol(blocks[[1]])
 
   if (ncol(mat) != ncol(mn_mat)) {
     cli::cli_abort(
@@ -224,7 +233,10 @@ apply_monthly_climatology <- function(dat, clim, scale,
     mat <- mat + mn_mat[m, , drop = FALSE]
   }
 
-  permuted[[1]] <- array(mat, dim = dim(arr))
+  for (i in seq_along(names(dat))) {
+    cols <- ((i - 1L) * n_cells + 1L):(i * n_cells)
+    permuted[[i]] <- array(mat[, cols, drop = FALSE], dim = dim(permuted[[i]]))
+  }
   aperm(permuted, names(st_dimensions(dat)))
 }
 
@@ -253,6 +265,13 @@ get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
                  class = "tidyeof_invalid_input")
   }
 
+  if (length(clim$mean) != length(dat)) {
+    cli::cli_abort(
+      "Climatology has {length(clim$mean)} attribute{?s} but the data has {length(dat)}.",
+      class = "tidyeof_attribute_mismatch"
+    )
+  }
+
   if (monthly) {
     out <- apply_monthly_climatology(dat, clim, scale = scale, direction = "anomalize")
     # Scaled anomalies are dimensionless; unscaled keep the data's units
@@ -260,10 +279,14 @@ get_anomalies <- function(dat, clim = NULL, scale = FALSE, monthly = FALSE) {
     return(out)
   }
 
-  out <- dat - clim$mean
-  if (scale) {
-    out <- out / clim$sd
-  }
+  # Ops.stars cannot subtract multi-attribute objects, so anomalize each
+  # attribute separately (paired by position, preserving the univariate
+  # behavior of ignoring attribute names) and recombine.
+  out <- do.call(c, purrr::map(seq_along(names(dat)), function(i) {
+    out_i <- dat[i] - clim$mean[i]
+    if (scale) out_i <- out_i / clim$sd[i]
+    out_i
+  }))
   out
 }
 
@@ -320,11 +343,13 @@ restore_climatology <- function(anomalies, clim, scale = FALSE, monthly = FALSE)
     target_sd <- units::drop_units(target_sd)
   }
 
-  # Restore climatology
-  if (scale) {
-    anomalies <- anomalies * target_sd
-  }
-  out <- anomalies + target_mean
+  # Ops.stars cannot operate on multi-attribute objects, so restore each
+  # attribute separately (paired by position) and recombine.
+  out <- do.call(c, purrr::map(seq_along(names(anomalies)), function(i) {
+    out_i <- anomalies[i]
+    if (scale) out_i <- out_i * target_sd[i]
+    out_i + target_mean[i]
+  }))
 
   # Restore units
   restore_units(out, clim$mean)
