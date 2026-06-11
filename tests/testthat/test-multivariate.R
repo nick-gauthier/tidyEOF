@@ -35,10 +35,10 @@ test_that("flatten_dim_space concatenates attributes", {
 })
 
 test_that("multivariate anomalies equal per-variable anomalies (annual and monthly)", {
-  for (m in c(FALSE, TRUE)) {
-    anom_mv <- get_anomalies(prism_mv, scale = TRUE, monthly = m)
-    anom_t <- get_anomalies(prism_mv["tmean"], scale = TRUE, monthly = m)
-    anom_p <- get_anomalies(prism_mv["ppt"], scale = TRUE, monthly = m)
+  for (use_monthly in c(FALSE, TRUE)) {
+    anom_mv <- get_anomalies(prism_mv, scale = TRUE, monthly = use_monthly)
+    anom_t <- get_anomalies(prism_mv["tmean"], scale = TRUE, monthly = use_monthly)
+    anom_p <- get_anomalies(prism_mv["ppt"], scale = TRUE, monthly = use_monthly)
     expect_named(anom_mv, c("tmean", "ppt"))
     expect_equal(units::drop_units(anom_mv)[["tmean"]],
                  units::drop_units(anom_t)[[1]], tolerance = 1e-12)
@@ -48,11 +48,11 @@ test_that("multivariate anomalies equal per-variable anomalies (annual and month
 })
 
 test_that("multivariate climatology round-trips through restore_climatology", {
-  for (m in c(FALSE, TRUE)) {
-    clim <- get_climatology(prism_mv, monthly = m)
+  for (use_monthly in c(FALSE, TRUE)) {
+    clim <- get_climatology(prism_mv, monthly = use_monthly)
     expect_named(clim$mean, c("tmean", "ppt"))
-    anom <- get_anomalies(prism_mv, clim, scale = TRUE, monthly = m)
-    restored <- restore_climatology(anom, clim, scale = TRUE, monthly = m)
+    anom <- get_anomalies(prism_mv, clim, scale = TRUE, monthly = use_monthly)
+    restored <- restore_climatology(anom, clim, scale = TRUE, monthly = use_monthly)
     expect_equal(units::drop_units(restored[["tmean"]]),
                  units::drop_units(prism_mv[["tmean"]]), tolerance = 1e-8)
     expect_equal(units::drop_units(restored[["ppt"]]),
@@ -63,4 +63,9 @@ test_that("multivariate climatology round-trips through restore_climatology", {
 test_that("get_anomalies rejects climatology with mismatched attribute count", {
   clim <- get_climatology(prism_mv["tmean"])
   expect_error(get_anomalies(prism_mv, clim), class = "tidyeof_attribute_mismatch")
+
+  anom <- get_anomalies(prism_mv, scale = TRUE, monthly = TRUE)
+  clim_uni_monthly <- get_climatology(prism_mv["tmean"], monthly = TRUE)
+  expect_error(restore_climatology(anom, clim_uni_monthly, scale = TRUE, monthly = TRUE),
+               class = "tidyeof_attribute_mismatch")
 })

@@ -115,17 +115,17 @@ get_climatology <- function(dat, monthly = FALSE) {
     # is always 1:12 so month number doubles as the array index.
     spatial <- setdiff(names(st_dimensions(dat)), "time")
     mat <- flatten_dim_space(dat, "time")
-    n_space <- ncol(mat)
+    n_total <- ncol(mat)
 
     month_stat <- function(stat_fn) {
       vapply(1:12, function(mm) {
         idx <- which(m == mm)
         if (length(idx) == 0) {
-          rep(NA_real_, n_space)
+          rep(NA_real_, n_total)
         } else {
           stat_fn(mat[idx, , drop = FALSE])
         }
-      }, numeric(n_space))
+      }, numeric(n_total))
     }
 
     mean_mat <- month_stat(function(x) colMeans(x, na.rm = TRUE))
@@ -323,6 +323,13 @@ restore_climatology <- function(anomalies, clim, scale = FALSE, monthly = FALSE)
   if (!is.list(clim) || !all(c("mean", "sd") %in% names(clim))) {
     rlang::abort("Climatology must be a list with 'mean' and 'sd' stars objects (from get_climatology())",
                  class = "tidyeof_invalid_input")
+  }
+
+  if (length(clim$mean) != length(anomalies)) {
+    cli::cli_abort(
+      "Climatology has {length(clim$mean)} attribute{?s} but the anomalies have {length(anomalies)}.",
+      class = "tidyeof_attribute_mismatch"
+    )
   }
 
   if (monthly) {
