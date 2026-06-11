@@ -104,6 +104,21 @@ matrix_to_spacetime <- function(mat,
   setNames(out, var_names)
 }
 
+#' Extract the EOF loading matrix (space x PC) from a patterns object
+#'
+#' Stacks every variable's loadings into the concatenated variable-major
+#' layout used by [flatten_time_space()], so rows align with
+#' `patterns$valid_pixels` and `patterns$block_map`.
+#' @param patterns A patterns object
+#' @return A numeric matrix with prod(spatial) * n_vars rows and k columns
+#' @keywords internal
+eof_loading_matrix <- function(patterns) {
+  do.call(rbind, purrr::map(names(patterns$eofs), function(v) {
+    arr <- patterns$eofs[[v]]
+    matrix(arr, nrow = prod(dim(arr)[-length(dim(arr))]), ncol = patterns$k)
+  }))
+}
+
 #' Obtain the size of a stars dimension definition
 #' @keywords internal
 dimension_size <- function(dimension) {

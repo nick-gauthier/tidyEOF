@@ -557,17 +557,6 @@ with_seed <- function(seed, code) {
   force(code)
 }
 
-#' Extract the EOF loading matrix (space x PC) from a patterns object
-#'
-#' Returns loadings in the same flattened spatial order used by
-#' [flatten_time_space()], so columns align with `valid_pixels`.
-#' @keywords internal
-eof_loading_matrix <- function(patterns) {
-  eof_array <- patterns$eofs[[1]]
-  spatial_sizes <- dim(eof_array)[-length(dim(eof_array))]
-  matrix(eof_array, nrow = prod(spatial_sizes), ncol = patterns$k)
-}
-
 #' Evaluate EOF reconstruction for a single fold via speckled holdout
 #'
 #' Hides a random scatter of grid cells in the held-out data, estimates mode

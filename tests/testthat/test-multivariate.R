@@ -145,3 +145,28 @@ test_that("multivariate rotation runs and reorders blocks together", {
   expect_named(pat$eofs, c("tmean", "ppt"))
   expect_equal(ncol(pat$rotation), 3)
 })
+
+test_that("multivariate reconstruction round-trips at full rank", {
+  pat <- patterns(prism_mv, k = 35, scale = TRUE, weight = FALSE)
+  rec <- reconstruct(pat)
+  expect_named(rec, c("tmean", "ppt"))
+  expect_equal(units(rec[["ppt"]]), units(prism_mv[["ppt"]]))
+  expect_equal(units::drop_units(rec[["tmean"]]),
+               units::drop_units(prism_mv[["tmean"]]), tolerance = 1e-6)
+  expect_equal(units::drop_units(rec[["ppt"]]),
+               units::drop_units(prism_mv[["ppt"]]), tolerance = 1e-6)
+})
+
+test_that("truncated multivariate reconstruction returns both variables with weighting", {
+  pat <- patterns(prism_mv, k = 4, scale = TRUE)
+  rec <- reconstruct(pat)
+  expect_named(rec, c("tmean", "ppt"))
+  expect_equal(unname(dim(rec)), c(51, 51, 36))
+})
+
+test_that("eof_loading_matrix stacks variable blocks", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  m <- tidyeof:::eof_loading_matrix(pat)
+  expect_equal(dim(m), c(2 * 2601, 3))
+  expect_equal(m[1:2601, ], matrix(pat$eofs[["tmean"]], nrow = 2601, ncol = 3))
+})

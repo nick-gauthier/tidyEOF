@@ -36,25 +36,34 @@ reconstruct <- function(target_patterns, amplitudes = NULL) {
     )
   }
 
-  eof_array <- target_patterns$eofs[[1]]
-  spatial_sizes <- dim(eof_array)[-length(dim(eof_array))]
-  eof_matrix <- matrix(eof_array,
-                       nrow = prod(spatial_sizes),
-                       ncol = target_patterns$k)
-
+  eof_matrix <- eof_loading_matrix(target_patterns)
   valid_pixels <- target_patterns$valid_pixels
   eof_valid <- eof_matrix[valid_pixels, , drop = FALSE]
 
   anomalies_valid <- amps_matrix %*% t(eof_valid)
 
-  anomalies <- matrix_to_spacetime(
-    anomalies_valid,
-    template_eofs = target_patterns$eofs,
-    spatial_template = target_patterns$climatology$mean,
-    valid_pixels = valid_pixels,
-    times = amplitudes$time,
-    var_names = target_patterns$names
-  )
+  # Re-insert into the full concatenated space, then split per variable
+  n_total <- nrow(eof_matrix)
+  full_mat <- matrix(NA_real_, nrow = nrow(anomalies_valid), ncol = n_total)
+  full_mat[, valid_pixels] <- anomalies_valid
+
+  block_map <- target_patterns$block_map
+  if (is.null(block_map)) {
+    # Patterns objects from before block_map existed are univariate
+    block_map <- setNames(list(seq_len(n_total)), target_patterns$names[[1]])
+  }
+
+  var_list <- purrr::map(seq_along(block_map), function(i) {
+    matrix_to_spacetime(
+      full_mat[, block_map[[i]], drop = FALSE],
+      template_eofs = target_patterns$eofs[i],
+      spatial_template = target_patterns$climatology$mean[i],
+      valid_pixels = seq_along(block_map[[i]]),
+      times = amplitudes$time,
+      var_names = names(block_map)[[i]]
+    )
+  })
+  anomalies <- do.call(c, var_list)
 
   final <- restore_climatology(anomalies,
                                clim = target_patterns$climatology,
