@@ -163,12 +163,12 @@ plot.coupled_patterns <- function(x,
 plot_canonical_patterns <- function(x, side = "both", k = NULL, scaled = FALSE) {
   if (is.null(k)) k <- x$k
 
-  make_single_plot <- function(canon_patterns, title_prefix, colour) {
+  make_single_plot <- function(canon_patterns, title_prefix) {
     # Similar to .plot_eofs_internal but for canonical patterns
     plot_data <- canon_patterns
 
     if (scaled) {
-      # Scale each CV to unit variance
+      # Normalize each CV so its largest absolute loading is 1
       is_geom <- has_geometry_dimension(plot_data)
       for (i in seq_len(k)) {
         if (is_geom) {
@@ -201,8 +201,8 @@ plot_canonical_patterns <- function(x, side = "both", k = NULL, scaled = FALSE) 
     pred_patterns <- get_canonical_patterns(x, type = "predictor", k = k)
     resp_patterns <- get_canonical_patterns(x, type = "response", k = k)
 
-    p_pred <- make_single_plot(pred_patterns, "Predictor", "#4C9F38")
-    p_resp <- make_single_plot(resp_patterns, "Response", "#E17D30")
+    p_pred <- make_single_plot(pred_patterns, "Predictor")
+    p_resp <- make_single_plot(resp_patterns, "Response")
 
     if (!requireNamespace("patchwork", quietly = TRUE)) {
       warning("patchwork needed for side='both'. Install with: install.packages('patchwork')")
@@ -219,6 +219,5 @@ plot_canonical_patterns <- function(x, side = "both", k = NULL, scaled = FALSE) 
 
   # Single side
   canon_patterns <- get_canonical_patterns(x, type = side, k = k)
-  title_prefix <- tools::toTitleCase(side)
-  make_single_plot(canon_patterns, title_prefix, if (side == "predictor") "#4C9F38" else "#E17D30")
+  make_single_plot(canon_patterns, tools::toTitleCase(side))
 }

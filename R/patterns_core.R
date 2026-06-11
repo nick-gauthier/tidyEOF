@@ -15,6 +15,27 @@ check_stars_object <- function(x, arg = rlang::caller_arg(x), call = rlang::call
   }
 }
 
+#' Check that a stars object has exactly one attribute
+#'
+#' EOF analysis operates on a single variable; silently using the first
+#' attribute of a multi-attribute object would hide the others.
+#' @param x A stars object
+#' @param arg Argument name for error messages
+#' @param call Calling environment for error messages
+#' @keywords internal
+check_single_attribute <- function(x, arg = rlang::caller_arg(x), call = rlang::caller_env()) {
+  if (length(x) > 1) {
+    cli::cli_abort(
+      c(
+        "Argument {.arg {arg}} has {length(x)} attributes ({.field {names(x)}}), but only single-variable analysis is supported.",
+        "i" = "Subset to one variable first, e.g. {.code {arg}[\"{names(x)[1]}\"]}."
+      ),
+      class = "tidyeof_multiple_attributes",
+      call = call
+    )
+  }
+}
+
 #' Check if k is valid
 #' @param k Number of components
 #' @param max_k Maximum allowed components
@@ -43,13 +64,22 @@ check_k_valid <- function(k, max_k, arg = rlang::caller_arg(k), call = rlang::ca
 #' @param scale Logical, whether to scale before PCA
 #' @param rotate Logical, whether to apply Varimax rotation. Rotation follows
 #'   the standard REOF convention (Hannachi et al. 2007): varimax operates on
-#'   sqrt(eigenvalue)-scaled EOFs, the stored patterns are the rotated
-#'   loadings (unit norm, not mutually orthogonal), and amplitudes remain
-#'   uncorrelated with sd = sqrt(rotated eigenvalue)
+#'   sqrt(eigenvalue)-scaled EOFs without Kaiser row-normalization
+#'   (`normalize = FALSE`), the stored patterns are the rotated loadings
+#'   (unit norm, not mutually orthogonal), and amplitudes remain
+#'   uncorrelated with sd = sqrt(rotated eigenvalue). Requires k > 1.
 #' @param monthly Logical, whether to use monthly climatology
 #' @param weight Logical, whether to apply area weighting
 #' @param irlba_threshold Minimum number of data elements to trigger IRLBA usage
-#'   (default: 50000). Set to Inf to always use base prcomp().
+#'   (default: 500000). Set to Inf to always use base prcomp().
+#'
+#' @details
+#' The eigenvalue table includes North et al. (1982) sampling-error bars
+#' (`low`/`hi`), computed with a relative error of sqrt(2/n) where n is the
+#' number of time steps. This assumes temporally independent samples: for
+#' autocorrelated data (e.g., monthly anomalies) the effective sample size is
+#' smaller and the bars are too narrow, so modes that appear well-separated
+#' may not be.
 #'
 #' @return A `patterns` object containing EOFs, amplitudes, and metadata
 #' @export
@@ -57,6 +87,14 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
 
   # Input validation
   check_stars_object(dat)
+  check_single_attribute(dat)
+
+  if (isTRUE(rotate) && k <= 1) {
+    cli::cli_abort(
+      "Rotation requires k > 1.",
+      class = "tidyeof_invalid_option"
+    )
+  }
 
   # Capture units from original data before any modifications
   original_units <- setNames(purrr::map(names(dat), ~tryCatch(units(dat[[.x]]), error = function(e) NULL)), names(dat))
@@ -111,9 +149,11 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
 #' rotated patterns are not mutually orthogonal, but scores stay uncorrelated.
 #' @keywords internal
 rotate_pca_components <- function(loadings_matrix, scores_matrix, sdev_vector) {
-  # Kaiser-normalise eigenvectors before rotation (Hannachi et al. 2007)
+  # Scale eigenvectors by sqrt(eigenvalue) before rotation (Hannachi et al.
+  # 2007). normalize = FALSE: the varimax criterion is applied to the scaled
+  # loadings directly, without Kaiser row-normalization, per that convention.
   scaled_loadings <- loadings_matrix %*% diag(sdev_vector)
-  rot <- varimax(scaled_loadings)
+  rot <- varimax(scaled_loadings, normalize = FALSE)
 
   rotation_matrix <- rot$rotmat
   rotated_scaled_loadings <- unclass(rot$loadings)
@@ -267,8 +307,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
            cumulative = cumulative * 100,
            error = sqrt(2 / n_times),
            low =  eigenvalues * (1 - error) * 100 / total_var,
-           hi = eigenvalues * (1 + error) * 100 / total_var,
-           cumvar_line = hi + 0.02 * max(hi))
+           hi = eigenvalues * (1 + error) * 100 / total_var)
 
   if (rotate && k > 1) {
     # Replace variance stats for the retained modes with the rotated values so
@@ -406,49 +445,31 @@ names0 <- function(num, prefix = "PC") {
   paste0(prefix, ind)
 }
 
-#' Smart PCA Selection with Optional IRLBA Support
+#' Smart PCA Selection with IRLBA Support
 #'
 #' Automatically selects between base `prcomp()` and `prcomp_irlba()` based on
-#' data size and package availability. For large datasets, IRLBA provides
-#' significant computational savings when only the first few components are needed.
+#' data size. For large datasets, IRLBA provides significant computational
+#' savings when only the first few components are needed.
 #'
 #' @param x A numeric matrix for PCA computation
 #' @param k Number of components to compute
 #' @param center Logical, whether to center the data
 #' @param scale. Logical, whether to scale the data
-#' @param size_threshold Minimum number of elements to trigger IRLBA (default: 50000)
+#' @param size_threshold Minimum number of elements to trigger IRLBA
 #' @param ... Additional arguments passed to the PCA function
 #'
 #' @return A PCA result object compatible with `prcomp()` output
 #' @keywords internal
 perform_pca_smart <- function(x, k = NULL, center = TRUE, scale. = FALSE,
                               size_threshold, ...) {
-
-  # Calculate data size
   data_size <- nrow(x) * ncol(x)
-  use_irlba <- FALSE
 
-  # Check if we should use IRLBA
   if (data_size >= size_threshold && !is.null(k)) {
-    # Check if irlba package is available
-    if (requireNamespace("irlba", quietly = TRUE)) {
-      use_irlba <- TRUE
-      cli::cli_inform(
-        "Using IRLBA for efficient PCA computation on large dataset ({format(data_size, big.mark = ',')} elements)."
-      )
-    } else {
-      cli::cli_inform(
-        "Large dataset detected ({format(data_size, big.mark = ',')} elements) but package {.pkg irlba} is unavailable. Consider installing it for faster computation."
-      )
-    }
-  }
-
-  # Perform PCA using selected method
-  if (use_irlba) {
-    # Use IRLBA for efficient computation of first k components
-      irlba::prcomp_irlba(x, n = k, center = center, scale. = scale., ...)
+    cli::cli_inform(
+      "Using IRLBA for efficient PCA computation on large dataset ({format(data_size, big.mark = ',')} elements)."
+    )
+    irlba::prcomp_irlba(x, n = k, center = center, scale. = scale., ...)
   } else {
-    # Use base prcomp
     prcomp(x, center = center, scale. = scale., ...)
   }
 }

@@ -125,7 +125,10 @@ extract_amplitudes_matrix <- function(x, times = NULL) {
 
   if (!is.null(times)) {
     times_df <- tibble::tibble(time = times)
-    amps <- dplyr::semi_join(amps, times_df, by = "time")
+    # Sort so predictor and response matrices filtered to the same times are
+    # row-aligned regardless of each object's storage order
+    amps <- dplyr::semi_join(amps, times_df, by = "time") %>%
+      dplyr::arrange(time)
   }
 
   amps %>%
@@ -143,12 +146,22 @@ extract_amplitudes_matrix <- function(x, times = NULL) {
 `[.patterns` <- function(x, i, ...) {
   # Handle different types of indexing
   if(is.character(i)) {
-    pc_names <- paste0("PC", seq_len(x$k))
+    pc_names <- setdiff(names(x$amplitudes), "time")
     i <- match(i, pc_names)
     if(any(is.na(i))) rlang::abort(glue("Invalid PC names. Available PCs: {glue_collapse(pc_names, sep = ', ')}"), class = "tidyeof_invalid_subset")
   }
 
   if(any(i > x$k)) rlang::abort(glue("Index out of bounds. Requested: {glue_collapse(i[i > x$k], sep = ', ')}, but only {x$k} components available."), class = "tidyeof_invalid_subset")
+
+  # Only leading contiguous truncation is well-defined: the eigenvalue table
+  # and the projection matrix have no meaning for non-contiguous subsets
+  i <- as.integer(i)
+  if(!identical(i, seq_len(length(i)))) {
+    rlang::abort(
+      "patterns objects can only be truncated to leading modes, i.e. x[1:k].",
+      class = "tidyeof_invalid_subset"
+    )
+  }
 
   # Subset components while preserving scaling
   x$eofs <- dplyr::slice(x$eofs, i, along = "PC", drop = FALSE)

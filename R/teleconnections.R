@@ -15,7 +15,7 @@ get_correlation <- function(dat, patterns, amplitudes = NULL) {
 
   matched <- match_times(amplitudes, dat)
   k <- ncol(matched$amps)
-  dat_filtered <- dplyr::filter(dat, time %in% matched$times)
+  dat_filtered <- sort_time(dplyr::filter(dat, time %in% matched$times))
 
   if (k == 1) {
     # k=1: st_apply drops the PC dimension, so compute directly
@@ -61,7 +61,7 @@ get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
     )
   }
 
-  dat_filtered <- dplyr::filter(dat, time %in% matched$times)
+  dat_filtered <- sort_time(dplyr::filter(dat, time %in% matched$times))
 
   if (k == 1) {
     # k=1: st_apply drops the PC dimension, so compute directly.
@@ -95,6 +95,19 @@ get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
           st_contour(contour_lines = TRUE, breaks = fdr) %>%
           dplyr::transmute(PC = paste0('PC', .x))) %>%
     do.call(rbind, .)
+}
+
+#' Sort a stars object along its time dimension
+#'
+#' The amplitudes in [match_times()] are arranged by time, so the field they
+#' are correlated against must be too -- storage order is not guaranteed.
+#' @keywords internal
+sort_time <- function(dat) {
+  times <- st_get_dimension_values(dat, 'time')
+  if (is.unsorted(times)) {
+    dat <- dplyr::slice(dat, 'time', order(times))
+  }
+  dat
 }
 
 #' Match time steps between amplitudes and a stars object

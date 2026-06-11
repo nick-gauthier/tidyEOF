@@ -21,7 +21,8 @@ screeplot.patterns <- function(x, k = NULL, kmax = 10, rule_n = FALSE, ...) {
 
   x$eigenvalues %>%
     dplyr::mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
-           multiplet = as.factor(cumsum(separated))) %>%
+           multiplet = as.factor(cumsum(separated)),
+           cumvar_line = hi + 0.02 * max(hi)) %>%
     filter(PC <= kmax) %>%
     ggplot2::ggplot(aes(x = PC, y = percent)) +
     ggplot2::geom_linerange(aes(x = PC, ymin = low, ymax = hi)) +

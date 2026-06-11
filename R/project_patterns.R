@@ -25,6 +25,7 @@ project_patterns <- function(patterns, newdata) {
   # Mismatched data will cause errors downstream (matrix dimension mismatches).
 
   validate_patterns(patterns)
+  check_single_attribute(newdata)
 
   new_times <- st_get_dimension_values(newdata, 'time')
 

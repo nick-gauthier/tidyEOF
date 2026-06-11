@@ -2,7 +2,7 @@
 % Please edit documentation in R/patterns_core.R
 \name{perform_pca_smart}
 \alias{perform_pca_smart}
-\title{Smart PCA Selection with Optional IRLBA Support}
+\title{Smart PCA Selection with IRLBA Support}
 \usage{
 perform_pca_smart(
   x,
@@ -22,7 +22,7 @@ perform_pca_smart(
 
 \item{scale.}{Logical, whether to scale the data}
 
-\item{size_threshold}{Minimum number of elements to trigger IRLBA (default: 50000)}
+\item{size_threshold}{Minimum number of elements to trigger IRLBA}
 
 \item{...}{Additional arguments passed to the PCA function}
 }
@@ -31,7 +31,7 @@ A PCA result object compatible with `prcomp()` output
 }
 \description{
 Automatically selects between base `prcomp()` and `prcomp_irlba()` based on
-data size and package availability. For large datasets, IRLBA provides
-significant computational savings when only the first few components are needed.
+data size. For large datasets, IRLBA provides significant computational
+savings when only the first few components are needed.
 }
 \keyword{internal}

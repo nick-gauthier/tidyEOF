@@ -66,6 +66,7 @@ common_patterns <- function(datasets, k = 4, scale = TRUE, rotate = FALSE,
         class = "tidyeof_invalid_input"
       )
     }
+    check_single_attribute(datasets[[nm]], arg = nm)
   }
 
   if (isTRUE(rotate) && k <= 1) {

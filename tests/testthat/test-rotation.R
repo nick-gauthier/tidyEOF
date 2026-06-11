@@ -1,8 +1,9 @@
 # Varimax rotation follows the standard REOF convention (Hannachi et al.
 # 2007): the rotation criterion is computed on sqrt(eigenvalue)-scaled
-# loadings, and the stored spatial patterns are those rotated loadings
-# (unit-norm, with the variance carried by the amplitudes). The displayed
-# patterns must therefore be exactly the varimax solution.
+# loadings WITHOUT Kaiser row-normalization (normalize = FALSE), and the
+# stored spatial patterns are those rotated loadings (unit-norm, with the
+# variance carried by the amplitudes). The displayed patterns must therefore
+# be exactly the varimax solution.
 
 make_rotation_stars <- function(nt = 40, nx = 10, ny = 10, seed = 1) {
   set.seed(seed)
@@ -28,12 +29,13 @@ test_that("rotated EOFs are the varimax solution (standard REOF convention)", {
   # directly comparable to a reference computed from the anomaly matrix
   pat <- patterns(dat, k = k, rotate = TRUE, weight = FALSE)
 
-  # Independent reference: varimax on Kaiser-scaled loadings
+  # Independent reference: varimax on sqrt(eigenvalue)-scaled loadings,
+  # without Kaiser row-normalization (Hannachi et al. 2007 convention)
   anom <- get_anomalies(dat, get_climatology(dat))
   X <- flatten_time_space(anom[1])$matrix
   pca <- prcomp(X, center = FALSE)
   L <- pca$rotation[, 1:k] %*% diag(pca$sdev[1:k])
-  LR <- unclass(varimax(L)$loadings)
+  LR <- unclass(varimax(L, normalize = FALSE)$loadings)
   LR <- LR[, order(colSums(LR^2), decreasing = TRUE)]
   ref <- sweep(LR, 2, sqrt(colSums(LR^2)), `/`)  # unit-norm patterns
 
