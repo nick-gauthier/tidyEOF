@@ -269,3 +269,26 @@ test_that("multivariate metric subset returns only requested metric columns", {
   expect_named(m, c("rmse", "rmse_tmean", "rmse_ppt"))
   expect_false(any(grepl("cor_", names(m))))
 })
+
+test_that("tune_eof handles multivariate input with per-variable metrics", {
+  res <- tune_eof(prism_mv, k = 1:3, kfolds = 3, scale = TRUE,
+                  weight = FALSE, n_reps = 2)
+  expect_true(all(c("rmse", "rmse_tmean", "rmse_ppt") %in% names(res)))
+  expect_equal(nrow(res), 9)
+  s <- summarize_eof_cv(res)
+  expect_true(attr(s, "best_k") %in% 1:3)
+})
+
+test_that("tune_cca downscales to a multivariate response", {
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+
+  cv <- prep_cv_folds(coarse, prism_mv,
+                      kfolds = 3, max_k_pred = 4, max_k_resp = 4,
+                      scale_resp = TRUE, weight = FALSE)
+  res <- tune_cca(cv, k_pred = 2:3, k_resp = 2:3)
+  expect_true(all(c("rmse", "rmse_tmean", "rmse_ppt") %in% names(res)))
+  s <- summarize_cv(res)
+  expect_true(all(c("k_pred", "k_resp", "k_cca") %in% names(s)))
+  expect_true("rmse_mean" %in% names(s))
+})
