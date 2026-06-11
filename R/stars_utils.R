@@ -104,7 +104,7 @@ matrix_to_spacetime <- function(mat,
   setNames(out, var_names)
 }
 
-#' Extract the EOF loading matrix (space x PC) from a patterns object
+#' Extract the EOF loading matrix (concatenated variable-space x PC) from a patterns object
 #'
 #' Stacks every variable's loadings into the concatenated variable-major
 #' layout used by [flatten_time_space()], so rows align with

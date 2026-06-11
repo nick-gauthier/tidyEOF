@@ -162,6 +162,8 @@ test_that("truncated multivariate reconstruction returns both variables with wei
   rec <- reconstruct(pat)
   expect_named(rec, c("tmean", "ppt"))
   expect_equal(unname(dim(rec)), c(51, 51, 36))
+  expect_true(all(is.finite(units::drop_units(rec[["tmean"]]))))
+  expect_true(all(is.finite(units::drop_units(rec[["ppt"]]))))
 })
 
 test_that("eof_loading_matrix stacks variable blocks", {
@@ -169,4 +171,25 @@ test_that("eof_loading_matrix stacks variable blocks", {
   m <- tidyeof:::eof_loading_matrix(pat)
   expect_equal(dim(m), c(2 * 2601, 3))
   expect_equal(m[1:2601, ], matrix(pat$eofs[["tmean"]], nrow = 2601, ncol = 3))
+})
+
+test_that("multivariate reconstruction preserves per-variable NA masks", {
+  z <- prism_mv
+  arr <- units::drop_units(z[["ppt"]])
+  arr[2, 1, ] <- NA          # mask one ppt cell across all times
+  arr[3, 5, ] <- NA          # and a second ppt cell
+  z$ppt <- units::set_units(arr, "mm")
+
+  pat <- patterns(z, k = 30, scale = TRUE, weight = FALSE)
+  rec <- reconstruct(pat)
+
+  # tmean has no masked cells; ppt's two masked cells must come back NA
+  expect_false(any(is.na(units::drop_units(rec[["tmean"]]))))
+  rec_ppt <- units::drop_units(rec[["ppt"]])
+  expect_true(all(is.na(rec_ppt[2, 1, ])))
+  expect_true(all(is.na(rec_ppt[3, 5, ])))
+  # all other ppt cells reconstructed finite
+  other <- rec_ppt
+  other[2, 1, ] <- 0; other[3, 5, ] <- 0
+  expect_true(all(is.finite(other)))
 })
