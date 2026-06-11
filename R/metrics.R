@@ -55,6 +55,10 @@ compute_spatial_metrics <- function(predicted, observed, metrics = c("rmse", "co
 #' correlations (already unitless) are averaged. Per-variable values get
 #' suffixed names (e.g. rmse_tmean) only when there is more than one block.
 #'
+#' @details Pooled RMSE assumes each block's observed standard deviation is
+#'   > 0; a constant (zero-variance) observed variable yields a non-finite
+#'   pooled score.
+#'
 #' @param pred_matrix Predicted values matrix (time x space)
 #' @param obs_matrix Observed values matrix (time x space)
 #' @param block_map Named list of column indices per variable

@@ -253,3 +253,19 @@ test_that("univariate metrics are unchanged", {
   m <- tidyeof:::compute_spatial_metrics(rec, prism)
   expect_named(m, c("rmse", "cor_spatial", "cor_temporal"))
 })
+
+test_that("compute_spatial_metrics rejects mismatched attribute sets", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  rec <- reconstruct(pat)
+  obs_bad <- setNames(prism_mv, c("tmean", "precip"))
+  expect_error(tidyeof:::compute_spatial_metrics(rec, obs_bad),
+               class = "tidyeof_attribute_mismatch")
+})
+
+test_that("multivariate metric subset returns only requested metric columns", {
+  pat <- patterns(prism_mv, k = 4, scale = TRUE)
+  rec <- reconstruct(pat)
+  m <- tidyeof:::compute_spatial_metrics(rec, prism_mv, metrics = "rmse")
+  expect_named(m, c("rmse", "rmse_tmean", "rmse_ppt"))
+  expect_false(any(grepl("cor_", names(m))))
+})
