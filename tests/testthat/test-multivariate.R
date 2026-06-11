@@ -83,3 +83,65 @@ test_that("compute_eof_signs works on multi-attribute EOF objects", {
   eofs$b <- arr_neg * 3
   expect_equal(unname(tidyeof:::compute_eof_signs(eofs)), c(-1, -1))
 })
+
+test_that("patterns() requires scale = TRUE for multivariate input", {
+  expect_error(patterns(prism_mv, k = 3), class = "tidyeof_multivariate_scale")
+  expect_error(patterns(prism_mv, k = 3, scale = FALSE), class = "tidyeof_multivariate_scale")
+})
+
+test_that("multivariate patterns have per-variable EOFs and shared amplitudes", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  expect_s3_class(pat, "patterns")
+  expect_named(pat$eofs, c("tmean", "ppt"))
+  expect_equal(pat$names, c("tmean", "ppt"))
+  expect_equal(pat$block_map, list(tmean = 1:2601, ppt = 2602:5202))
+  expect_equal(unname(dim(pat$eofs[["tmean"]])), c(51, 51, 3))
+  expect_named(pat$amplitudes, c("time", "PC1", "PC2", "PC3"))
+  expect_equal(nrow(pat$proj_matrix), length(pat$valid_pixels))
+  expect_equal(pat$units$ppt, units(prism_mv[["ppt"]]))
+})
+
+test_that("duplicated variable yields identical loading blocks", {
+  dup <- prism
+  dup$tmean2 <- prism[[1]]
+  pat <- patterns(dup, k = 3, scale = TRUE, weight = FALSE)
+  expect_equal(pat$eofs[["tmean"]], pat$eofs[["tmean2"]], tolerance = 1e-8)
+})
+
+test_that("univariate EOF attribute is named after the variable", {
+  pat <- patterns(prism, k = 2)
+  expect_named(pat$eofs, "tmean")
+  expect_equal(pat$block_map, list(tmean = 1:2601))
+})
+
+test_that("non-finite cells from sd = 0 standardization are dropped", {
+  z <- units::drop_units(prism)
+  arr <- z[[1]]
+  arr[1, 1, ] <- 5  # constant cell -> sd 0 -> NaN anomalies under scaling
+  z[[1]] <- arr
+  pat <- patterns(z, k = 2, scale = TRUE, weight = FALSE)
+  expect_false(1 %in% pat$valid_pixels)
+  expect_true(all(is.finite(pat$proj_matrix)))
+})
+
+test_that("monthly multivariate patterns run end to end", {
+  pat <- patterns(prism_mv, k = 2, scale = TRUE, monthly = TRUE)
+  expect_named(pat$eofs, c("tmean", "ppt"))
+  expect_equal(nrow(pat$amplitudes), 36)
+})
+
+test_that("per-variable NA masks are handled independently", {
+  z <- prism_mv
+  arr <- units::drop_units(z[["ppt"]])
+  arr[2, 1, ] <- NA
+  z$ppt <- units::set_units(arr, "mm")
+  pat <- patterns(z, k = 2, scale = TRUE, weight = FALSE)
+  expect_false((2601 + 2) %in% pat$valid_pixels)  # ppt block, cell 2
+  expect_true(2 %in% pat$valid_pixels)            # tmean cell 2 still valid
+})
+
+test_that("multivariate rotation runs and reorders blocks together", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE, rotate = TRUE)
+  expect_named(pat$eofs, c("tmean", "ppt"))
+  expect_equal(ncol(pat$rotation), 3)
+})

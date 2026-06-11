@@ -194,7 +194,8 @@ common_patterns <- function(datasets, k = 4, scale = TRUE, rotate = FALSE,
       monthly = monthly,
       rotate = rotate,
       weight = weight,
-      valid_pixels = eofs$valid_pixels
+      valid_pixels = eofs$valid_pixels,
+      block_map = eofs$block_map
     )
 
     pat <- apply_sign_flips(pat, signs)

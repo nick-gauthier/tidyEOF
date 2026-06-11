@@ -36,6 +36,27 @@ check_single_attribute <- function(x, arg = rlang::caller_arg(x), call = rlang::
   }
 }
 
+#' Check that multivariate input is standardized
+#'
+#' PCA is variance-driven, so joint EOFs of variables with different units
+#' require per-pixel standardization to contribute comparably.
+#' @param dat A stars object
+#' @param scale The scale argument passed to the caller
+#' @param call Calling environment for error messages
+#' @keywords internal
+check_multivariate_scale <- function(dat, scale, call = rlang::caller_env()) {
+  if (length(dat) > 1 && !isTRUE(scale)) {
+    cli::cli_abort(
+      c(
+        "Multivariate input ({length(dat)} attributes: {.field {names(dat)}}) requires {.code scale = TRUE}.",
+        "i" = "PCA is variance-driven; variables with different units must be standardized to contribute comparably."
+      ),
+      class = "tidyeof_multivariate_scale",
+      call = call
+    )
+  }
+}
+
 #' Check if k is valid
 #' @param k Number of components
 #' @param max_k Maximum allowed components
@@ -87,7 +108,7 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
 
   # Input validation
   check_stars_object(dat)
-  check_single_attribute(dat)
+  check_multivariate_scale(dat, scale)
 
   if (isTRUE(rotate) && k <= 1) {
     cli::cli_abort(
@@ -131,7 +152,8 @@ patterns <- function(dat, k = 4, scale = FALSE, rotate = FALSE, monthly = FALSE,
     monthly = monthly,
     rotate = rotate,
     weight = weight,
-    valid_pixels = eofs$valid_pixels
+    valid_pixels = eofs$valid_pixels,
+    block_map = eofs$block_map
   )
 
   # Align patterns so EOFs have roughly similar dominant signs
@@ -193,13 +215,20 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
 
   pc_names <- names0(k, 'PC')
 
-  # Handle spatial dimensions differently for geometry vs raster
-  flattened <- flatten_time_space(units::drop_units(dat)[1])
-  anomaly_matrix_full <- flattened$matrix
-  n_pixels <- ncol(anomaly_matrix_full)
+  var_names <- names(dat)
+  n_vars <- length(var_names)
 
-  # Get valid pixel indices (non-NA)
-  valid_pixels <- which(!apply(anomaly_matrix_full, 2, anyNA))
+  flattened <- flatten_time_space(units::drop_units(dat))
+  anomaly_matrix_full <- flattened$matrix
+  n_pixels <- ncol(anomaly_matrix_full)   # n_vars * n_space
+  n_space <- flattened$n_space
+  block_map <- flattened$block_map
+
+  # Valid pixels must be finite everywhere: this drops NA-masked cells and
+  # also Inf/NaN cells produced by sd ~ 0 standardization (e.g. arid cells
+  # for precipitation)
+  valid_pixels <- which(apply(anomaly_matrix_full, 2,
+                              function(col) all(is.finite(col))))
 
   # Validate k value
   max_k <- min(length(times) - 1, length(valid_pixels))
@@ -208,15 +237,16 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
   # Extract matrix for valid pixels (time x space)
   anomaly_matrix <- anomaly_matrix_full[, valid_pixels, drop = FALSE]
 
-  # Apply spatial weights column-wise if provided
+  # Apply spatial weights column-wise if provided; one weight per grid cell,
+  # replicated across variable blocks
   if (!is.null(weights)) {
-    if (length(weights) != n_pixels) {
+    if (length(weights) != n_space) {
       cli::cli_abort(
-        "Length of {.arg weights} ({length(weights)}) must match number of spatial points ({n_pixels}).",
+        "Length of {.arg weights} ({length(weights)}) must match number of spatial points per variable ({n_space}).",
         class = "tidyeof_weight_mismatch"
       )
     }
-    weights_valid <- weights[valid_pixels]
+    weights_valid <- rep(weights, n_vars)[valid_pixels]
     anomaly_matrix <- sweep(anomaly_matrix, 2, weights_valid, `*`)
   } else {
     weights_valid <- rep(1, length(valid_pixels))
@@ -263,30 +293,26 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
   full_patterns <- array(NA, dim = c(k, n_pixels))
   full_patterns[, valid_pixels] <- t(loadings)
 
+  # Build a multi-attribute template (one attribute per variable) with the
+  # time dimension relabeled as PC, then fill each attribute with its block.
+  # Attribute names come from the data, so univariate EOFs are named after
+  # their variable (previously "weight").
   if (has_geometry_dimension(dat)) {
-    # For geometry: (geometry, time) → (geometry, PC)
-    template <- dat[,,1:k, drop = FALSE]  # geometry, first k time slices
-    spatial_patterns <- template %>%
-      stars::st_set_dimensions('time', values = pc_names, names = 'PC') %>%
-      setNames("weight")
-
-    # Fill with EOF pattern data (geometry x PC)
-    spatial_patterns[[1]] <- t(full_patterns)  # transpose to get geometry x PC
-
+    template <- dat[, , 1:k, drop = FALSE] %>%
+      stars::st_set_dimensions('time', values = pc_names, names = 'PC')
+    for (i in seq_along(var_names)) {
+      template[[i]] <- t(full_patterns[, block_map[[i]], drop = FALSE])  # geometry x PC
+    }
   } else {
-    # For raster: (x, y, time) → (x, y, PC)
-    template <- dat[,,,1:k, drop = FALSE]  # x, y, first k time slices
-    spatial_patterns <- template %>%
-      stars::st_set_dimensions('time', values = pc_names, names = 'PC') %>%
-      setNames("weight")
-
-    # For raster, reshape back to x,y,PC structure
-    pattern_array <- array(full_patterns, dim = c(k, dims[[1]], dims[[2]]))
-    reordered_patterns <- aperm(pattern_array, c(2, 3, 1))  # x, y, PC
-
-    # Fill with EOF pattern data (x, y, PC)
-    spatial_patterns[[1]] <- reordered_patterns
+    template <- dat[, , , 1:k, drop = FALSE] %>%
+      stars::st_set_dimensions('time', values = pc_names, names = 'PC')
+    for (i in seq_along(var_names)) {
+      pattern_array <- array(full_patterns[, block_map[[i]], drop = FALSE],
+                             dim = c(k, dims[[1]], dims[[2]]))
+      template[[i]] <- aperm(pattern_array, c(2, 3, 1))  # x, y, PC
+    }
   }
+  spatial_patterns <- template
 
   # Format amplitudes (already rotated and reordered if needed)
   colnames(amplitudes) <- pc_names
@@ -332,6 +358,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     total_variance = total_var,
     rotation_matrix = rotation_matrix,
     valid_pixels = valid_pixels,
+    block_map = block_map,
     spatial_dims = flattened$spatial_dims,
     spatial_shape = flattened$spatial_shape,
     # proj_matrix maps weighted anomalies to amplitudes (the dual basis of the

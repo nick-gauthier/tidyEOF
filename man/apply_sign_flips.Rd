@@ -16,6 +16,8 @@ The patterns object with signs applied
 }
 \description{
 Flips the sign of EOFs, amplitudes, and projection matrix according to the
-supplied sign vector. This keeps all components synchronized.
+supplied sign vector. This keeps all components synchronized. Supports both
+single-attribute (univariate) and multi-attribute (multivariate) EOF stars
+objects.
 }
 \keyword{internal}

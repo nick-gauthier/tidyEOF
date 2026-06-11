@@ -20,6 +20,8 @@
 #' @param rotate Logical, whether rotation was applied
 #' @param weight Logical, whether area weighting was applied
 #' @param valid_pixels Indices of valid (non-NA) pixels
+#' @param block_map Named list mapping each variable to its column range in the
+#'   concatenated space-time matrix
 #'
 #' @return A patterns object
 #' @keywords internal
@@ -27,7 +29,7 @@ new_patterns <- function(eofs, amplitudes, eigenvalues, k, proj_matrix,
                          rotation = NULL, climatology = NULL, units = NULL,
                          names = NULL, scaled = FALSE, monthly = FALSE,
                          rotate = FALSE, weight = TRUE, valid_pixels = NULL,
-                         total_variance = NULL) {
+                         total_variance = NULL, block_map = NULL) {
   stopifnot(inherits(eofs, "stars"))
   stopifnot(is.data.frame(amplitudes))
   stopifnot(is.data.frame(eigenvalues))
@@ -50,6 +52,7 @@ new_patterns <- function(eofs, amplitudes, eigenvalues, k, proj_matrix,
       k = k,
       weight = weight,
       valid_pixels = valid_pixels,
+      block_map = block_map,
       proj_matrix = proj_matrix
     ),
     class = "patterns"
@@ -64,6 +67,7 @@ new_patterns <- function(eofs, amplitudes, eigenvalues, k, proj_matrix,
 print.patterns <- function(x, ...) {
   cli::cli_h1("Patterns Object")
   cli::cli_text("Modes: {.field {x$k}}")
+  cli::cli_text("Variables: {.field {x$names}}")
   times <- x$amplitudes$time
   cli::cli_text("Time steps: {.field {length(times)}} ({times[1]} to {times[length(times)]})")
 

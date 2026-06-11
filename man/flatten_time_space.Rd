@@ -10,12 +10,17 @@ flatten_time_space(dat)
 \item{dat}{A stars object with a `time` dimension}
 }
 \value{
-A list containing the flattened matrix, spatial dimension names,
-  their lengths, and coordinate values
+A list containing the flattened matrix, block_map (named list of
+  column index ranges per attribute), n_space (spatial cells per attribute),
+  spatial dimension names, their shape, and coordinate values
 }
 \description{
-Internal helper to turn a single-attribute stars object with a `time`
-dimension into a matrix of shape time x space along with the metadata needed
-to reconstruct the original spatial layout.
+Internal helper to turn a stars object (one or more attributes) with a
+`time` dimension into a matrix of shape time x (V * space) along with the
+metadata needed to reconstruct the original spatial layout.  When the object
+has multiple attributes they are concatenated variable-major: all columns for
+the first attribute, then all columns for the second, etc.  The returned
+`block_map` is a named list mapping each attribute name to its column
+indices, and `n_space` is the number of spatial cells per attribute.
 }
 \keyword{internal}

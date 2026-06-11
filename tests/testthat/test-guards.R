@@ -1,6 +1,8 @@
 # Input guards and alignment fixes:
 # - rotation requires k > 1 (previously silently skipped, stored rotate = TRUE)
-# - multi-attribute stars inputs abort (previously silently used first attribute)
+# - multi-attribute stars inputs to patterns() require scale = TRUE (joint EOFs
+#   of differently-scaled variables must be standardized); common_patterns and
+#   project_patterns still require single-attribute inputs
 # - [.patterns only allows leading contiguous subsets (eigenvalue stats and
 #   projection are undefined for non-contiguous subsets)
 # - amplitude extraction and teleconnection maps align by time value, not
@@ -18,9 +20,9 @@ test_that("patterns aborts for rotate = TRUE with k = 1", {
   )
 })
 
-test_that("patterns aborts for multi-attribute input", {
+test_that("patterns requires scale = TRUE for multi-attribute input", {
   two <- c(setNames(prism, "a"), setNames(prism, "b"))
-  expect_error(patterns(two, k = 2), class = "tidyeof_multiple_attributes")
+  expect_error(patterns(two, k = 2), class = "tidyeof_multivariate_scale")
 })
 
 test_that("common_patterns aborts for multi-attribute input", {
