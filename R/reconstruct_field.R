@@ -15,6 +15,9 @@
 #' `mutate(result, across(everything(), ~pmax(.x, 0 * .x)))` (the `0 * .x`
 #' trick preserves units).
 #'
+#' For multivariate patterns the return is a multi-attribute stars object, with
+#' each variable's climatology and units restored.
+#'
 #' @return A stars object with reconstructed spatial-temporal data
 #' @export
 reconstruct <- function(target_patterns, amplitudes = NULL) {

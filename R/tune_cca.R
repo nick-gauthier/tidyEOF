@@ -193,7 +193,10 @@ prep_cv_folds <- function(predictor, response,
 #'   `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 #'   the maximum can act as regularization.
 #' @param metrics Character vector of metrics to compute. Options:
-#'   "rmse", "cor_spatial", "cor_temporal" (default: all three)
+#'   "rmse", "cor_spatial", "cor_temporal" (default: all three). For
+#'   multivariate fields each metric also gets per-variable columns (e.g.
+#'   `rmse_tmean`); the plain name is the pooled score (sd-normalized RMS for
+#'   `rmse`, mean for correlations).
 #' @param parallel Logical, whether to use furrr for parallel execution (default FALSE)
 #'
 #' @return A tibble with columns: k_pred, k_resp, k_cca, fold, and one column
@@ -441,7 +444,12 @@ print.cv_folds <- function(x, ...) {
 #' @param max_k Maximum EOFs to compute per fold (default max(k))
 #' @param metrics Character vector of metrics to compute. Options:
 #'   "rmse", "cor_spatial", "cor_temporal" (default: all three). Metrics are
-#'   computed on the hidden cells only.
+#'   computed on the hidden cells only. For multivariate fields each metric
+#'   also gets per-variable columns (e.g. `rmse_tmean`); the plain name is the
+#'   pooled score (sd-normalized RMS for `rmse`, mean for correlations).
+#'   Per-variable cross-validation scores for very small variable blocks are
+#'   noisier and may be NA in some replicates, because the hidden cells are
+#'   sampled across the concatenated space, proportional to block size.
 #' @param scale Logical, whether to scale data before EOF extraction (default FALSE)
 #' @param monthly Logical, whether to compute monthly climatology (default FALSE)
 #' @param weight Logical, whether to apply area weighting (default TRUE)

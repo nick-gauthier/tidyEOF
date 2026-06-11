@@ -25,7 +25,10 @@ tune_cca(
 the maximum can act as regularization.}
 
 \item{metrics}{Character vector of metrics to compute. Options:
-"rmse", "cor_spatial", "cor_temporal" (default: all three)}
+"rmse", "cor_spatial", "cor_temporal" (default: all three). For
+multivariate fields each metric also gets per-variable columns (e.g.
+`rmse_tmean`); the plain name is the pooled score (sd-normalized RMS for
+`rmse`, mean for correlations).}
 
 \item{parallel}{Logical, whether to use furrr for parallel execution (default FALSE)}
 }

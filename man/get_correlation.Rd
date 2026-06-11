@@ -7,7 +7,8 @@
 get_correlation(dat, patterns, amplitudes = NULL)
 }
 \arguments{
-\item{dat}{A stars object with a time dimension}
+\item{dat}{A stars object with a time dimension. For multivariate analyses,
+correlate one variable at a time (e.g. `get_correlation(dat["tmean"], pat)`).}
 
 \item{patterns}{A patterns object from patterns()}
 

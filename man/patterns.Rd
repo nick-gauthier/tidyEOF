@@ -15,7 +15,12 @@ patterns(
 )
 }
 \arguments{
-\item{dat}{A `stars` object containing spatial and temporal dimensions}
+\item{dat}{A `stars` object containing spatial and temporal dimensions.
+Multiple attributes (e.g. temperature and precipitation on the same grid)
+are analyzed jointly as combined EOFs: each variable contributes a block
+of the space dimension, modes share one amplitude time series, and
+`scale = TRUE` is required so variables with different units contribute
+comparably.}
 
 \item{k}{The number of PC/EOF modes to retain}
 
@@ -51,4 +56,10 @@ number of time steps. This assumes temporally independent samples: for
 autocorrelated data (e.g., monthly anomalies) the effective sample size is
 smaller and the bars are too narrow, so modes that appear well-separated
 may not be.
+
+For multivariate input, per-pixel standardization is undefined where the
+climatological standard deviation is ~0 (e.g. precipitation in arid cells);
+such cells are dropped automatically like NA cells. Strongly skewed
+variables such as precipitation often benefit from a sqrt or log transform
+before analysis.
 }

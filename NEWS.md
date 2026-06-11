@@ -1,3 +1,16 @@
+# tidyeof (development version)
+
+* `patterns()` accepts multi-attribute `stars` objects for combined
+  (multivariate) EOF analysis — e.g. joint temperature + precipitation
+  downscaling with physically consistent predictions. Requires `scale = TRUE`.
+* The whole stack is multivariate-aware: `project_patterns()`,
+  `reconstruct()`, `couple()`/`predict()`, `tune_eof()`, `tune_cca()`, and
+  plot methods. CV metrics gain per-variable columns plus a pooled score.
+* Breaking change: EOF attributes in `patterns$eofs` are now named after the
+  variable (previously `"weight"`).
+* Cells with non-finite standardized anomalies (climatological sd of 0) are
+  now excluded like NA cells.
+
 # tidyeof 0.1.0
 
 Initial release.

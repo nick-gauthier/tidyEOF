@@ -4,6 +4,10 @@
 #' returning the corresponding principal component time series. This is a core
 #' function used in pattern-based downscaling and reconstruction.
 #'
+#' For multivariate patterns, `newdata` must contain the same variables as the
+#' training data (any order); univariate patterns accept any single-attribute
+#' object regardless of name.
+#'
 #' @param patterns A patterns object containing EOFs, climatology, and other metadata
 #' @param newdata A stars object with new spatial-temporal data to project
 #'

@@ -5,6 +5,10 @@
 #' for joint PCA. The resulting shared spatial patterns get source-specific
 #' amplitudes and climatologies, enabling CCA coupling and cross-source prediction.
 #'
+#' Each source must currently contain a single variable; combining
+#' `common_patterns()` with multivariate (multi-attribute) input is not yet
+#' supported.
+#'
 #' @param datasets Named list of stars objects sharing the same spatial grid.
 #'   Names become the source identifiers used for extraction.
 #' @param k Number of EOF modes to retain

@@ -80,7 +80,12 @@ check_k_valid <- function(k, max_k, arg = rlang::caller_arg(k), call = rlang::ca
 #' (Implicitly Restarted Lanczos Bidiagonalization Algorithm) for efficient
 #' computation when the irlba package is available.
 #'
-#' @param dat A `stars` object containing spatial and temporal dimensions
+#' @param dat A `stars` object containing spatial and temporal dimensions.
+#'   Multiple attributes (e.g. temperature and precipitation on the same grid)
+#'   are analyzed jointly as combined EOFs: each variable contributes a block
+#'   of the space dimension, modes share one amplitude time series, and
+#'   `scale = TRUE` is required so variables with different units contribute
+#'   comparably.
 #' @param k The number of PC/EOF modes to retain
 #' @param scale Logical, whether to scale before PCA
 #' @param rotate Logical, whether to apply Varimax rotation. Rotation follows
@@ -101,6 +106,12 @@ check_k_valid <- function(k, max_k, arg = rlang::caller_arg(k), call = rlang::ca
 #' autocorrelated data (e.g., monthly anomalies) the effective sample size is
 #' smaller and the bars are too narrow, so modes that appear well-separated
 #' may not be.
+#'
+#' For multivariate input, per-pixel standardization is undefined where the
+#' climatological standard deviation is ~0 (e.g. precipitation in arid cells);
+#' such cells are dropped automatically like NA cells. Strongly skewed
+#' variables such as precipitation often benefit from a sqrt or log transform
+#' before analysis.
 #'
 #' @return A `patterns` object containing EOFs, amplitudes, and metadata
 #' @export

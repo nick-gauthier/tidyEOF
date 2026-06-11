@@ -27,7 +27,8 @@ evaluate_eof_fold(
 \item{seed}{Base seed; combined with the fold id so masks are reproducible}
 }
 \value{
-Tibble with fold_id and metric values
+Tibble with fold_id and metric values. For multivariate fields the
+  metrics include pooled scores plus per-variable scores (e.g. `rmse_tmean`).
 }
 \description{
 Hides a random scatter of grid cells in the held-out data, estimates mode

@@ -26,4 +26,7 @@ For bounded variables like precipitation, the reconstructed field may contain
 small negative values due to EOF truncation. To clamp these, use
 `mutate(result, across(everything(), ~pmax(.x, 0 * .x)))` (the `0 * .x`
 trick preserves units).
+
+For multivariate patterns the return is a multi-attribute stars object, with
+each variable's climatology and units restored.
 }
