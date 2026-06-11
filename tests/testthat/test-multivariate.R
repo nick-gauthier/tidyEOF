@@ -30,4 +30,6 @@ test_that("flatten_dim_space concatenates attributes", {
   expect_equal(dim(m), c(36, 2 * 2601))
   m1 <- tidyeof:::flatten_dim_space(prism_mv["tmean"], "time")
   expect_equal(m[, 1:2601], m1)
+  expect_type(m, "double")
+  expect_false(inherits(m, "units"))
 })
