@@ -4,13 +4,15 @@
 #' PC amplitude time series. Checks for overlapping time steps between the
 #' raster field and the PC amplitudes.
 #'
-#' @param dat A stars object with a time dimension
+#' @param dat A stars object with a time dimension. For multivariate analyses,
+#'   correlate one variable at a time (e.g. `get_correlation(dat["tmean"], pat)`).
 #' @param patterns A patterns object from patterns()
 #' @param amplitudes Optional amplitudes tibble (defaults to patterns$amplitudes)
 #'
 #' @return A stars object with correlation values for each PC
 #' @export
 get_correlation <- function(dat, patterns, amplitudes = NULL) {
+  check_single_attribute(dat)
   if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
 
   matched <- match_times(amplitudes, dat)
@@ -41,7 +43,8 @@ get_correlation <- function(dat, patterns, amplitudes = NULL) {
 #' Computes pixel-wise correlations with FDR correction and returns significance
 #' contour lines as sf polygons.
 #'
-#' @param dat A stars object with a time dimension
+#' @param dat A stars object with a time dimension. For multivariate analyses,
+#'   correlate one variable at a time (e.g. `get_fdr(dat["tmean"], pat)`).
 #' @param patterns A patterns object from patterns()
 #' @param fdr False discovery rate threshold (default 0.1)
 #' @param amplitudes Optional amplitudes tibble (defaults to patterns$amplitudes)
@@ -49,6 +52,7 @@ get_correlation <- function(dat, patterns, amplitudes = NULL) {
 #' @return An sf object with significance contour polygons for each PC
 #' @export
 get_fdr <- function(dat, patterns, fdr = 0.1, amplitudes = NULL) {
+  check_single_attribute(dat)
   if(is.null(amplitudes)) amplitudes <- patterns$amplitudes
 
   matched <- match_times(amplitudes, dat)

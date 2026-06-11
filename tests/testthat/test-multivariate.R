@@ -336,3 +336,24 @@ test_that("get_canonical_patterns returns all response variables", {
   got <- matrix(cp[["tmean"]], nrow = 2601, ncol = 2)
   expect_equal(got, expected, ignore_attr = TRUE)
 })
+
+test_that("multivariate patterns plot with one panel row per variable", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  expect_s3_class(plot(pat), "patchwork")
+  expect_s3_class(plot(pat, type = "eofs"), "patchwork")
+  expect_s3_class(plot(pat, type = "amplitudes"), "ggplot")
+})
+
+test_that("unsupported multivariate plot modes error clearly", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  expect_error(plot(pat, type = "eofs", scaled = TRUE, rawdata = prism_mv),
+               class = "tidyeof_multivariate_unsupported")
+  expect_error(plot(pat, type = "amplitudes", scale = "raw"),
+               class = "tidyeof_multivariate_unsupported")
+})
+
+test_that("teleconnection functions require a single-attribute field", {
+  pat <- patterns(prism, k = 2)
+  expect_error(get_correlation(prism_mv, pat),
+               class = "tidyeof_multiple_attributes")
+})

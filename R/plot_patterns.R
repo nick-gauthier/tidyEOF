@@ -86,7 +86,7 @@ plot.patterns <- function(x,
 
       # Combine with patchwork using top-over-bottom layout
       return(
-        patchwork::wrap_plots(p_eofs, p_amps, ncol = 1, heights = layout$heights) +
+        patchwork::wrap_plots(p_eofs, p_amps, ncol = 1, heights = c(layout$heights[1] * length(x$eofs), layout$heights[2])) +
              patchwork::plot_annotation(
                title = glue::glue("EOF Analysis: {glue::glue_collapse(x$names, sep = ', ')}"),
                subtitle = glue::glue("k = {x$k} modes | {ifelse(x$scaled, 'scaled', 'unscaled')} | {ifelse(x$rotate, 'rotated', 'unrotated')}")
@@ -117,10 +117,8 @@ plot.patterns <- function(x,
 #' @keywords internal
 .plot_eofs_internal <- function(x, scaled = FALSE, rawdata = NULL, layout = NULL,
                                  overlay = NULL, overlay_color = "grey30", overlay_fill = NA) {
-  # Use provided layout or let facet_wrap choose defaults
   facet_args <- if(!is.null(layout)) layout else list()
 
-  # Build overlay layer if provided
   overlay_layer <- if(!is.null(overlay)) {
     ggplot2::geom_sf(data = overlay, fill = overlay_fill, color = overlay_color, inherit.aes = FALSE)
   } else {
@@ -128,29 +126,57 @@ plot.patterns <- function(x,
   }
 
   if(scaled) {
+    if (length(x$eofs) > 1) {
+      cli::cli_abort(
+        c(
+          "Correlation (scaled) EOF maps are only supported for single-variable patterns.",
+          "i" = "Fit patterns on one variable, or plot with {.code scaled = FALSE}."
+        ),
+        class = "tidyeof_multivariate_unsupported"
+      )
+    }
     if(is.null(rawdata)) {
       rlang::abort("rawdata must be provided when scaled = TRUE for correlation calculation", class = "tidyeof_missing_rawdata")
     }
+    return(
+      ggplot2::ggplot() +
+        stars::geom_stars(data = get_correlation(rawdata, x)) +
+        overlay_layer +
+        do.call(ggplot2::facet_wrap, c(list(~PC), facet_args)) +
+        ggplot2::scale_fill_distiller(palette = 'RdBu', na.value = NA, limits = c(-1, 1)) +
+        ggplot2::coord_sf() +
+        ggplot2::theme_void() +
+        ggplot2::theme(legend.position = "right") +
+        ggplot2::labs(fill = "Correlation")
+    )
+  }
+
+  vars <- names(x$eofs)
+
+  # One panel row per variable, each with its own fill scale: loadings of
+  # different variables are not comparable on a shared color scale
+  plot_one <- function(v) {
     ggplot2::ggplot() +
-      stars::geom_stars(data = get_correlation(rawdata, x)) +
-      overlay_layer +
-      do.call(ggplot2::facet_wrap, c(list(~PC), facet_args)) +
-      ggplot2::scale_fill_distiller(palette = 'RdBu', na.value = NA, limits = c(-1, 1)) +
-      ggplot2::coord_sf() +
-      ggplot2::theme_void() +
-      ggplot2::theme(legend.position = "right") +
-      ggplot2::labs(fill = "Correlation")
-  } else {
-    ggplot2::ggplot() +
-      stars::geom_stars(data = x$eofs) +
+      stars::geom_stars(data = x$eofs[v]) +
       overlay_layer +
       do.call(ggplot2::facet_wrap, c(list(~PC), facet_args)) +
       scico::scale_fill_scico(palette = 'vik', midpoint = 0, na.value = NA) +
       ggplot2::coord_sf() +
       ggplot2::theme_void() +
       ggplot2::theme(legend.position = "right") +
-      ggplot2::labs(fill = "Loading")
+      ggplot2::labs(fill = if (length(vars) == 1) "Loading" else v)
   }
+
+  if (length(vars) == 1) {
+    return(plot_one(vars))
+  }
+
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    warning("patchwork package needed for multivariate EOF plots. Showing first variable only.")
+    return(plot_one(vars[1]))
+  }
+
+  patchwork::wrap_plots(purrr::map(vars, plot_one), ncol = 1)
 }
 
 #' Internal function for amplitude plotting
@@ -178,6 +204,12 @@ plot.patterns <- function(x,
       dplyr::left_join(eigs, by = 'PC') %>%
       dplyr::mutate(amplitude = amplitude * std.dev)
   } else if(scale == "raw") {
+    if (length(x$eofs) > 1) {
+      cli::cli_abort(
+        "Raw amplitude scaling mixes units across variables and is not supported for multivariate patterns. Use scale = 'standardized' or 'variance'.",
+        class = "tidyeof_multivariate_unsupported"
+      )
+    }
     # Use EOF loadings to convert back to original units
     eigs <- split(x$eofs) %>%
       as_tibble() %>%
