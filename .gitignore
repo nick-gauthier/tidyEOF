@@ -13,7 +13,7 @@ tmp/
 *.png
 *.zip
 *.tif
-..Rcheck/
+*.Rcheck/
 *.tar.gz
 docs/
 inst/doc/
