@@ -225,3 +225,31 @@ test_that("rotated multivariate projection reproduces stored amplitudes", {
   expect_equal(as.matrix(proj[-1]), as.matrix(pat$amplitudes[-1]),
                tolerance = 1e-6, ignore_attr = TRUE)
 })
+
+test_that("multivariate metrics report pooled plus per-variable scores", {
+  pat <- patterns(prism_mv, k = 4, scale = TRUE)
+  rec <- reconstruct(pat)
+  m <- tidyeof:::compute_spatial_metrics(rec, prism_mv)
+
+  expect_true(all(c("rmse", "rmse_tmean", "rmse_ppt",
+                    "cor_spatial", "cor_spatial_tmean", "cor_spatial_ppt",
+                    "cor_temporal", "cor_temporal_tmean", "cor_temporal_ppt")
+                  %in% names(m)))
+
+  # Pooled rmse = RMS of per-variable rmse normalized by observed sd
+  sd_t <- sd(units::drop_units(prism_mv[["tmean"]]), na.rm = TRUE)
+  sd_p <- sd(units::drop_units(prism_mv[["ppt"]]), na.rm = TRUE)
+  expect_equal(m$rmse,
+               sqrt(mean(c((m$rmse_tmean / sd_t)^2, (m$rmse_ppt / sd_p)^2))))
+
+  # Pooled correlations are means of per-variable correlations
+  expect_equal(m$cor_spatial, mean(c(m$cor_spatial_tmean, m$cor_spatial_ppt)))
+  expect_equal(m$cor_temporal, mean(c(m$cor_temporal_tmean, m$cor_temporal_ppt)))
+})
+
+test_that("univariate metrics are unchanged", {
+  pat <- patterns(prism, k = 4)
+  rec <- reconstruct(pat)
+  m <- tidyeof:::compute_spatial_metrics(rec, prism)
+  expect_named(m, c("rmse", "cor_spatial", "cor_temporal"))
+})

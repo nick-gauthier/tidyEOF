@@ -7,6 +7,16 @@
 #' @return Named list of computed metrics
 #' @keywords internal
 compute_spatial_metrics <- function(predicted, observed, metrics = c("rmse", "cor_spatial", "cor_temporal")) {
+  if (length(predicted) > 1 || length(observed) > 1) {
+    if (!setequal(names(predicted), names(observed))) {
+      cli::cli_abort(
+        "Predicted attributes ({.field {names(predicted)}}) must match observed attributes ({.field {names(observed)}}).",
+        class = "tidyeof_attribute_mismatch"
+      )
+    }
+    observed <- observed[names(predicted)]
+  }
+
   # Align times before comparison (handles dropped NA rows in predictions)
   pred_times <- stars::st_get_dimension_values(predicted, "time")
   obs_times <- stars::st_get_dimension_values(observed, "time")
@@ -32,20 +42,56 @@ compute_spatial_metrics <- function(predicted, observed, metrics = c("rmse", "co
   pred_flat <- flatten_time_space(predicted)
   obs_flat <- flatten_time_space(observed)
 
+  compute_block_metrics(pred_flat$matrix, obs_flat$matrix,
+                        pred_flat$block_map, metrics)
+}
+
+#' Compute per-variable and pooled metrics over block-structured matrices
+#'
+#' The plain metric name is always the pooled score. For a single block it is
+#' the metric itself, preserving univariate behavior exactly. For multiple
+#' blocks, RMSE is normalized by each block's observed standard deviation and
+#' RMS-combined (raw pooling across different units is meaningless), and
+#' correlations (already unitless) are averaged. Per-variable values get
+#' suffixed names (e.g. rmse_tmean) only when there is more than one block.
+#'
+#' @param pred_matrix Predicted values matrix (time x space)
+#' @param obs_matrix Observed values matrix (time x space)
+#' @param block_map Named list of column indices per variable
+#' @param metrics Character vector of metric names
+#' @return Named list of metric values
+#' @keywords internal
+compute_block_metrics <- function(pred_matrix, obs_matrix, block_map,
+                                  metrics = c("rmse", "cor_spatial", "cor_temporal")) {
+  calc <- list(rmse = calc_rmse, cor_spatial = calc_cor_spatial,
+               cor_temporal = calc_cor_temporal)
+  metrics <- intersect(metrics, names(calc))
+
+  per_var <- purrr::map(block_map, function(cols) {
+    p <- pred_matrix[, cols, drop = FALSE]
+    o <- obs_matrix[, cols, drop = FALSE]
+    vals <- purrr::map(calc[metrics], ~.x(p, o))
+    vals$.obs_sd <- stats::sd(o, na.rm = TRUE)
+    vals
+  })
+
   results <- list()
-
-  if ("rmse" %in% metrics) {
-    results$rmse <- calc_rmse(pred_flat$matrix, obs_flat$matrix)
+  for (m in metrics) {
+    vals <- purrr::map_dbl(per_var, m)
+    if (length(per_var) == 1) {
+      results[[m]] <- vals[[1]]
+    } else {
+      if (m == "rmse") {
+        nrmse <- vals / purrr::map_dbl(per_var, ".obs_sd")
+        results[[m]] <- sqrt(mean(nrmse^2))
+      } else {
+        results[[m]] <- mean(vals)
+      }
+      for (v in names(per_var)) {
+        results[[paste0(m, "_", v)]] <- per_var[[v]][[m]]
+      }
+    }
   }
-
-  if ("cor_spatial" %in% metrics) {
-    results$cor_spatial <- calc_cor_spatial(pred_flat$matrix, obs_flat$matrix)
-  }
-
-  if ("cor_temporal" %in% metrics) {
-    results$cor_temporal <- calc_cor_temporal(pred_flat$matrix, obs_flat$matrix)
-  }
-
   results
 }
 
