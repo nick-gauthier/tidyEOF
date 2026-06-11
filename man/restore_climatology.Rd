@@ -15,7 +15,9 @@ restore_climatology(anomalies, clim, scale = FALSE, monthly = FALSE)
 \item{scale}{Logical. If TRUE, multiply by standard deviation before adding mean
 (use when anomalies were standardized)}
 
-\item{monthly}{Logical. If TRUE, restore using monthly climatology}
+\item{monthly}{Logical. If TRUE, restore using monthly climatology. Time
+steps are matched to the climatology by calendar month, so the anomalies
+may start in any month or span partial years.}
 }
 \value{
 A stars object with the original field restored

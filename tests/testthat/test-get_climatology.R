@@ -244,15 +244,18 @@ test_that("functions handle incomplete years gracefully", {
     st_set_dimensions(2, values = y, name = "y") %>%
     st_set_dimensions(3, values = times, name = "time")
 
-  # Should give warning but still compute
-  expect_warning(clim <- get_climatology(test_data, monthly = TRUE),
-                 "Data does not contain complete years")
-  expect_error(anom <- get_anomalies(test_data, monthly = TRUE),
-                 "Data does not contain complete years")
+  # Should message about unequal month sample sizes but still compute
+  expect_message(clim <- get_climatology(test_data, monthly = TRUE),
+                 class = "tidyeof_unbalanced_months")
 
   # Results should still have correct structure
   expect_type(clim, "list")
   expect_s3_class(clim$mean, "stars")
+
+  # Anomalies no longer require complete years and round-trip exactly
+  anom <- get_anomalies(test_data, clim = clim, monthly = TRUE)
+  restored <- restore_climatology(anom, clim, monthly = TRUE)
+  expect_equal(test_data$t2m, restored$t2m, tolerance = 1e-10)
 })
 
 test_that("functions handle non-January start dates correctly", {
@@ -273,19 +276,18 @@ test_that("functions handle non-January start dates correctly", {
   # Calculate climatology
   clim <- get_climatology(test_data, monthly = TRUE)
 
-  # Check month ordering
-  expected_months <- as.character(unique(lubridate::month(times, label = TRUE, abbr = FALSE)))
-  expect_equal(st_get_dimension_values(clim$mean, "month"), expected_months)
-  expect_equal(expected_months[1], "July")
+  # Month dimension is always calendar-ordered 1:12, regardless of start month
+  expect_equal(as.integer(st_get_dimension_values(clim$mean, "month")), 1:12)
 
-  # Calculate anomalies
-  anom <- get_anomalies(test_data, monthly = TRUE)
-
-  # Verify values
-  for(i in 1:12) {
-    month_data <- test_array[,,which(as.character(lubridate::month(times, label = TRUE, abbr = FALSE)) == expected_months[i])]
-    expect_equal(unique(as.vector(month_data)), i)
+  # Climatology of calendar month m matches the data values for that month
+  for(m in 1:12) {
+    month_data <- test_array[,,which(lubridate::month(times) == m)]
+    expect_equal(unique(as.vector(clim$mean$t2m[,,m])), unique(as.vector(month_data)))
   }
+
+  # Calculate anomalies (zero, since each month is constant across years)
+  anom <- get_anomalies(test_data, monthly = TRUE)
+  expect_true(all(abs(anom$t2m) < 1e-10))
 
   # Test restore_climatology
   restored <- restore_climatology(anom, clim, monthly = TRUE)
@@ -306,13 +308,13 @@ test_that("functions handle partial years correctly with non-standard start", {
     st_set_dimensions(2, values = y, name = "y") %>%
     st_set_dimensions(3, values = times, name = "time")
 
-  # Should give warning but still compute
-  expect_warning(clim <- get_climatology(test_data, monthly = TRUE))
+  # Should message about unequal month sample sizes but still compute
+  expect_message(clim <- get_climatology(test_data, monthly = TRUE),
+                 class = "tidyeof_unbalanced_months")
 
-  # Check month ordering
-  expected_months <- as.character(unique(lubridate::month(times, label = TRUE, abbr = FALSE)))
-  expect_equal(st_get_dimension_values(clim$mean, "month"), expected_months)
-  expect_equal(expected_months[1], "October")
+  # Month dimension is calendar-ordered; every month is present in this record
+  expect_equal(as.integer(st_get_dimension_values(clim$mean, "month")), 1:12)
+  expect_true(all(!is.na(clim$mean$t2m)))
 })
 
 test_that("cycle of operations preserves values for different start months", {
@@ -340,12 +342,8 @@ test_that("cycle of operations preserves values for different start months", {
     anom <- get_anomalies(test_data, monthly = TRUE)
     restored <- restore_climatology(anom, clim, monthly = TRUE)
 
-    # Check month ordering in climatology
-    expected_months <- as.character(unique(lubridate::month(times, label = TRUE, abbr = FALSE)))
-    expect_equal(st_get_dimension_values(clim$mean, "month"), expected_months)
-    expect_equal(expected_months[1],
-                 as.character(month(ymd(paste0("2000-", start_month, "-01")),
-                       label = TRUE, abbr = FALSE)))
+    # Month dimension is calendar-ordered 1:12 regardless of start month
+    expect_equal(as.integer(st_get_dimension_values(clim$mean, "month")), 1:12)
 
     # Check value preservation
     expect_equal(test_data$t2m, restored$t2m, tolerance = 1e-10)
