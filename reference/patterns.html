@@ -84,9 +84,10 @@ computation when the irlba package is available.</p>
 <dt id="arg-rotate">rotate<a class="anchor" aria-label="anchor" href="#arg-rotate"></a></dt>
 <dd><p>Logical, whether to apply Varimax rotation. Rotation follows
 the standard REOF convention (Hannachi et al. 2007): varimax operates on
-sqrt(eigenvalue)-scaled EOFs, the stored patterns are the rotated
-loadings (unit norm, not mutually orthogonal), and amplitudes remain
-uncorrelated with sd = sqrt(rotated eigenvalue)</p></dd>
+sqrt(eigenvalue)-scaled EOFs without Kaiser row-normalization
+(`normalize = FALSE`), the stored patterns are the rotated loadings
+(unit norm, not mutually orthogonal), and amplitudes remain
+uncorrelated with sd = sqrt(rotated eigenvalue). Requires k &gt; 1.</p></dd>
 
 
 <dt id="arg-monthly">monthly<a class="anchor" aria-label="anchor" href="#arg-monthly"></a></dt>
@@ -99,12 +100,21 @@ uncorrelated with sd = sqrt(rotated eigenvalue)</p></dd>
 
 <dt id="arg-irlba-threshold">irlba_threshold<a class="anchor" aria-label="anchor" href="#arg-irlba-threshold"></a></dt>
 <dd><p>Minimum number of data elements to trigger IRLBA usage
-(default: 50000). Set to Inf to always use base prcomp().</p></dd>
+(default: 500000). Set to Inf to always use base prcomp().</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A `patterns` object containing EOFs, amplitudes, and metadata</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>The eigenvalue table includes North et al. (1982) sampling-error bars
+(`low`/`hi`), computed with a relative error of sqrt(2/n) where n is the
+number of time steps. This assumes temporally independent samples: for
+autocorrelated data (e.g., monthly anomalies) the effective sample size is
+smaller and the bars are too narrow, so modes that appear well-separated
+may not be.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

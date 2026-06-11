@@ -1,9 +1,8 @@
-# Smart PCA Selection with Optional IRLBA Support
+# Smart PCA Selection with IRLBA Support
 
 Automatically selects between base \`prcomp()\` and \`prcomp_irlba()\`
-based on data size and package availability. For large datasets, IRLBA
-provides significant computational savings when only the first few
-components are needed.
+based on data size. For large datasets, IRLBA provides significant
+computational savings when only the first few components are needed.
 
 ## Usage
 
@@ -38,7 +37,7 @@ perform_pca_smart(
 
 - size_threshold:
 
-  Minimum number of elements to trigger IRLBA (default: 50000)
+  Minimum number of elements to trigger IRLBA
 
 - ...:
 
