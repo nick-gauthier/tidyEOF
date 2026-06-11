@@ -69,3 +69,17 @@ test_that("get_anomalies rejects climatology with mismatched attribute count", {
   expect_error(restore_climatology(anom, clim_uni_monthly, scale = TRUE, monthly = TRUE),
                class = "tidyeof_attribute_mismatch")
 })
+
+test_that("compute_eof_signs works on multi-attribute EOF objects", {
+  # Hand-build a 2-attribute (x, y, PC) stars object with known column sums
+  arr_pos <- array(1, dim = c(3, 3, 2))      # both PCs sum positive
+  arr_neg <- array(-1, dim = c(3, 3, 2))     # both PCs sum negative
+  eofs <- stars::st_as_stars(list(a = arr_pos, b = arr_neg)) %>%
+    stars::st_set_dimensions(names = c("x", "y", "PC"))
+  # Block sums cancel: 9 + (-9) = 0 per PC -> orient() maps 0 to +1
+  expect_equal(unname(tidyeof:::compute_eof_signs(eofs)), c(1, 1))
+
+  # Make b dominate negatively
+  eofs$b <- arr_neg * 3
+  expect_equal(unname(tidyeof:::compute_eof_signs(eofs)), c(-1, -1))
+})

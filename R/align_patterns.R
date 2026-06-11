@@ -1,40 +1,44 @@
 #' Compute sign vector for consistent EOF orientation
 #'
 #' Determines the sign (+1 or -1) needed for each EOF component so that
-#' the dominant loading is positive. Works for both raster and sf geometry
-#' stars objects.
+#' the dominant loading is positive across ALL variable blocks. Supports both
+#' single-attribute (univariate) and multi-attribute (multivariate) stars objects,
+#' and both raster (x, y, PC) and sf geometry (geometry, PC) layouts.
 #'
-#' @param eofs A stars object with EOF spatial patterns (must have a PC dimension)
+#' @param eofs A stars object with EOF spatial patterns (must have a PC dimension
+#'   as the last dimension). May contain one or more attributes (variables).
 #' @return Named numeric vector of +1/-1 values, one per PC
 #' @keywords internal
 compute_eof_signs <- function(eofs) {
-  # Orient so the dominant loading is positive. A zero-sum (perfectly balanced)
-  # pattern maps to +1 rather than sign(0) = 0, which would zero out the mode.
+  # Orient so the dominant loading across ALL variable blocks is positive.
+  # A zero-sum pattern maps to +1 rather than sign(0) = 0, which would zero
+  # out the mode.
   orient <- function(x) if (sum(x, na.rm = TRUE) >= 0) 1 else -1
-  if (has_geometry_dimension(eofs)) {
-    eof_data <- eofs[[1]]
-    sums <- apply(eof_data, 2, orient)
-    names(sums) <- paste0("PC", seq_along(sums))
-  } else {
-    sums <- split(eofs) %>%
-      as_tibble() %>%
-      dplyr::summarise(across(starts_with('PC'), ~orient(.x))) %>%
-      unlist()
-  }
-  sums
+  mat <- do.call(rbind, purrr::map(names(eofs), function(v) {
+    arr <- eofs[[v]]
+    matrix(arr, nrow = prod(dim(arr)[-length(dim(arr))]))
+  }))
+  signs <- apply(mat, 2, orient)
+  names(signs) <- paste0("PC", seq_along(signs))
+  signs
 }
 
 #' Apply sign flips to a patterns object
 #'
 #' Flips the sign of EOFs, amplitudes, and projection matrix according to the
-#' supplied sign vector. This keeps all components synchronized.
+#' supplied sign vector. This keeps all components synchronized. Supports both
+#' single-attribute (univariate) and multi-attribute (multivariate) EOF stars
+#' objects.
 #'
 #' @param patterns A patterns object
 #' @param signs Named numeric vector of +1/-1 values (from compute_eof_signs)
 #' @return The patterns object with signs applied
 #' @keywords internal
 apply_sign_flips <- function(patterns, signs) {
-  patterns$eofs <- sweep(patterns$eofs, MARGIN = length(dim(patterns$eofs)), STATS = signs, FUN = "*")
+  for (v in names(patterns$eofs)) {
+    arr <- patterns$eofs[[v]]
+    patterns$eofs[[v]] <- sweep(arr, length(dim(arr)), signs, `*`)
+  }
 
   patterns$amplitudes <- patterns$amplitudes %>%
     select(-time) %>%
