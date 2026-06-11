@@ -1,3 +1,6 @@
+prism <- system.file("testdata/prism_test.RDS", package = "tidyeof") %>%
+  readRDS()
+
 # Helper: load test data and create mock second source
 load_test_data <- function() {
   prism <- system.file("testdata/prism_test.RDS", package = "tidyeof") %>%
@@ -370,4 +373,20 @@ test_that("sources with different time ranges work", {
   n_b <- nrow(cpat$b$amplitudes)
   expect_equal(n_a, floor(n * 0.8))
   expect_equal(n_b, n - ceiling(n * 0.2) + 1)
+})
+
+test_that("reconstruct names a common_patterns source by its own variable, not the reference", {
+  era <- prism                       # attribute "tmean"
+  phyda <- setNames(prism, "temp")   # same grid/times, attribute "temp"
+
+  cpat <- common_patterns(list(era = era, phyda = phyda),
+                          k = 3, scale = TRUE, weight = FALSE)
+
+  rec <- reconstruct(cpat$phyda)
+  expect_named(rec, "temp")
+  expect_equal(units(rec[["temp"]]), units(prism[["tmean"]]))
+
+  # The reference source still reconstructs correctly too
+  rec_era <- reconstruct(cpat$era)
+  expect_named(rec_era, "tmean")
 })

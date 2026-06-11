@@ -63,7 +63,7 @@ reconstruct <- function(target_patterns, amplitudes = NULL) {
       spatial_template = target_patterns$climatology$mean[i],
       valid_pixels = seq_along(block_map[[i]]),
       times = amplitudes$time,
-      var_names = names(block_map)[[i]]
+      var_names = target_patterns$names[[i]]
     )
   })
   anomalies <- do.call(c, var_list)
