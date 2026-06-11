@@ -36,7 +36,7 @@ test_that("common_patterns aborts for multi-attribute input", {
 test_that("project_patterns aborts for multi-attribute newdata", {
   pat <- patterns(prism, k = 2)
   two <- c(setNames(prism, "a"), setNames(prism, "b"))
-  expect_error(project_patterns(pat, two), class = "tidyeof_multiple_attributes")
+  expect_error(project_patterns(pat, two), class = "tidyeof_attribute_mismatch")
 })
 
 test_that("[.patterns allows leading contiguous subsets only", {

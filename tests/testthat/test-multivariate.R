@@ -193,3 +193,35 @@ test_that("multivariate reconstruction preserves per-variable NA masks", {
   other[2, 1, ] <- 0; other[3, 5, ] <- 0
   expect_true(all(is.finite(other)))
 })
+
+test_that("projecting training data reproduces stored amplitudes (multivariate)", {
+  pat <- patterns(prism_mv, k = 4, scale = TRUE)
+  proj <- project_patterns(pat, prism_mv)
+  expect_equal(as.matrix(proj[-1]), as.matrix(pat$amplitudes[-1]),
+               tolerance = 1e-6, ignore_attr = TRUE)
+})
+
+test_that("project_patterns reorders newdata attributes to training order", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  expect_equal(project_patterns(pat, prism_mv[c("ppt", "tmean")]),
+               project_patterns(pat, prism_mv))
+})
+
+test_that("project_patterns rejects mismatched attribute sets", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE)
+  bad <- setNames(prism_mv, c("tmean", "precip"))
+  expect_error(project_patterns(pat, bad), class = "tidyeof_attribute_mismatch")
+})
+
+test_that("univariate projection stays name-agnostic", {
+  pat <- patterns(prism, k = 3)
+  renamed <- setNames(prism, "tas")
+  expect_equal(project_patterns(pat, renamed), project_patterns(pat, prism))
+})
+
+test_that("rotated multivariate projection reproduces stored amplitudes", {
+  pat <- patterns(prism_mv, k = 3, scale = TRUE, rotate = TRUE)
+  proj <- project_patterns(pat, prism_mv)
+  expect_equal(as.matrix(proj[-1]), as.matrix(pat$amplitudes[-1]),
+               tolerance = 1e-6, ignore_attr = TRUE)
+})

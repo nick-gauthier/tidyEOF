@@ -25,7 +25,22 @@ project_patterns <- function(patterns, newdata) {
   # Mismatched data will cause errors downstream (matrix dimension mismatches).
 
   validate_patterns(patterns)
-  check_single_attribute(newdata)
+
+  # Univariate patterns accept any single-attribute newdata (name-agnostic,
+  # e.g. cross-source prediction where the variable is named differently).
+  # Multivariate projection needs the same variable set, reordered to match.
+  if (length(patterns$names) > 1 || length(newdata) > 1) {
+    if (!setequal(names(newdata), patterns$names)) {
+      cli::cli_abort(
+        c(
+          "Attributes of {.arg newdata} ({.field {names(newdata)}}) must match the training variables ({.field {patterns$names}}).",
+          "i" = "Multivariate patterns require the same set of variables."
+        ),
+        class = "tidyeof_attribute_mismatch"
+      )
+    }
+    newdata <- newdata[patterns$names]
+  }
 
   new_times <- st_get_dimension_values(newdata, 'time')
 
@@ -41,7 +56,7 @@ project_patterns <- function(patterns, newdata) {
 
   anomalies <- units::drop_units(anomalies)
 
-  flattened <- flatten_time_space(anomalies[1])
+  flattened <- flatten_time_space(anomalies)
   data_matrix <- flattened$matrix
 
   valid_pixels <- if (!is.null(patterns$valid_pixels)) {
