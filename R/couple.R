@@ -428,46 +428,14 @@ get_canonical_patterns <- function(object, type = c("predictor", "response"), k 
     coef_matrix <- object$cca$ycoef[, 1:k, drop = FALSE]
   }
 
-  # Extract EOF array (spatial dims + PC)
+  # EOF attribute arrays are constructed spatial-first with PC last
+  # (see get_eofs), one attribute per variable
   eof_stars <- patterns$eofs
   eof_dims <- stars::st_dimensions(eof_stars)
-
-  # Find spatial dimensions (everything except PC)
   spatial_dim_names <- setdiff(names(eof_dims), "PC")
   n_pcs <- length(stars::st_get_dimension_values(eof_stars, "PC"))
 
-  # Get the underlying array
-  eof_array <- eof_stars[[1]]
-
-  # Determine array dimension order
-  dim_names <- names(dim(eof_array))
-  if (is.null(dim_names)) {
-    # Assume standard order from stars: spatial dims first, PC last
-    dim_names <- c(spatial_dim_names, "PC")
-  }
-  pc_dim <- which(dim_names == "PC")
-
-  # Reshape to matrix: (spatial pixels) x (PCs)
-  # Move PC dimension to last if not already
-  if (pc_dim != length(dim(eof_array))) {
-    perm_order <- c(setdiff(seq_along(dim(eof_array)), pc_dim), pc_dim)
-    eof_array <- aperm(eof_array, perm_order)
-  }
-
-  spatial_shape <- dim(eof_array)[-length(dim(eof_array))]
-  n_spatial <- prod(spatial_shape)
-  eof_matrix <- matrix(eof_array, nrow = n_spatial, ncol = n_pcs)
-
-  # Compute canonical patterns: (spatial) x (canonical modes)
-  # canonical_pattern[i] = sum_j EOF[j] * coef[j,i]
-  canonical_matrix <- eof_matrix %*% coef_matrix
-
-  # Reshape back to spatial array with CV dimension
-  canonical_array <- array(canonical_matrix, dim = c(spatial_shape, k))
-
-  # Build new stars object with CV dimension instead of PC
   new_dims <- eof_dims[spatial_dim_names]
-
   cv_dim <- list(
     from = 1L,
     to = k,
@@ -481,10 +449,18 @@ get_canonical_patterns <- function(object, type = c("predictor", "response"), k 
   new_dims$CV <- cv_dim
   class(new_dims) <- "dimensions"
 
-  result <- stars::st_as_stars(canonical_array, dimensions = new_dims)
-  names(result) <- names(eof_stars)
+  result_list <- purrr::map(names(eof_stars), function(v) {
+    eof_array <- eof_stars[[v]]
+    spatial_shape <- dim(eof_array)[-length(dim(eof_array))]
+    eof_matrix <- matrix(eof_array, nrow = prod(spatial_shape), ncol = n_pcs)
 
-  result
+    # canonical_pattern[i] = sum_j EOF[j] * coef[j, i]
+    canonical_array <- array(eof_matrix %*% coef_matrix,
+                             dim = c(spatial_shape, k))
+    setNames(stars::st_as_stars(canonical_array, dimensions = new_dims), v)
+  })
+
+  do.call(c, result_list)
 }
 
 #' Get Canonical Correlations from Coupled Patterns

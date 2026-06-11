@@ -292,3 +292,39 @@ test_that("tune_cca downscales to a multivariate response", {
   expect_true(all(c("k_pred", "k_resp", "k_cca") %in% names(s)))
   expect_true("rmse_mean" %in% names(s))
 })
+
+test_that("CCA downscaling predicts a multivariate response end to end", {
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+
+  pred_pat <- patterns(filter(coarse, time <= as.Date("2018-12-01")),
+                       k = 3, weight = FALSE)
+  resp_pat <- patterns(filter(prism_mv, time <= as.Date("2018-12-01")),
+                       k = 3, scale = TRUE, weight = FALSE)
+
+  coupled <- couple(pred_pat, resp_pat, k = 2)
+  prediction <- predict(coupled, filter(coarse, time > as.Date("2018-12-01")))
+
+  expect_s3_class(prediction, "stars")
+  expect_named(prediction, c("tmean", "ppt"))
+  expect_equal(units(prediction[["ppt"]]), units(prism_mv[["ppt"]]))
+  expect_equal(unname(dim(prediction)), c(51, 51, 12))
+
+  amps <- predict(coupled, filter(coarse, time > as.Date("2018-12-01")),
+                  reconstruct = FALSE)
+  expect_s3_class(amps, "tbl_df")
+})
+
+test_that("get_canonical_patterns returns all response variables", {
+  coarse <- prism %>% mutate(tmean = tmean * 0.9)
+  pred_pat <- patterns(coarse, k = 3, weight = FALSE)
+  resp_pat <- patterns(prism_mv, k = 3, scale = TRUE, weight = FALSE)
+  coupled <- couple(pred_pat, resp_pat, k = 2)
+
+  cp <- get_canonical_patterns(coupled, type = "response")
+  expect_named(cp, c("tmean", "ppt"))
+  expect_equal(stars::st_get_dimension_values(cp, "CV"), c("CV1", "CV2"))
+
+  cp_pred <- get_canonical_patterns(coupled, type = "predictor")
+  expect_named(cp_pred, "tmean")
+})
