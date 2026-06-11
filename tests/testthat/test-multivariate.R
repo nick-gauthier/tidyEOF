@@ -294,6 +294,7 @@ test_that("tune_cca downscales to a multivariate response", {
 })
 
 test_that("CCA downscaling predicts a multivariate response end to end", {
+  set.seed(42)
   coarse <- prism %>%
     mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
 
@@ -327,4 +328,11 @@ test_that("get_canonical_patterns returns all response variables", {
 
   cp_pred <- get_canonical_patterns(coupled, type = "predictor")
   expect_named(cp_pred, "tmean")
+
+  # Canonical pattern = that variable's EOF block %*% the CCA y-coefficients
+  ycoef <- coupled$cca$ycoef[, 1:2]
+  eof_block <- matrix(resp_pat$eofs[["tmean"]], nrow = 2601, ncol = 3)
+  expected <- eof_block %*% ycoef
+  got <- matrix(cp[["tmean"]], nrow = 2601, ncol = 2)
+  expect_equal(got, expected, ignore_attr = TRUE)
 })
