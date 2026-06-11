@@ -211,7 +211,6 @@ rotate_pca_components <- function(loadings_matrix, scores_matrix, sdev_vector) {
 #' @keywords internal
 get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
   times <- stars::st_get_dimension_values(dat, "time")
-  dims <- dim(dat)
 
   pc_names <- names0(k, 'PC')
 
@@ -222,6 +221,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
   anomaly_matrix_full <- flattened$matrix
   n_pixels <- ncol(anomaly_matrix_full)   # n_vars * n_space
   n_space <- flattened$n_space
+  spatial_shape <- flattened$spatial_shape
   block_map <- flattened$block_map
 
   # Valid pixels must be finite everywhere: this drops NA-masked cells and
@@ -234,7 +234,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
   max_k <- min(length(times) - 1, length(valid_pixels))
   check_k_valid(k, max_k)
 
-  # Extract matrix for valid pixels (time x space)
+  # Extract matrix for valid pixels (time x V*space)
   anomaly_matrix <- anomaly_matrix_full[, valid_pixels, drop = FALSE]
 
   # Apply spatial weights column-wise if provided; one weight per grid cell,
@@ -308,7 +308,7 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
       stars::st_set_dimensions('time', values = pc_names, names = 'PC')
     for (i in seq_along(var_names)) {
       pattern_array <- array(full_patterns[, block_map[[i]], drop = FALSE],
-                             dim = c(k, dims[[1]], dims[[2]]))
+                             dim = c(k, spatial_shape))
       template[[i]] <- aperm(pattern_array, c(2, 3, 1))  # x, y, PC
     }
   }
