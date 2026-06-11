@@ -33,6 +33,11 @@ A list with two stars objects:
 
   Climatological standard deviation with same structure
 
+For monthly climatologies, the \`month\` dimension always has values
+1:12 in calendar order, regardless of which month the data starts in.
+Months not present in the data are NA. Complete years are not required,
+but a message is emitted when months have unequal sample sizes.
+
 ## Examples
 
 ``` r

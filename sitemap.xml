@@ -12,6 +12,7 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/news/index.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/paper.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/apply_cca_prediction.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/apply_monthly_climatology.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/apply_sign_flips.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/area_weights.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/as.matrix.patterns.html</loc></url>
@@ -33,6 +34,7 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/evaluate_eof_fold.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/evaluate_fold.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/extract_amplitudes_matrix.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/flatten_dim_space.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/flatten_time_space.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/flip_patterns.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/get_anomalies.html</loc></url>
@@ -49,6 +51,8 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/index.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/match_times.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/matrix_to_spacetime.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/month_dimension.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/month_index.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/new_patterns.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/patterns.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/perform_pca_smart.html</loc></url>

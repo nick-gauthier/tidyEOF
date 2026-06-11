@@ -25,7 +25,10 @@ get_anomalies(dat, clim = NULL, scale = FALSE, monthly = FALSE)
 
 - monthly:
 
-  Logical. If TRUE, compute monthly anomalies
+  Logical. If TRUE, compute monthly anomalies. Each time step is matched
+  to its calendar month, so the data may start in any month, span
+  partial years, or cover a single year. Aborts if the data contains a
+  month absent from the climatology.
 
 ## Value
 

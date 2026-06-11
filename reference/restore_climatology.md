@@ -30,7 +30,9 @@ restore_climatology(anomalies, clim, scale = FALSE, monthly = FALSE)
 
 - monthly:
 
-  Logical. If TRUE, restore using monthly climatology
+  Logical. If TRUE, restore using monthly climatology. Time steps are
+  matched to the climatology by calendar month, so the anomalies may
+  start in any month or span partial years.
 
 ## Value
 
