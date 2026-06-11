@@ -15,16 +15,23 @@ month_index <- function(times) {
 #'
 #' Moves `dim_name` to the first dimension and flattens the remaining
 #' (spatial) dimensions, matching the column ordering used by
-#' [flatten_time_space()]. Units are dropped.
+#' [flatten_time_space()]. Units are dropped. When `x` has multiple
+#' attributes they are concatenated variable-major: all columns for the
+#' first attribute, then all columns for the second, etc.
 #'
-#' @param x A single-attribute stars object
+#' @param x A stars object (one or more attributes)
 #' @param dim_name Name of the dimension to keep as rows
 #' @return A matrix with rows = `dim_name`, columns = flattened space
+#'   (concatenated variable-major for multi-attribute objects)
 #' @keywords internal
 flatten_dim_space <- function(x, dim_name) {
   spatial <- setdiff(names(stars::st_dimensions(x)), dim_name)
-  arr <- aperm(units::drop_units(x), c(dim_name, spatial))[[1]]
-  matrix(arr, nrow = dim(arr)[1])
+  permuted <- aperm(units::drop_units(x), c(dim_name, spatial))
+  blocks <- purrr::map(seq_along(names(x)), function(i) {
+    arr <- permuted[[i]]
+    matrix(arr, nrow = dim(arr)[1])
+  })
+  do.call(cbind, blocks)
 }
 
 #' Build a calendar month dimension (values 1:12)
