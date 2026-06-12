@@ -250,26 +250,14 @@ validate_patterns_compatibility <- function(predictor_patterns, response_pattern
 predict.coupled_patterns <- function(object, newdata, k = NULL, reconstruct = TRUE,
                                    predictor_patterns = NULL, ...) {
 
-  # Validate inputs
   if (!inherits(object, "coupled_patterns")) {
     cli::cli_abort("object must be a coupled_patterns object from couple()",
                    class = "tidyeof_invalid_input")
   }
 
-  if (object$method != "cca") {
-    cli::cli_abort("Only CCA-based coupled_patterns objects are supported",
+  if (!object$method %in% c("cca", "pcr")) {
+    cli::cli_abort("Unsupported coupling method {.val {object$method}}.",
                    class = "tidyeof_unsupported_method")
-  }
-
-  # Use object's k if not specified
-  if (is.null(k)) {
-    k <- object$k
-  }
-
-  # Validate k
-  if (k > object$k) {
-    warning("Requested k (", k, ") exceeds available modes (", object$k, "). Using k = ", object$k)
-    k <- object$k
   }
 
   # Use override patterns if provided, otherwise use stored patterns
@@ -289,24 +277,26 @@ predict.coupled_patterns <- function(object, newdata, k = NULL, reconstruct = TR
   # Project new data onto predictor patterns to get PC amplitudes
   new_amplitudes <- project_patterns(proj_patterns, newdata)
 
-  # Apply CCA transformation
-  predicted_amplitudes <- apply_cca_prediction(
-    new_amplitudes = new_amplitudes,
-    cca_result = object$cca,
-    k = k
-  )
+  predicted_amplitudes <- if (object$method == "cca") {
+    if (is.null(k)) {
+      k <- object$k
+    }
+    if (k > object$k) {
+      warning("Requested k (", k, ") exceeds available modes (", object$k, "). Using k = ", object$k)
+      k <- object$k
+    }
+    apply_cca_prediction(new_amplitudes = new_amplitudes, cca_result = object$cca, k = k)
+  } else {
+    # k is inert for PCR
+    apply_pcr_prediction(new_amplitudes = new_amplitudes, pcr = object$pcr)
+  }
 
   if (!reconstruct) {
     return(predicted_amplitudes)
   }
 
-  # Reconstruct spatial field
-  reconstructed <- reconstruct(
-    target_patterns = object$response_patterns,
-    amplitudes = predicted_amplitudes
-  )
-
-  return(reconstructed)
+  reconstruct(target_patterns = object$response_patterns,
+              amplitudes = predicted_amplitudes)
 }
 
 #' Apply CCA Prediction Transform
@@ -375,6 +365,50 @@ apply_cca_prediction <- function(new_amplitudes, cca_result, k) {
     mutate(time = new_times, .before = 1)
 
   return(result)
+}
+
+#' Apply PCR Prediction Transform
+#'
+#' Internal function that maps predictor PC amplitudes to predicted predictand
+#' PC amplitudes via the fitted OLS coefficient matrix.
+#'
+#' @param new_amplitudes Tibble with `time` and predictor PC amplitudes
+#' @param pcr The `pcr` slot of a coupled object: `coefficients`, `xcenter`, `ycenter`
+#' @return Tibble with `time` and predicted response PC amplitudes
+#' @keywords internal
+apply_pcr_prediction <- function(new_amplitudes, pcr) {
+  new_times <- new_amplitudes$time
+
+  pred_matrix <- new_amplitudes %>%
+    dplyr::select(-time) %>%
+    as.matrix()
+
+  # Apply training centering if the fit was centered (mirrors apply_cca_prediction)
+  if (!identical(pcr$xcenter, FALSE)) {
+    xcenter <- pcr$xcenter
+    if (!is.null(names(xcenter)) && !is.null(colnames(pred_matrix))) {
+      xcenter <- xcenter[colnames(pred_matrix)]
+    }
+    pred_matrix <- sweep(pred_matrix, 2, xcenter, "-")
+  }
+
+  response_amplitudes <- pred_matrix %*% pcr$coefficients
+
+  if (!identical(pcr$ycenter, FALSE)) {
+    ycenter <- pcr$ycenter
+    if (!is.null(names(ycenter)) && !is.null(colnames(response_amplitudes))) {
+      ycenter <- ycenter[colnames(response_amplitudes)]
+    }
+    response_amplitudes <- sweep(response_amplitudes, 2, ycenter, "+")
+  }
+
+  n_response_pcs <- ncol(response_amplitudes)
+  pc_names <- paste0("PC", 1:n_response_pcs)
+
+  response_amplitudes %>%
+    as_tibble(.name_repair = "minimal") %>%
+    setNames(pc_names) %>%
+    mutate(time = new_times, .before = 1)
 }
 
 # CCA accessors ----
