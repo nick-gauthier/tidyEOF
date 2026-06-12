@@ -18,7 +18,8 @@
 
 \item{newdata}{New predictor data (stars object) for making predictions}
 
-\item{k}{Number of CCA modes to use for prediction. If NULL, uses all available modes}
+\item{k}{Number of CCA modes to use for prediction (CCA only; if NULL, uses
+all available modes). Ignored for `method = "pcr"`.}
 
 \item{reconstruct}{Logical, whether to reconstruct the full spatial field (default: TRUE)}
 

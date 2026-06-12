@@ -192,6 +192,10 @@ prep_cv_folds <- function(predictor, response,
 #' @param k_cca Vector of CCA mode counts to try, or NULL (default) to use
 #'   `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 #'   the maximum can act as regularization.
+#' @param method Coupling method passed to [couple()]: `"cca"` (default) or
+#'   `"pcr"`. For `"pcr"` the `k_cca` axis is inert — leave `k_cca = NULL` so
+#'   the grid is effectively `k_pred` x `k_resp` (an explicit `k_cca` vector
+#'   would produce duplicate rows that all evaluate identically).
 #' @param metrics Character vector of metrics to compute. Options:
 #'   "rmse", "cor_spatial", "cor_temporal" (default: all three). For
 #'   multivariate fields each metric also gets per-variable columns (e.g.
@@ -325,6 +329,7 @@ tune_cca <- function(cv_folds,
 #' @param k_pred Number of predictor EOFs
 #' @param k_resp Number of response EOFs
 #' @param k_cca Number of CCA modes
+#' @param method Coupling method passed to couple() ("cca" or "pcr")
 #' @param metrics Metrics to compute
 #'
 #' @return Tibble with fold_id and metric values

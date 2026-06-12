@@ -52,7 +52,11 @@ fit_pcr <- function(pred_amps, resp_amps, center = TRUE) {
 #' @param predictor_patterns A patterns object containing predictor patterns (e.g., from patterns())
 #' @param response_patterns A patterns object containing response patterns (e.g., from patterns())
 #' @param k Number of CCA modes to retain. If NULL, uses min(ncol(predictor), ncol(response))
-#' @param method Coupling method. Currently only "cca" is supported
+#' @param method Coupling method: `"cca"` (canonical correlation, default) or
+#'   `"pcr"` (principal components regression — OLS of the predictand PC
+#'   amplitudes on the predictor PC amplitudes). For PCR the regularization is
+#'   the predictor truncation `k_pred`, and the canonical-mode argument `k` is
+#'   ignored.
 #' @param center Logical, whether to center the amplitudes before CCA
 #'   (default: TRUE). Centering is the statistically standard choice and makes
 #'   retaining all modes equivalent to multivariate regression with an
@@ -63,7 +67,8 @@ fit_pcr <- function(pred_amps, resp_amps, center = TRUE) {
 #' @param validate Logical, whether to validate input patterns compatibility
 #'
 #' @return A coupled_patterns object containing:
-#'   \item{cca}{The CCA results from cancor()}
+#'   \item{cca}{The CCA results from cancor() (present only for `method = "cca"`)}
+#'   \item{pcr}{The PCR fit — coefficients and centering (present only for `method = "pcr"`)}
 #'   \item{predictor_patterns}{The original predictor patterns}
 #'   \item{response_patterns}{The original response patterns}
 #'   \item{k}{Number of CCA modes retained}
@@ -219,7 +224,8 @@ validate_patterns_compatibility <- function(predictor_patterns, response_pattern
 #'
 #' @param object A coupled_patterns object from couple()
 #' @param newdata New predictor data (stars object) for making predictions
-#' @param k Number of CCA modes to use for prediction. If NULL, uses all available modes
+#' @param k Number of CCA modes to use for prediction (CCA only; if NULL, uses
+#'   all available modes). Ignored for `method = "pcr"`.
 #' @param reconstruct Logical, whether to reconstruct the full spatial field (default: TRUE)
 #' @param predictor_patterns Optional patterns object to use instead of the one stored
 #'   in the coupled object. Useful for cross-source prediction with common EOFs: the
@@ -423,6 +429,7 @@ apply_pcr_prediction <- function(new_amplitudes, pcr) {
 #' @keywords internal
 check_cca_method <- function(object, fn, call = rlang::caller_env()) {
   method <- object$method
+  # NULL method: tolerate legacy hand-built objects (real couple() always sets method).
   if (!is.null(method) && method != "cca") {
     cli::cli_abort(
       c(
