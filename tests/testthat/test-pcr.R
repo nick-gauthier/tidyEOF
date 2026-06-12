@@ -178,3 +178,15 @@ test_that("PCR and CCA give comparable skill at full rank (wiring sanity)", {
   # All canonical modes retained => CCA equals multivariate OLS, so PCR matches closely
   expect_lt(abs(m_cca - m_pcr) / m_cca, 0.5)
 })
+
+test_that("tune_cca warns when k_cca is passed with method = 'pcr'", {
+  set.seed(6)
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+  cv <- prep_cv_folds(coarse, prism, kfolds = 3,
+                      max_k_pred = 3, max_k_resp = 3, weight = FALSE)
+  expect_warning(
+    suppressMessages(tune_cca(cv, k_pred = 2:3, k_resp = 2:3, k_cca = 1:2, method = "pcr")),
+    class = "tidyeof_k_ignored"
+  )
+})

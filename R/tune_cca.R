@@ -247,6 +247,16 @@ tune_cca <- function(cv_folds,
                    class = "tidyeof_invalid_k")
   }
 
+  if (!is.null(k_cca) && method == "pcr") {
+    cli::cli_warn(
+      c(
+        "{.arg k_cca} is ignored for {.code method = \"pcr\"}; predictor truncation is the only regularizer.",
+        "i" = "Leave {.arg k_cca} as {.code NULL} to avoid duplicate cross-validation rows."
+      ),
+      class = "tidyeof_k_ignored"
+    )
+  }
+
   # Build parameter grid
 
   if (is.null(k_cca)) {
