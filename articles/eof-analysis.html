@@ -169,6 +169,9 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 <pre><code><span><span class="va">Modes</span><span class="op">:</span> <span class="fl">4</span></span></code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
+<pre><code><span><span class="va">Variables</span><span class="op">:</span> <span class="va">tmean</span></span></code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
 <pre><code>Time steps: 36 (2017-01-01 to 2019-12-01)</code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
@@ -221,7 +224,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p>The <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method produces a combined view of spatial patterns and amplitude time series:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb25"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -232,7 +235,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <p>You can plot EOFs or amplitudes separately:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb26"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span>, type <span class="op">=</span> <span class="st">"eofs"</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -242,7 +245,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 </div>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb27"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span>, type <span class="op">=</span> <span class="st">"amplitudes"</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -261,7 +264,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 <code>"raw"</code> – back-projected to original data units</li>
 </ul>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb28"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span>, type <span class="op">=</span> <span class="st">"amplitudes"</span>, scale <span class="op">=</span> <span class="st">"variance"</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -274,7 +277,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p>The scree plot shows eigenvalues with North et al. (1982) error bars. Overlapping error bars indicate modes that form a degenerate multiplet and should not be interpreted individually.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb29"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb30"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/screeplot.html" class="external-link">screeplot</a></span><span class="op">(</span><span class="va">pat</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -285,7 +288,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <p>The <code>rule_n</code> option adds a blue dashed line showing the modified Rule N significance boundary (based on the Tracy-Widom distribution). Modes to the left of this line are statistically distinguishable from noise.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb30"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/stats/screeplot.html" class="external-link">screeplot</a></span><span class="op">(</span><span class="va">pat</span>, rule_n <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
 <div>
@@ -296,7 +299,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <p>You can also test individual eigenvalues directly:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb31"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Is the 3rd eigenvalue significant at p = 0.05?</span></span>
 <span><span class="fu"><a href="../reference/eigen_test.html">eigen_test</a></span><span class="op">(</span></span>
 <span>  <span class="va">pat</span><span class="op">$</span><span class="va">eigenvalues</span><span class="op">$</span><span class="va">eigenvalues</span>,</span>
@@ -312,7 +315,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p>Unrotated EOFs are orthogonal, which is a mathematical convenience but not always physically meaningful. Varimax rotation relaxes the orthogonality constraint on spatial patterns (while keeping amplitudes uncorrelated), often producing more localized and interpretable modes.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb33"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb34"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pat_rot</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/patterns.html">patterns</a></span><span class="op">(</span><span class="va">temp</span>, k <span class="op">=</span> <span class="fl">4</span>, rotate <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat_rot</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
@@ -324,7 +327,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <p>Compare rotated vs unrotated patterns:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb34"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">p1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span>, type <span class="op">=</span> <span class="st">"eofs"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"Unrotated"</span><span class="op">)</span></span>
 <span><span class="va">p2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat_rot</span>, type <span class="op">=</span> <span class="st">"eofs"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">ggtitle</a></span><span class="op">(</span><span class="st">"Rotated"</span><span class="op">)</span></span>
 <span><span class="fu">patchwork</span><span class="fu">::</span><span class="fu"><a href="https://patchwork.data-imaginist.com/reference/wrap_plots.html" class="external-link">wrap_plots</a></span><span class="op">(</span><span class="va">p1</span>, <span class="va">p2</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
@@ -339,7 +342,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p>Use <code>[</code> to extract a subset of modes. This is useful for focusing on the leading modes or for truncation experiments.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb35"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb36"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">pat_sub</span> <span class="op">&lt;-</span> <span class="va">pat</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span></span>
 <span><span class="va">pat_sub</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
@@ -350,6 +353,9 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code><span><span class="va">Modes</span><span class="op">:</span> <span class="fl">2</span></span></code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code><span><span class="va">Variables</span><span class="op">:</span> <span class="va">tmean</span></span></code></pre>
 </div>
 <div class="cell-output cell-output-stderr">
 <pre><code>Time steps: 36 (2017-01-01 to 2019-12-01)</code></pre>
@@ -392,12 +398,12 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p><code><a href="../reference/reconstruct.html">reconstruct()</a></code> multiplies amplitudes by EOF patterns and adds back the climatology, recovering the spatial field.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb51"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb53"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">recon</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/reconstruct.html">reconstruct</a></span><span class="op">(</span><span class="va">pat</span><span class="op">)</span></span></code></pre></div>
 </div>
 <p>With fewer modes, the reconstruction is a smoothed approximation of the original field. The reconstruction error decreases as more modes are retained:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb52"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb54"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">errors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, <span class="kw">function</span><span class="op">(</span><span class="va">k</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">recon_k</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/reconstruct.html">reconstruct</a></span><span class="op">(</span><span class="va">pat</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="va">k</span><span class="op">]</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="op">(</span><span class="va">temp</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span> <span class="op">-</span> <span class="va">recon_k</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">^</span><span class="fl">2</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
@@ -413,14 +419,14 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 </div>
 <p>For bounded variables like precipitation, the reconstructed field may contain small negative values from truncation. To clamp these:</p>
-<div class="sourceCode" id="cb54"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb56"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># pmax(.x, 0 * .x) preserves units</span></span>
 <span><span class="va">recon</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/everything.html" class="external-link">everything</a></span><span class="op">(</span><span class="op">)</span>, <span class="op">~</span><span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">pmax</a></span><span class="op">(</span><span class="va">.x</span>, <span class="fl">0</span> <span class="op">*</span> <span class="va">.x</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </section><section class="level2"><h2 id="projection">Projection<a class="anchor" aria-label="anchor" href="#projection"></a>
 </h2>
 <p><code><a href="../reference/project_patterns.html">project_patterns()</a></code> projects new data onto an existing set of EOF patterns, returning amplitudes. This is useful for comparing how a new time period or different dataset maps onto previously-identified modes.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb55"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb57"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Project the original data back onto its own patterns (should recover stored amplitudes)</span></span>
 <span><span class="va">projected</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/project_patterns.html">project_patterns</a></span><span class="op">(</span><span class="va">pat</span>, <span class="va">temp</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/all.equal.html" class="external-link">all.equal</a></span><span class="op">(</span><span class="va">projected</span>, <span class="va">pat</span><span class="op">$</span><span class="va">amplitudes</span>, tolerance <span class="op">=</span> <span class="fl">1e-10</span><span class="op">)</span></span></code></pre></div>
@@ -433,7 +439,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </h2>
 <p><code><a href="../reference/get_correlation.html">get_correlation()</a></code> computes pixel-wise correlations between a spatial field and each PC time series. This is the classic teleconnection map – it shows where each mode has spatial influence.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb57"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb59"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cor_maps</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_correlation.html">get_correlation</a></span><span class="op">(</span><span class="va">temp</span>, <span class="va">pat</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://r-spatial.github.io/stars/reference/geom_stars.html" class="external-link">geom_stars</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">cor_maps</span><span class="op">)</span> <span class="op">+</span></span>
@@ -451,7 +457,7 @@ time    1  36     NA       NA   Date 2017-01-01,...,2019-12-01    </code></pre>
 </div>
 <p><code><a href="../reference/get_fdr.html">get_fdr()</a></code> adds field significance testing with FDR (false discovery rate) correction, returning significance contour polygons:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb58"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb60"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">fdr_contours</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/get_fdr.html">get_fdr</a></span><span class="op">(</span><span class="va">temp</span>, <span class="va">pat</span>, fdr <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output cell-output-stderr">
 <pre><code>Warning in min(bb[, 1L], na.rm = TRUE): no non-missing arguments to min;
@@ -469,7 +475,7 @@ returning -Inf</code></pre>
 <pre><code>Warning in max(bb[, 4L], na.rm = TRUE): no non-missing arguments to max;
 returning -Inf</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb63"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb65"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://r-spatial.github.io/stars/reference/geom_stars.html" class="external-link">geom_stars</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">cor_maps</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">fdr_contours</span>, fill <span class="op">=</span> <span class="cn">NA</span>, color <span class="op">=</span> <span class="st">"black"</span>, linewidth <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
@@ -489,7 +495,7 @@ returning -Inf</code></pre>
 </h2>
 <p>By default, <code><a href="../reference/patterns.html">patterns()</a></code> applies area weighting using <code>sqrt(cell_area / mean_area)</code>. This ensures that grid cells at high latitudes (which cover less area on a regular lat/lon grid) don’t dominate the PCA. You can access the weights directly:</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb64"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb66"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">w</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/area_weights.html">area_weights</a></span><span class="op">(</span><span class="va">temp</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">w</span>, main <span class="op">=</span> <span class="st">"Area weights"</span><span class="op">)</span></span></code></pre></div>
 <div class="cell-output-display">
@@ -504,7 +510,7 @@ returning -Inf</code></pre>
 </h2>
 <p>The <code><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot()</a></code> method accepts an <code>overlay</code> argument for adding geographic context (coastlines, state boundaries, etc.):</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb65"><pre class="downlit sourceCode r">
+<div class="sourceCode cell-code" id="cb67"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example with US state boundaries (requires an sf object)</span></span>
 <span><span class="va">states</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_read.html" class="external-link">st_read</a></span><span class="op">(</span><span class="st">"path/to/states.shp"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">pat</span>, overlay <span class="op">=</span> <span class="va">states</span><span class="op">)</span></span></code></pre></div>

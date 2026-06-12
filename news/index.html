@@ -39,6 +39,14 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="tidyeof-development-version">tidyeof (development version)<a class="anchor" aria-label="anchor" href="#tidyeof-development-version"></a></h2>
+<ul><li>
+<code><a href="../reference/patterns.html">patterns()</a></code> accepts multi-attribute <code>stars</code> objects for combined (multivariate) EOF analysis — e.g. joint temperature + precipitation downscaling with physically consistent predictions. Requires <code>scale = TRUE</code>.</li>
+<li>The whole stack is multivariate-aware: <code><a href="../reference/project_patterns.html">project_patterns()</a></code>, <code><a href="../reference/reconstruct.html">reconstruct()</a></code>, <code><a href="../reference/couple.html">couple()</a></code>/<code><a href="https://rdrr.io/r/stats/predict.html" class="external-link">predict()</a></code>, <code><a href="../reference/tune_eof.html">tune_eof()</a></code>, <code><a href="../reference/tune_cca.html">tune_cca()</a></code>, and plot methods. CV metrics gain per-variable columns plus a pooled score.</li>
+<li>Breaking change: EOF attributes in <code>patterns$eofs</code> are now named after the variable (previously <code>"weight"</code>).</li>
+<li>Cells with non-finite standardized anomalies (climatological sd of 0) are now excluded like NA cells.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.0" id="tidyeof-010">tidyeof 0.1.0<a class="anchor" aria-label="anchor" href="#tidyeof-010"></a></h2>
 <p>Initial release.</p>
 <div class="section level3">

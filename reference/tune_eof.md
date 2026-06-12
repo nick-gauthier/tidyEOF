@@ -49,7 +49,13 @@ tune_eof(
 
   Character vector of metrics to compute. Options: "rmse",
   "cor_spatial", "cor_temporal" (default: all three). Metrics are
-  computed on the hidden cells only.
+  computed on the hidden cells only. For multivariate fields each metric
+  also gets per-variable columns (e.g. \`rmse_tmean\`); the plain name
+  is the pooled score (sd-normalized RMS for \`rmse\`, mean for
+  correlations). Per-variable cross-validation scores for very small
+  variable blocks are noisier and may be NA in some replicates, because
+  the hidden cells are sampled across the concatenated space,
+  proportional to block size.
 
 - scale:
 

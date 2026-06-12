@@ -14,7 +14,9 @@ get_correlation(dat, patterns, amplitudes = NULL)
 
 - dat:
 
-  A stars object with a time dimension
+  A stars object with a time dimension. For multivariate analyses,
+  correlate one variable at a time (e.g.
+  \`get_correlation(dat\["tmean"\], pat)\`).
 
 - patterns:
 

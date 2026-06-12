@@ -25,6 +25,12 @@ project_patterns(patterns, newdata)
 
 A tibble with time column and PC amplitude columns
 
+## Details
+
+For multivariate patterns, \`newdata\` must contain the same variables
+as the training data (any order); univariate patterns accept any
+single-attribute object regardless of name.
+
 ## Examples
 
 ``` r

@@ -59,6 +59,12 @@ with \`\$\` or \`\[\[\` using source names (e.g., \`cpat\$era\`). Each
 extracted element is a standard \`patterns\` object with shared EOFs but
 source-specific climatology and amplitudes.
 
+## Details
+
+Each source must currently contain a single variable; combining
+\`common_patterns()\` with multivariate (multi-attribute) input is not
+yet supported.
+
 ## Examples
 
 ``` r

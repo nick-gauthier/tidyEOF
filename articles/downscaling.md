@@ -242,8 +242,8 @@ cpat$a$eofs
 
     stars object with 3 dimensions and 1 attribute
     attribute(s):
-                  Min.     1st Qu.     Median       Mean    3rd Qu.      Max.
-    weight  -0.2334799 -0.05031055 0.03787486 0.02307869 0.09097917 0.2537912
+                 Min.     1st Qu.     Median       Mean    3rd Qu.      Max.
+    tmean  -0.2334799 -0.05031055 0.03787486 0.02307869 0.09097917 0.2537912
     dimension(s):
        from to offset delta refsys point      values x/y
     x     1 11   -118   0.2  NAD83 FALSE        NULL [x]
@@ -256,8 +256,8 @@ cpat$b$eofs
 
     stars object with 3 dimensions and 1 attribute
     attribute(s):
-                  Min.     1st Qu.     Median       Mean    3rd Qu.      Max.
-    weight  -0.2334799 -0.05031055 0.03787486 0.02307869 0.09097917 0.2537912
+                 Min.     1st Qu.     Median       Mean    3rd Qu.      Max.
+    tmean  -0.2334799 -0.05031055 0.03787486 0.02307869 0.09097917 0.2537912
     dimension(s):
        from to offset delta refsys point      values x/y
     x     1 11   -118   0.2  NAD83 FALSE        NULL [x]

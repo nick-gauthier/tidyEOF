@@ -13,7 +13,9 @@ get_fdr(dat, patterns, fdr = 0.1, amplitudes = NULL)
 
 - dat:
 
-  A stars object with a time dimension
+  A stars object with a time dimension. For multivariate analyses,
+  correlate one variable at a time (e.g. \`get_fdr(dat\["tmean"\],
+  pat)\`).
 
 - patterns:
 

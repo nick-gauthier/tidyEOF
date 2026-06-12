@@ -104,7 +104,12 @@ modes the data support (Bro et al. 2008).</p>
 <dt id="arg-metrics">metrics<a class="anchor" aria-label="anchor" href="#arg-metrics"></a></dt>
 <dd><p>Character vector of metrics to compute. Options:
 "rmse", "cor_spatial", "cor_temporal" (default: all three). Metrics are
-computed on the hidden cells only.</p></dd>
+computed on the hidden cells only. For multivariate fields each metric
+also gets per-variable columns (e.g. `rmse_tmean`); the plain name is the
+pooled score (sd-normalized RMS for `rmse`, mean for correlations).
+Per-variable cross-validation scores for very small variable blocks are
+noisier and may be NA in some replicates, because the hidden cells are
+sampled across the concatenated space, proportional to block size.</p></dd>
 
 
 <dt id="arg-scale">scale<a class="anchor" aria-label="anchor" href="#arg-scale"></a></dt>

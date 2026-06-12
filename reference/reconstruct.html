@@ -76,6 +76,8 @@ by the EOF patterns and adding back the climatology.</p>
 small negative values due to EOF truncation. To clamp these, use
 `mutate(result, across(everything(), ~pmax(.x, 0 * .x)))` (the `0 * .x`
 trick preserves units).</p>
+<p>For multivariate patterns the return is a multi-attribute stars object, with
+each variable's climatology and units restored.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

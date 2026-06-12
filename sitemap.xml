@@ -20,9 +20,11 @@
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/calc_cor_temporal.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/calc_rmse.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/check_k_valid.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/check_multivariate_scale.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/check_single_attribute.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/check_stars_object.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/common_patterns.html</loc></url>
+<url><loc>https://nick-gauthier.github.io/tidyEOF/reference/compute_block_metrics.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/compute_eof_signs.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/compute_spatial_metrics.html</loc></url>
 <url><loc>https://nick-gauthier.github.io/tidyEOF/reference/couple.html</loc></url>

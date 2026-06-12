@@ -102,6 +102,8 @@ pat
 
     Modes: 4
 
+    Variables: tmean
+
     Time steps: 36 (2017-01-01 to 2019-12-01)
 
     ── Processing Options ──
@@ -240,6 +242,8 @@ pat_sub
     ── Patterns Object ─────────────────────────────────────────────────────────────
 
     Modes: 2
+
+    Variables: tmean
 
     Time steps: 36 (2017-01-01 to 2019-12-01)
 

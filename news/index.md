@@ -1,5 +1,24 @@
 # Changelog
 
+## tidyeof (development version)
+
+- [`patterns()`](https://nick-gauthier.github.io/tidyEOF/reference/patterns.md)
+  accepts multi-attribute `stars` objects for combined (multivariate)
+  EOF analysis — e.g. joint temperature + precipitation downscaling with
+  physically consistent predictions. Requires `scale = TRUE`.
+- The whole stack is multivariate-aware:
+  [`project_patterns()`](https://nick-gauthier.github.io/tidyEOF/reference/project_patterns.md),
+  [`reconstruct()`](https://nick-gauthier.github.io/tidyEOF/reference/reconstruct.md),
+  [`couple()`](https://nick-gauthier.github.io/tidyEOF/reference/couple.md)/[`predict()`](https://rdrr.io/r/stats/predict.html),
+  [`tune_eof()`](https://nick-gauthier.github.io/tidyEOF/reference/tune_eof.md),
+  [`tune_cca()`](https://nick-gauthier.github.io/tidyEOF/reference/tune_cca.md),
+  and plot methods. CV metrics gain per-variable columns plus a pooled
+  score.
+- Breaking change: EOF attributes in `patterns$eofs` are now named after
+  the variable (previously `"weight"`).
+- Cells with non-finite standardized anomalies (climatological sd of 0)
+  are now excluded like NA cells.
+
 ## tidyeof 0.1.0
 
 Initial release.
