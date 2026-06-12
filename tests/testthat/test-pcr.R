@@ -120,3 +120,20 @@ test_that("predict warns when k is passed to a PCR object", {
   # default k = NULL does not warn
   expect_no_warning(predict(cpl, prism, reconstruct = FALSE))
 })
+
+test_that("CCA accessors abort on a PCR coupled object", {
+  pred <- patterns(prism, k = 4, weight = FALSE)
+  resp <- patterns(prism, k = 3, weight = FALSE)
+  cpl <- couple(pred, resp, method = "pcr")
+  expect_error(get_canonical_correlations(cpl), class = "tidyeof_cca_only")
+  expect_error(get_canonical_patterns(cpl, type = "response"), class = "tidyeof_cca_only")
+  expect_error(get_canonical_variables(cpl, resp, type = "response"), class = "tidyeof_cca_only")
+})
+
+test_that("CCA accessors still work for a CCA coupled object", {
+  pred <- patterns(prism, k = 4, weight = FALSE)
+  resp <- patterns(prism, k = 3, weight = FALSE)
+  cpl <- couple(pred, resp, method = "cca", k = 2)
+  expect_s3_class(get_canonical_correlations(cpl), "data.frame")
+  expect_s3_class(get_canonical_patterns(cpl, type = "response"), "stars")
+})

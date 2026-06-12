@@ -419,6 +419,22 @@ apply_pcr_prediction <- function(new_amplitudes, pcr) {
 
 # CCA accessors ----
 
+#' Guard a CCA-only accessor against non-CCA coupled objects
+#' @keywords internal
+check_cca_method <- function(object, fn, call = rlang::caller_env()) {
+  method <- object$method
+  if (!is.null(method) && method != "cca") {
+    cli::cli_abort(
+      c(
+        "{.fn {fn}} is a CCA-specific diagnostic, not defined for a {.val {method}} coupling.",
+        "i" = "Canonical correlations, variates, and patterns exist only for {.code method = \"cca\"}."
+      ),
+      class = "tidyeof_cca_only",
+      call = call
+    )
+  }
+}
+
 #' Get Canonical Variables from Coupled Patterns
 #'
 #' Extract canonical variables from either predictor or response patterns
@@ -433,6 +449,7 @@ apply_pcr_prediction <- function(new_amplitudes, pcr) {
 #' @export
 get_canonical_variables <- function(object, data, type = c("predictor", "response"), k = NULL) {
 
+  check_cca_method(object, "get_canonical_variables")
   type <- match.arg(type)
 
   if (is.null(k)) {
@@ -506,6 +523,7 @@ get_canonical_variables <- function(object, data, type = c("predictor", "respons
 #' }
 get_canonical_patterns <- function(object, type = c("predictor", "response"), k = NULL) {
 
+  check_cca_method(object, "get_canonical_patterns")
   type <- match.arg(type)
 
   if (is.null(k)) {
@@ -568,6 +586,7 @@ get_canonical_patterns <- function(object, type = c("predictor", "response"), k 
 #' @export
 get_canonical_correlations <- function(object, k = NULL) {
 
+  check_cca_method(object, "get_canonical_correlations")
   if (is.null(k)) {
     k <- object$k
   }
