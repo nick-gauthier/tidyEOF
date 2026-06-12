@@ -1,6 +1,48 @@
 # Coupling functions for EOF patterns via CCA
 # Consolidated from couple_patterns.R and predict_coupled_patterns.R
 
+#' Fit the OLS coefficient matrix for PCR coupling
+#'
+#' Ordinary least squares of the predictand PC amplitudes on the predictor PC
+#' amplitudes. The EOF truncation already performed the dimension reduction, so
+#' this is plain (optionally centered) multivariate regression. The fit is
+#' rank-safe: a rank-deficient predictor matrix (e.g. `k_pred >= n_times` or
+#' collinear amplitudes) aborts rather than returning `NA` coefficients.
+#'
+#' @param pred_amps Predictor amplitude matrix (time x k_pred)
+#' @param resp_amps Predictand amplitude matrix (time x k_resp)
+#' @param center Logical; center both sides before fitting (default TRUE)
+#' @return List with `coefficients` (k_pred x k_resp), `xcenter`, `ycenter`
+#'   (each a named numeric vector when centered, or `FALSE`)
+#' @keywords internal
+fit_pcr <- function(pred_amps, resp_amps, center = TRUE) {
+  if (isTRUE(center)) {
+    xcenter <- colMeans(pred_amps)
+    ycenter <- colMeans(resp_amps)
+    Xc <- sweep(pred_amps, 2, xcenter, "-")
+    Yc <- sweep(resp_amps, 2, ycenter, "-")
+  } else {
+    xcenter <- FALSE
+    ycenter <- FALSE
+    Xc <- pred_amps
+    Yc <- resp_amps
+  }
+
+  qrX <- qr(Xc)
+  if (qrX$rank < ncol(Xc)) {
+    cli::cli_abort(
+      c(
+        "Predictor amplitudes are rank-deficient ({qrX$rank} < {ncol(Xc)} columns); OLS is not identifiable.",
+        "i" = "Reduce the number of predictor EOFs so it is below the number of time steps and free of collinearity."
+      ),
+      class = "tidyeof_rank_deficient"
+    )
+  }
+
+  coefficients <- qr.coef(qrX, Yc)
+  list(coefficients = coefficients, xcenter = xcenter, ycenter = ycenter)
+}
+
 #' Couple Pattern Relationships Using CCA
 #'
 #' This function couples predictor and response patterns using Canonical Correlation Analysis (CCA)
@@ -44,6 +86,13 @@
 couple <- function(predictor_patterns, response_patterns, k = NULL,
                   method = "cca", center = TRUE, validate = TRUE) {
 
+  if (!method %in% c("cca", "pcr")) {
+    cli::cli_abort(
+      "Unsupported coupling method {.val {method}}. Use {.val cca} or {.val pcr}.",
+      class = "tidyeof_unsupported_method"
+    )
+  }
+
   # Validate inputs and get common times
   common_times <- if (validate) {
     validate_patterns_compatibility(predictor_patterns, response_patterns)
@@ -53,11 +102,6 @@ couple <- function(predictor_patterns, response_patterns, k = NULL,
     pred_times[pred_times %in% resp_times]
   }
 
-  if (method != "cca") {
-    cli::cli_abort("Only 'cca' method is supported. For legacy methods, see vignettes/legacy_pattern_coupling.qmd",
-                   class = "tidyeof_unsupported_method")
-  }
-
   # Extract amplitude matrices filtered to common times
   pred_amps <- extract_amplitudes_matrix(predictor_patterns, common_times)
   resp_amps <- extract_amplitudes_matrix(response_patterns, common_times)
@@ -65,35 +109,35 @@ couple <- function(predictor_patterns, response_patterns, k = NULL,
   # Notify user if filtering occurred
   pred_n <- length(get_times(predictor_patterns))
   resp_n <- length(get_times(response_patterns))
-
   if (length(common_times) < pred_n || length(common_times) < resp_n) {
     cli::cli_inform("Filtered to {length(common_times)} common time steps (predictor had {pred_n}, response had {resp_n}).")
   }
 
-  # Determine k if not specified
-  if (is.null(k)) {
-    k <- min(ncol(pred_amps), ncol(resp_amps))
-  }
-
-  # Validate k
-  max_k <- min(ncol(pred_amps), ncol(resp_amps))
-  if (k > max_k) {
-    warning("k = ", k, " exceeds maximum possible (", max_k, "). Setting k = ", max_k)
-    k <- max_k
-  }
-
-  # Perform CCA
-  cca_result <- cancor(pred_amps, resp_amps, xcenter = center, ycenter = center)
-
-  # Create coupled_patterns object
   coupled <- list(
-    cca = cca_result,
     predictor_patterns = predictor_patterns,
     response_patterns = response_patterns,
-    k = k,
     method = method,
     center = center
   )
+
+  if (method == "cca") {
+    # Determine and validate k (number of canonical modes)
+    if (is.null(k)) {
+      k <- min(ncol(pred_amps), ncol(resp_amps))
+    }
+    max_k <- min(ncol(pred_amps), ncol(resp_amps))
+    if (k > max_k) {
+      warning("k = ", k, " exceeds maximum possible (", max_k, "). Setting k = ", max_k)
+      k <- max_k
+    }
+    coupled$cca <- cancor(pred_amps, resp_amps, xcenter = center, ycenter = center)
+    coupled$k <- k
+  } else {  # method == "pcr"
+    # The coupling-k is inert for PCR; regularization is the predictor
+    # truncation (k_pred). k is stored only for reporting.
+    coupled$pcr <- fit_pcr(pred_amps, resp_amps, center = center)
+    coupled$k <- ncol(pred_amps)
+  }
 
   class(coupled) <- "coupled_patterns"
   return(coupled)
@@ -106,8 +150,12 @@ couple <- function(predictor_patterns, response_patterns, k = NULL,
 print.coupled_patterns <- function(x, ...) {
   cli::cli_h1("Coupled Patterns Object")
   cli::cli_text("Method: {.field {x$method}}")
-  cli::cli_text("CCA modes retained: {.field {x$k}}")
-  cli::cli_text("Canonical correlations: {.val {round(x$cca$cor[1:x$k], 3)}}")
+  if (x$method == "cca") {
+    cli::cli_text("CCA modes retained: {.field {x$k}}")
+    cli::cli_text("Canonical correlations: {.val {round(x$cca$cor[1:x$k], 3)}}")
+  } else {
+    cli::cli_text("Predictor PCs used: {.field {x$k}}")
+  }
   cli::cli_text("Predictor patterns: {.field {ncol(extract_amplitudes_matrix(x$predictor_patterns))}} PCs")
   cli::cli_text("Response patterns: {.field {ncol(extract_amplitudes_matrix(x$response_patterns))}} PCs")
   invisible(x)
@@ -120,10 +168,15 @@ print.coupled_patterns <- function(x, ...) {
 summary.coupled_patterns <- function(object, ...) {
   cli::cli_h1("Coupled Patterns Summary")
   cli::cli_text("Method: {.field {object$method}}")
-  cli::cli_text("CCA modes retained: {.field {object$k}}")
   cli::cli_text("Centered: {.field {object$center}}")
-  cli::cli_h2("Canonical Correlations")
-  print(get_canonical_correlations(object))
+  if (object$method == "cca") {
+    cli::cli_text("CCA modes retained: {.field {object$k}}")
+    cli::cli_h2("Canonical Correlations")
+    print(get_canonical_correlations(object))
+  } else {
+    cli::cli_text("Predictor PCs used: {.field {object$k}}")
+    cli::cli_text("Response PCs predicted: {.field {ncol(object$pcr$coefficients)}}")
+  }
   invisible(object)
 }
 

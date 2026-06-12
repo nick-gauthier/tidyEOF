@@ -27,7 +27,7 @@ test_that("couple validation works", {
   # Test method validation
   expect_error(
     couple(data.frame(time = 1:10), data.frame(time = 1:10), method = "invalid"),
-    "Only 'cca' method is supported"
+    class = "tidyeof_unsupported_method"
   )
 })
 
