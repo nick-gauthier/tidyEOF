@@ -19,7 +19,8 @@ new_patterns(
   rotate = FALSE,
   weight = TRUE,
   valid_pixels = NULL,
-  total_variance = NULL
+  total_variance = NULL,
+  block_map = NULL
 )
 }
 \arguments{
@@ -54,6 +55,9 @@ new_patterns(
 \item{total_variance}{Total variance of the data (sum of all eigenvalues).
 Needed for variance summaries and Rule N when the stored eigenvalue
 table is truncated (e.g., IRLBA)}
+
+\item{block_map}{Named list mapping each variable to its column range in the
+concatenated space-time matrix}
 }
 \value{
 A patterns object

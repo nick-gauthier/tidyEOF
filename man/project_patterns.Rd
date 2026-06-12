@@ -19,6 +19,11 @@ This function projects new spatial-temporal data onto existing EOF patterns,
 returning the corresponding principal component time series. This is a core
 function used in pattern-based downscaling and reconstruction.
 }
+\details{
+For multivariate patterns, `newdata` must contain the same variables as the
+training data (any order); univariate patterns accept any single-attribute
+object regardless of name.
+}
 \examples{
 \dontrun{
 # Get patterns from training data

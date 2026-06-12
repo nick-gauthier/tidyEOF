@@ -14,3 +14,5 @@
 ^LICENSE\.md$
 ^\.lintr$
 ^\.DS_Store$
+^CLAUDE\.md$
+^specs$

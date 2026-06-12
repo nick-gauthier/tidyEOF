@@ -5,6 +5,10 @@
 #' for joint PCA. The resulting shared spatial patterns get source-specific
 #' amplitudes and climatologies, enabling CCA coupling and cross-source prediction.
 #'
+#' Each source must currently contain a single variable; combining
+#' `common_patterns()` with multivariate (multi-attribute) input is not yet
+#' supported.
+#'
 #' @param datasets Named list of stars objects sharing the same spatial grid.
 #'   Names become the source identifiers used for extraction.
 #' @param k Number of EOF modes to retain
@@ -194,7 +198,8 @@ common_patterns <- function(datasets, k = 4, scale = TRUE, rotate = FALSE,
       monthly = monthly,
       rotate = rotate,
       weight = weight,
-      valid_pixels = eofs$valid_pixels
+      valid_pixels = eofs$valid_pixels,
+      block_map = eofs$block_map
     )
 
     pat <- apply_sign_flips(pat, signs)

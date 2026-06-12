@@ -1,19 +1,20 @@
 #' Flatten a time-indexed stars object into a matrix
 #'
-#' Internal helper to turn a single-attribute stars object with a `time`
-#' dimension into a matrix of shape time x space along with the metadata needed
-#' to reconstruct the original spatial layout.
+#' Internal helper to turn a stars object (one or more attributes) with a
+#' `time` dimension into a matrix of shape time x (V * space) along with the
+#' metadata needed to reconstruct the original spatial layout.  When the object
+#' has multiple attributes they are concatenated variable-major: all columns for
+#' the first attribute, then all columns for the second, etc.  The returned
+#' `block_map` is a named list mapping each attribute name to its column
+#' indices, and `n_space` is the number of spatial cells per attribute.
 #'
 #' @param dat A stars object with a `time` dimension
-#' @return A list containing the flattened matrix, spatial dimension names,
-#'   their lengths, and coordinate values
+#' @return A list containing the flattened matrix, block_map (named list of
+#'   column index ranges per attribute), n_space (spatial cells per attribute),
+#'   spatial dimension names, their shape, and coordinate values
 #' @keywords internal
 flatten_time_space <- function(dat) {
   check_stars_object(dat)
-
-  if (length(dat) != 1) {
-    dat <- dat[1]
-  }
 
   dims <- stars::st_dimensions(dat)
   if (!"time" %in% names(dims)) {
@@ -22,16 +23,29 @@ flatten_time_space <- function(dat) {
 
   spatial_dims <- setdiff(names(dims), "time")
   permuted <- aperm(dat, c("time", spatial_dims))
-  arr <- permuted[[1]]
-  mat <- matrix(arr, nrow = dim(arr)[1], ncol = prod(dim(arr)[-1]))
+
+  var_names <- names(dat)
+  blocks <- purrr::map(seq_along(var_names), function(i) {
+    arr <- permuted[[i]]
+    matrix(arr, nrow = dim(arr)[1], ncol = prod(dim(arr)[-1]))
+  })
+  mat <- do.call(cbind, blocks)
+
+  n_space <- ncol(blocks[[1]])
+  block_map <- setNames(
+    purrr::map(seq_along(var_names), ~((.x - 1L) * n_space + 1L):(.x * n_space)),
+    var_names
+  )
 
   spatial_values <- purrr::map(spatial_dims, ~stars::st_get_dimension_values(permuted, .x))
   names(spatial_values) <- spatial_dims
 
   list(
     matrix = mat,
+    block_map = block_map,
+    n_space = n_space,
     spatial_dims = spatial_dims,
-    spatial_shape = dim(arr)[-1],
+    spatial_shape = dim(permuted[[1]])[-1],
     spatial_values = spatial_values
   )
 }
@@ -88,6 +102,21 @@ matrix_to_spacetime <- function(mat,
   out <- stars::st_as_stars(out_array, dimensions = new_dims)
 
   setNames(out, var_names)
+}
+
+#' Extract the EOF loading matrix (concatenated variable-space x PC) from a patterns object
+#'
+#' Stacks every variable's loadings into the concatenated variable-major
+#' layout used by [flatten_time_space()], so rows align with
+#' `patterns$valid_pixels` and `patterns$block_map`.
+#' @param patterns A patterns object
+#' @return A numeric matrix with prod(spatial) * n_vars rows and k columns
+#' @keywords internal
+eof_loading_matrix <- function(patterns) {
+  do.call(rbind, purrr::map(names(patterns$eofs), function(v) {
+    arr <- patterns$eofs[[v]]
+    matrix(arr, nrow = prod(dim(arr)[-length(dim(arr))]), ncol = patterns$k)
+  }))
 }
 
 #' Obtain the size of a stars dimension definition

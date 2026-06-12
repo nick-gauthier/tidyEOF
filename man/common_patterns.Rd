@@ -42,6 +42,11 @@ dataset is anomalized with its own climatology, then concatenated along time
 for joint PCA. The resulting shared spatial patterns get source-specific
 amplitudes and climatologies, enabling CCA coupling and cross-source prediction.
 }
+\details{
+Each source must currently contain a single variable; combining
+`common_patterns()` with multivariate (multi-attribute) input is not yet
+supported.
+}
 \examples{
 \dontrun{
 cpat <- common_patterns(

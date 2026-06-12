@@ -193,7 +193,10 @@ prep_cv_folds <- function(predictor, response,
 #'   `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 #'   the maximum can act as regularization.
 #' @param metrics Character vector of metrics to compute. Options:
-#'   "rmse", "cor_spatial", "cor_temporal" (default: all three)
+#'   "rmse", "cor_spatial", "cor_temporal" (default: all three). For
+#'   multivariate fields each metric also gets per-variable columns (e.g.
+#'   `rmse_tmean`); the plain name is the pooled score (sd-normalized RMS for
+#'   `rmse`, mean for correlations).
 #' @param parallel Logical, whether to use furrr for parallel execution (default FALSE)
 #'
 #' @return A tibble with columns: k_pred, k_resp, k_cca, fold, and one column
@@ -441,7 +444,12 @@ print.cv_folds <- function(x, ...) {
 #' @param max_k Maximum EOFs to compute per fold (default max(k))
 #' @param metrics Character vector of metrics to compute. Options:
 #'   "rmse", "cor_spatial", "cor_temporal" (default: all three). Metrics are
-#'   computed on the hidden cells only.
+#'   computed on the hidden cells only. For multivariate fields each metric
+#'   also gets per-variable columns (e.g. `rmse_tmean`); the plain name is the
+#'   pooled score (sd-normalized RMS for `rmse`, mean for correlations).
+#'   Per-variable cross-validation scores for very small variable blocks are
+#'   noisier and may be NA in some replicates, because the hidden cells are
+#'   sampled across the concatenated space, proportional to block size.
 #' @param scale Logical, whether to scale data before EOF extraction (default FALSE)
 #' @param monthly Logical, whether to compute monthly climatology (default FALSE)
 #' @param weight Logical, whether to apply area weighting (default TRUE)
@@ -557,17 +565,6 @@ with_seed <- function(seed, code) {
   force(code)
 }
 
-#' Extract the EOF loading matrix (space x PC) from a patterns object
-#'
-#' Returns loadings in the same flattened spatial order used by
-#' [flatten_time_space()], so columns align with `valid_pixels`.
-#' @keywords internal
-eof_loading_matrix <- function(patterns) {
-  eof_array <- patterns$eofs[[1]]
-  spatial_sizes <- dim(eof_array)[-length(dim(eof_array))]
-  matrix(eof_array, nrow = prod(spatial_sizes), ncol = patterns$k)
-}
-
 #' Evaluate EOF reconstruction for a single fold via speckled holdout
 #'
 #' Hides a random scatter of grid cells in the held-out data, estimates mode
@@ -584,7 +581,8 @@ eof_loading_matrix <- function(patterns) {
 #' @param n_reps Number of random hidden-cell masks to average over
 #' @param seed Base seed; combined with the fold id so masks are reproducible
 #'
-#' @return Tibble with fold_id and metric values
+#' @return Tibble with fold_id and metric values. For multivariate fields the
+#'   metrics include pooled scores plus per-variable scores (e.g. `rmse_tmean`).
 #' @keywords internal
 evaluate_eof_fold <- function(fold, k, metrics, hidden_fraction = 0.2,
                               n_reps = 5, seed = 1L) {
@@ -593,14 +591,25 @@ evaluate_eof_fold <- function(fold, k, metrics, hidden_fraction = 0.2,
   # Held-out anomalies in the space the patterns were fit in (own climatology)
   anomalies <- get_anomalies(fold$test_data, patterns_k$climatology,
                              scale = patterns_k$scaled, monthly = patterns_k$monthly)
-  anom_mat <- flatten_time_space(units::drop_units(anomalies)[1])$matrix
+  anom_mat <- flatten_time_space(units::drop_units(anomalies))$matrix
 
   valid <- patterns_k$valid_pixels
   n_valid <- length(valid)
   obs <- anom_mat[, valid, drop = FALSE]               # time x valid cells
 
-  # Area weights applied during fitting must also weight the LS estimate
-  w <- if (isTRUE(patterns_k$weight)) area_weights(fold$test_data)[valid] else rep(1, n_valid)
+  # Area weights applied during fitting must also weight the LS estimate;
+  # one weight per grid cell, replicated across variable blocks
+  n_vars <- length(patterns_k$names)
+  w <- if (isTRUE(patterns_k$weight)) {
+    rep(area_weights(fold$test_data), n_vars)[valid]
+  } else {
+    rep(1, n_valid)
+  }
+
+  block_map <- patterns_k$block_map
+  if (is.null(block_map)) {
+    block_map <- setNames(list(seq_len(ncol(anom_mat))), patterns_k$names[[1]])
+  }
 
   weighted_loadings <- eof_loading_matrix(patterns_k)[valid, , drop = FALSE] * w
   weighted_obs <- sweep(obs, 2, w, `*`)                # time x valid cells
@@ -625,16 +634,21 @@ evaluate_eof_fold <- function(fold, k, metrics, hidden_fraction = 0.2,
                          2, w[hidden], `/`)
     obs_hidden <- obs[, hidden, drop = FALSE]
 
-    vals <- list()
-    if ("rmse" %in% metrics)        vals$rmse <- calc_rmse(pred_hidden, obs_hidden)
-    if ("cor_spatial" %in% metrics) vals$cor_spatial <- calc_cor_spatial(pred_hidden, obs_hidden)
-    if ("cor_temporal" %in% metrics) vals$cor_temporal <- calc_cor_temporal(pred_hidden, obs_hidden)
-    vals
+    # Map hidden columns back to variable blocks for per-variable metrics
+    hidden_cols <- valid[hidden]
+    hidden_blocks <- purrr::map(block_map, ~which(hidden_cols %in% .x))
+    hidden_blocks <- hidden_blocks[lengths(hidden_blocks) > 0]
+
+    compute_block_metrics(pred_hidden, obs_hidden, hidden_blocks, metrics)
   })
 
   result <- tibble::tibble(fold = fold$fold_id)
-  for (m in metrics) {
-    result[[m]] <- mean(vapply(rep_metrics, function(v) v[[m]], numeric(1)), na.rm = TRUE)
+  metric_names <- unique(unlist(purrr::map(rep_metrics, names)))
+  for (m in metric_names) {
+    vals <- vapply(rep_metrics,
+                   function(v) if (is.null(v[[m]])) NA_real_ else v[[m]],
+                   numeric(1))
+    result[[m]] <- mean(vals, na.rm = TRUE)
   }
   result
 }
