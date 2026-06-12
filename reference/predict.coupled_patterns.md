@@ -30,8 +30,8 @@ predict(
 
 - k:
 
-  Number of CCA modes to use for prediction. If NULL, uses all available
-  modes
+  Number of CCA modes to use for prediction (CCA only; if NULL, uses all
+  available modes). Ignored for \`method = "pcr"\`.
 
 - reconstruct:
 

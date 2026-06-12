@@ -78,7 +78,11 @@ maximize correlation between them.</p>
 
 
 <dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
-<dd><p>Coupling method. Currently only "cca" is supported</p></dd>
+<dd><p>Coupling method: `"cca"` (canonical correlation, default) or
+`"pcr"` (principal components regression — OLS of the predictand PC
+amplitudes on the predictor PC amplitudes). For PCR the regularization is
+the predictor truncation `k_pred`, and the canonical-mode argument `k` is
+ignored.</p></dd>
 
 
 <dt id="arg-center">center<a class="anchor" aria-label="anchor" href="#arg-center"></a></dt>
@@ -99,7 +103,10 @@ common one, which leaves the common-period amplitudes with a nonzero mean.</p></
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A coupled_patterns object containing:</p>
 <dl><dt>cca</dt>
-<dd><p>The CCA results from cancor()</p></dd>
+<dd><p>The CCA results from cancor() (present only for `method = "cca"`)</p></dd>
+
+  <dt>pcr</dt>
+<dd><p>The PCR fit — coefficients and centering (present only for `method = "pcr"`)</p></dd>
 
   <dt>predictor_patterns</dt>
 <dd><p>The original predictor patterns</p></dd>

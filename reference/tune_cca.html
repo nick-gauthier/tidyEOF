@@ -56,6 +56,7 @@ so this runs quickly even with large grids.</p>
 <span>  k_pred <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span>
 <span>  k_resp <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">10</span>,</span>
 <span>  k_cca <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  method <span class="op">=</span> <span class="st">"cca"</span>,</span>
 <span>  metrics <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rmse"</span>, <span class="st">"cor_spatial"</span>, <span class="st">"cor_temporal"</span><span class="op">)</span>,</span>
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -81,6 +82,13 @@ so this runs quickly even with large grids.</p>
 <dd><p>Vector of CCA mode counts to try, or NULL (default) to use
 `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 the maximum can act as regularization.</p></dd>
+
+
+<dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
+<dd><p>Coupling method passed to [couple()]: `"cca"` (default) or
+`"pcr"`. For `"pcr"` the `k_cca` axis is inert — leave `k_cca = NULL` so
+the grid is effectively `k_pred` x `k_resp` (an explicit `k_cca` vector
+would produce duplicate rows that all evaluate identically).</p></dd>
 
 
 <dt id="arg-metrics">metrics<a class="anchor" aria-label="anchor" href="#arg-metrics"></a></dt>

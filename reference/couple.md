@@ -36,7 +36,11 @@ couple(
 
 - method:
 
-  Coupling method. Currently only "cca" is supported
+  Coupling method: \`"cca"\` (canonical correlation, default) or
+  \`"pcr"\` (principal components regression — OLS of the predictand PC
+  amplitudes on the predictor PC amplitudes). For PCR the regularization
+  is the predictor truncation \`k_pred\`, and the canonical-mode
+  argument \`k\` is ignored.
 
 - center:
 
@@ -59,7 +63,12 @@ A coupled_patterns object containing:
 
 - cca:
 
-  The CCA results from cancor()
+  The CCA results from cancor() (present only for \`method = "cca"\`)
+
+- pcr:
+
+  The PCR fit — coefficients and centering (present only for \`method =
+  "pcr"\`)
 
 - predictor_patterns:
 

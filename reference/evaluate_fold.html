@@ -45,7 +45,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">evaluate_fold</span><span class="op">(</span><span class="va">fold</span>, <span class="va">k_pred</span>, <span class="va">k_resp</span>, <span class="va">k_cca</span>, <span class="va">metrics</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">evaluate_fold</span><span class="op">(</span><span class="va">fold</span>, <span class="va">k_pred</span>, <span class="va">k_resp</span>, <span class="va">k_cca</span>, method <span class="op">=</span> <span class="st">"cca"</span>, <span class="va">metrics</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -66,6 +66,10 @@
 
 <dt id="arg-k-cca">k_cca<a class="anchor" aria-label="anchor" href="#arg-k-cca"></a></dt>
 <dd><p>Number of CCA modes</p></dd>
+
+
+<dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
+<dd><p>Coupling method passed to couple() ("cca" or "pcr")</p></dd>
 
 
 <dt id="arg-metrics">metrics<a class="anchor" aria-label="anchor" href="#arg-metrics"></a></dt>

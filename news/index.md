@@ -2,6 +2,15 @@
 
 ## tidyeof (development version)
 
+- [`couple()`](https://nick-gauthier.github.io/tidyEOF/reference/couple.md)
+  and
+  [`tune_cca()`](https://nick-gauthier.github.io/tidyEOF/reference/tune_cca.md)
+  gain `method = "pcr"` for principal components regression — an OLS
+  alternative to CCA that maps predictor PC amplitudes to predictand PC
+  amplitudes. Regularization is the predictor truncation (`k_pred`); the
+  CCA-style coupling `k`/`k_cca` is inert for PCR (a warning is emitted
+  if passed). CCA-specific diagnostics (`get_canonical_*`) are not
+  defined for PCR couplings.
 - [`patterns()`](https://nick-gauthier.github.io/tidyEOF/reference/patterns.md)
   accepts multi-attribute `stars` objects for combined (multivariate)
   EOF analysis — e.g. joint temperature + precipitation downscaling with
