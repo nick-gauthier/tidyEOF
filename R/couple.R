@@ -287,7 +287,13 @@ predict.coupled_patterns <- function(object, newdata, k = NULL, reconstruct = TR
     }
     apply_cca_prediction(new_amplitudes = new_amplitudes, cca_result = object$cca, k = k)
   } else {
-    # k is inert for PCR
+    # k is inert for PCR (regularization is the predictor truncation at couple() time)
+    if (!is.null(k)) {
+      cli::cli_warn(
+        "{.arg k} is ignored for a PCR coupling; predictor truncation is fixed at {.fn couple} time.",
+        class = "tidyeof_k_ignored"
+      )
+    }
     apply_pcr_prediction(new_amplitudes = new_amplitudes, pcr = object$pcr)
   }
 

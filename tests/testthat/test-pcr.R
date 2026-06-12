@@ -110,3 +110,13 @@ test_that("PCR supports the cross-source predictor_patterns override", {
   pr <- predict(cpl, prism, predictor_patterns = cpat$b, reconstruct = FALSE)
   expect_named(pr, c("time", "PC1", "PC2", "PC3"))
 })
+
+test_that("predict warns when k is passed to a PCR object", {
+  pred <- patterns(prism, k = 4, weight = FALSE)
+  resp <- patterns(prism, k = 3, weight = FALSE)
+  cpl <- couple(pred, resp, method = "pcr")
+  expect_warning(predict(cpl, prism, k = 2, reconstruct = FALSE),
+                 class = "tidyeof_k_ignored")
+  # default k = NULL does not warn
+  expect_no_warning(predict(cpl, prism, reconstruct = FALSE))
+})
