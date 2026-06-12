@@ -20,7 +20,11 @@ couple(
 
 \item{k}{Number of CCA modes to retain. If NULL, uses min(ncol(predictor), ncol(response))}
 
-\item{method}{Coupling method. Currently only "cca" is supported}
+\item{method}{Coupling method: `"cca"` (canonical correlation, default) or
+`"pcr"` (principal components regression — OLS of the predictand PC
+amplitudes on the predictor PC amplitudes). For PCR the regularization is
+the predictor truncation `k_pred`, and the canonical-mode argument `k` is
+ignored.}
 
 \item{center}{Logical, whether to center the amplitudes before CCA
 (default: TRUE). Centering is the statistically standard choice and makes
@@ -34,7 +38,8 @@ common one, which leaves the common-period amplitudes with a nonzero mean.}
 }
 \value{
 A coupled_patterns object containing:
-  \item{cca}{The CCA results from cancor()}
+  \item{cca}{The CCA results from cancor() (present only for `method = "cca"`)}
+  \item{pcr}{The PCR fit — coefficients and centering (present only for `method = "pcr"`)}
   \item{predictor_patterns}{The original predictor patterns}
   \item{response_patterns}{The original response patterns}
   \item{k}{Number of CCA modes retained}

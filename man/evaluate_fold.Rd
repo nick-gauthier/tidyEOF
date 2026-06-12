@@ -4,7 +4,7 @@
 \alias{evaluate_fold}
 \title{Evaluate a single fold with given parameters}
 \usage{
-evaluate_fold(fold, k_pred, k_resp, k_cca, metrics)
+evaluate_fold(fold, k_pred, k_resp, k_cca, method = "cca", metrics)
 }
 \arguments{
 \item{fold}{A single fold list from cv_folds$folds}
@@ -14,6 +14,8 @@ evaluate_fold(fold, k_pred, k_resp, k_cca, metrics)
 \item{k_resp}{Number of response EOFs}
 
 \item{k_cca}{Number of CCA modes}
+
+\item{method}{Coupling method passed to couple() ("cca" or "pcr")}
 
 \item{metrics}{Metrics to compute}
 }

@@ -192,6 +192,10 @@ prep_cv_folds <- function(predictor, response,
 #' @param k_cca Vector of CCA mode counts to try, or NULL (default) to use
 #'   `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 #'   the maximum can act as regularization.
+#' @param method Coupling method passed to [couple()]: `"cca"` (default) or
+#'   `"pcr"`. For `"pcr"` the `k_cca` axis is inert — leave `k_cca = NULL` so
+#'   the grid is effectively `k_pred` x `k_resp` (an explicit `k_cca` vector
+#'   would produce duplicate rows that all evaluate identically).
 #' @param metrics Character vector of metrics to compute. Options:
 #'   "rmse", "cor_spatial", "cor_temporal" (default: all three). For
 #'   multivariate fields each metric also gets per-variable columns (e.g.
@@ -222,6 +226,7 @@ tune_cca <- function(cv_folds,
                      k_pred = 1:10,
                      k_resp = 1:10,
                      k_cca = NULL,
+                     method = "cca",
                      metrics = c("rmse", "cor_spatial", "cor_temporal"),
                      parallel = FALSE) {
 
@@ -244,6 +249,16 @@ tune_cca <- function(cv_folds,
   if (max(k_resp) > cv_folds$max_k_resp) {
     cli::cli_abort("max(k_resp) = {max(k_resp)} exceeds max_k_resp = {cv_folds$max_k_resp} from prep_cv_folds()",
                    class = "tidyeof_invalid_k")
+  }
+
+  if (!is.null(k_cca) && method == "pcr") {
+    cli::cli_warn(
+      c(
+        "{.arg k_cca} is ignored for {.code method = \"pcr\"}; predictor truncation is the only regularizer.",
+        "i" = "Leave {.arg k_cca} as {.code NULL} to avoid duplicate cross-validation rows."
+      ),
+      class = "tidyeof_k_ignored"
+    )
   }
 
   # Build parameter grid
@@ -290,6 +305,7 @@ tune_cca <- function(cv_folds,
         k_pred = params$k_pred,
         k_resp = params$k_resp,
         k_cca = params$k_cca,
+        method = method,
         metrics = metrics
       )
     })
@@ -313,17 +329,19 @@ tune_cca <- function(cv_folds,
 #' @param k_pred Number of predictor EOFs
 #' @param k_resp Number of response EOFs
 #' @param k_cca Number of CCA modes
+#' @param method Coupling method passed to couple() ("cca" or "pcr")
 #' @param metrics Metrics to compute
 #'
 #' @return Tibble with fold_id and metric values
 #' @keywords internal
-evaluate_fold <- function(fold, k_pred, k_resp, k_cca, metrics) {
+evaluate_fold <- function(fold, k_pred, k_resp, k_cca, method = "cca", metrics) {
   # Truncate patterns to requested k (cheap operation using [.patterns)
   pred_patterns <- fold$train_pred_patterns[1:k_pred]
   resp_patterns <- fold$train_resp_patterns[1:k_resp]
 
-  # Couple patterns with CCA
-  coupled <- couple(pred_patterns, resp_patterns, k = k_cca, validate = FALSE)
+  # Couple patterns (k_cca is inert for method = "pcr")
+  coupled <- couple(pred_patterns, resp_patterns, k = k_cca,
+                    method = method, validate = FALSE)
 
   # Predict on test data
   predicted <- predict(coupled, fold$test_pred_data)

@@ -9,6 +9,7 @@ tune_cca(
   k_pred = 1:10,
   k_resp = 1:10,
   k_cca = NULL,
+  method = "cca",
   metrics = c("rmse", "cor_spatial", "cor_temporal"),
   parallel = FALSE
 )
@@ -23,6 +24,11 @@ tune_cca(
 \item{k_cca}{Vector of CCA mode counts to try, or NULL (default) to use
 `min(k_pred, k_resp)` for each combination. Using fewer CCA modes than
 the maximum can act as regularization.}
+
+\item{method}{Coupling method passed to [couple()]: `"cca"` (default) or
+`"pcr"`. For `"pcr"` the `k_cca` axis is inert — leave `k_cca = NULL` so
+the grid is effectively `k_pred` x `k_resp` (an explicit `k_cca` vector
+would produce duplicate rows that all evaluate identically).}
 
 \item{metrics}{Character vector of metrics to compute. Options:
 "rmse", "cor_spatial", "cor_temporal" (default: all three). For

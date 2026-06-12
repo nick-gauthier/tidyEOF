@@ -64,7 +64,7 @@ test_that("couple handles edge cases appropriately", {
   # Test unsupported method
   expect_error(
     couple(cera_patterns, prism_patterns, method = "gam"),
-    "Only 'cca' method is supported"
+    class = "tidyeof_unsupported_method"
   )
 
   # Test that k is adjusted automatically
