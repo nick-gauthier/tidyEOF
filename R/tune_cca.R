@@ -222,6 +222,7 @@ tune_cca <- function(cv_folds,
                      k_pred = 1:10,
                      k_resp = 1:10,
                      k_cca = NULL,
+                     method = "cca",
                      metrics = c("rmse", "cor_spatial", "cor_temporal"),
                      parallel = FALSE) {
 
@@ -290,6 +291,7 @@ tune_cca <- function(cv_folds,
         k_pred = params$k_pred,
         k_resp = params$k_resp,
         k_cca = params$k_cca,
+        method = method,
         metrics = metrics
       )
     })
@@ -317,13 +319,14 @@ tune_cca <- function(cv_folds,
 #'
 #' @return Tibble with fold_id and metric values
 #' @keywords internal
-evaluate_fold <- function(fold, k_pred, k_resp, k_cca, metrics) {
+evaluate_fold <- function(fold, k_pred, k_resp, k_cca, method = "cca", metrics) {
   # Truncate patterns to requested k (cheap operation using [.patterns)
   pred_patterns <- fold$train_pred_patterns[1:k_pred]
   resp_patterns <- fold$train_resp_patterns[1:k_resp]
 
-  # Couple patterns with CCA
-  coupled <- couple(pred_patterns, resp_patterns, k = k_cca, validate = FALSE)
+  # Couple patterns (k_cca is inert for method = "pcr")
+  coupled <- couple(pred_patterns, resp_patterns, k = k_cca,
+                    method = method, validate = FALSE)
 
   # Predict on test data
   predicted <- predict(coupled, fold$test_pred_data)

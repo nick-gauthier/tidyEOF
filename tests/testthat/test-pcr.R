@@ -137,3 +137,44 @@ test_that("CCA accessors still work for a CCA coupled object", {
   expect_s3_class(get_canonical_correlations(cpl), "data.frame")
   expect_s3_class(get_canonical_patterns(cpl, type = "response"), "stars")
 })
+
+test_that("tune_cca(method = 'pcr') runs and selects sensible k", {
+  set.seed(3)
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+  cv <- prep_cv_folds(coarse, prism, kfolds = 3,
+                      max_k_pred = 4, max_k_resp = 4, weight = FALSE)
+  res <- tune_cca(cv, k_pred = 2:3, k_resp = 2:3, method = "pcr")
+  expect_true(all(c("rmse", "cor_spatial", "cor_temporal") %in% names(res)))
+  s <- summarize_cv(res, metric = "rmse")
+  expect_true(all(c("k_pred", "k_resp") %in% names(s)))
+})
+
+test_that("tune_cca(method = 'pcr') handles a multivariate response", {
+  set.seed(4)
+  prism_mv <- make_multivar(prism)
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+  cv <- prep_cv_folds(coarse, prism_mv, kfolds = 3,
+                      max_k_pred = 4, max_k_resp = 4,
+                      scale_resp = TRUE, weight = FALSE)
+  res <- tune_cca(cv, k_pred = 2:3, k_resp = 2:3, method = "pcr")
+  expect_true(all(c("rmse", "rmse_tmean", "rmse_ppt") %in% names(res)))
+})
+
+test_that("PCR and CCA give comparable skill at full rank (wiring sanity)", {
+  set.seed(5)
+  coarse <- prism %>%
+    mutate(tmean = tmean * 0.8 + units::set_units(rnorm(length(tmean), 0, 0.5), "°C"))
+  pred <- patterns(filter(coarse, time <= as.Date("2018-12-01")), k = 3, weight = FALSE)
+  resp <- patterns(filter(prism, time <= as.Date("2018-12-01")), k = 3, weight = FALSE)
+  test_pred <- filter(coarse, time > as.Date("2018-12-01"))
+  test_resp <- filter(prism, time > as.Date("2018-12-01"))
+
+  cca <- couple(pred, resp, method = "cca", k = 3)
+  pcr <- couple(pred, resp, method = "pcr")
+  m_cca <- tidyeof:::compute_spatial_metrics(predict(cca, test_pred), test_resp, "rmse")$rmse
+  m_pcr <- tidyeof:::compute_spatial_metrics(predict(pcr, test_pred), test_resp, "rmse")$rmse
+  # All canonical modes retained => CCA equals multivariate OLS, so PCR matches closely
+  expect_lt(abs(m_cca - m_pcr) / m_cca, 0.5)
+})
