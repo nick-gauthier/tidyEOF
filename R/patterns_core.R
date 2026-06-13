@@ -331,7 +331,10 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
     as_tibble() %>%
     mutate(time = times, .before = 1)
 
-  # Calculate eigenvalues - always use original unrotated values for scree plot
+  # Calculate eigenvalues from the unrotated spectrum. The North et al. (1982)
+  # low/hi error bars only apply to true eigenvalues, so the rotated branch
+  # below overwrites percent/cumulative/std.dev but deliberately leaves low/hi
+  # alone -- screeplot() drops the error bars entirely for rotated patterns.
   # prcomp_irlba returns only the leading k singular values, so percent/low/hi
   # must use the true total variance ($totalvar), and the North et al. (1982)
   # sampling error needs the number of temporal samples, not length(sdev)

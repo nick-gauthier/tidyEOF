@@ -16,26 +16,54 @@
 #' screeplot(pat, rule_n = TRUE)  # show significance cutoff
 #' }
 screeplot.patterns <- function(x, k = NULL, kmax = 10, rule_n = FALSE, ...) {
-  # Compute Rule N cutoff if requested
-  rule_n_k <- if (rule_n) rule_n_cutoff(x) else NULL
+  rotated <- isTRUE(x$rotate)
 
-  x$eigenvalues %>%
-    dplyr::mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
-           multiplet = as.factor(cumsum(separated)),
-           cumvar_line = hi + 0.02 * max(hi)) %>%
-    filter(PC <= kmax) %>%
-    ggplot2::ggplot(aes(x = PC, y = percent)) +
-    ggplot2::geom_linerange(aes(x = PC, ymin = low, ymax = hi)) +
-    ggplot2::geom_point(size = 2, aes(color = multiplet)) +
+  # North et al. (1982) error bars and the Rule N / multiplet diagnostics test
+  # the true eigenspectrum to choose k *before* rotating. Varimax redistributes
+  # variance and yields non-eigenvalues, so these overlays are statistically
+  # meaningless on rotated patterns and are dropped here.
+  if (rotated && rule_n) {
+    cli::cli_warn(
+      c(
+        "Rule N significance does not apply to rotated patterns; ignoring {.arg rule_n}.",
+        "i" = "Rotation redistributes variance, so the eigenvalue significance test is only valid on unrotated EOFs."
+      ),
+      class = "tidyeof_rule_n_rotated"
+    )
+  }
+  rule_n_k <- if (rule_n && !rotated) rule_n_cutoff(x) else NULL
+
+  dat <- x$eigenvalues %>%
+    filter(PC <= kmax)
+
+  if (rotated) {
+    # Rotated variance fractions: plain points, no error bars or multiplet
+    # coloring; the cumulative-% label floats just above each point.
+    p <- dat %>%
+      dplyr::mutate(cumvar_line = percent + 0.02 * max(percent)) %>%
+      ggplot2::ggplot(aes(x = PC, y = percent)) +
+      ggplot2::geom_point(size = 2)
+  } else {
+    # Unrotated: North error bars with multiplet (degeneracy) coloring.
+    p <- dat %>%
+      dplyr::mutate(separated = if_else(is.na(lag(low)), TRUE, hi < lag(low)),
+                    multiplet = as.factor(cumsum(separated)),
+                    cumvar_line = hi + 0.02 * max(hi)) %>%
+      ggplot2::ggplot(aes(x = PC, y = percent)) +
+      ggplot2::geom_linerange(aes(x = PC, ymin = low, ymax = hi)) +
+      ggplot2::geom_point(size = 2, aes(color = multiplet)) +
+      ggplot2::scale_color_brewer(palette = 'Spectral') +
+      ggplot2::guides(color = 'none')
+  }
+
+  p +
     ggplot2::geom_text(aes(x = PC, y = cumvar_line, label = glue::glue("{round(cumulative, 0)}%")), size = 2.5, vjust = 0) +
     ggplot2::labs(x = "Principal Component", y = "Normalized Eigenvalue") +
     { if (!is.null(k)) ggplot2::geom_vline(xintercept = k + .5, linetype = 2, color = 'red', alpha = .7) } +
     { if (!is.null(rule_n_k) && rule_n_k > 0 && rule_n_k <= kmax) ggplot2::geom_vline(xintercept = rule_n_k + .5, linetype = 2, color = 'blue', alpha = .7) } +
     { if (!is.null(rule_n_k) && rule_n_k > kmax) ggplot2::annotate("text", x = kmax, y = Inf, label = glue::glue("All shown modes significant\n(Rule N cutoff: {rule_n_k})"), hjust = 1, vjust = 1.5, size = 3, color = 'blue') } +
     ggplot2::theme_bw() +
-    ggplot2::guides(color = 'none') +
-    ggplot2::scale_x_continuous(breaks = seq_len(kmax)) +
-    ggplot2::scale_color_brewer(palette = 'Spectral')
+    ggplot2::scale_x_continuous(breaks = seq_len(kmax))
 }
 
 #' Plot method for patterns objects
