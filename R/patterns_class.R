@@ -172,6 +172,15 @@ extract_amplitudes_matrix <- function(x, times = NULL) {
   x$amplitudes <- x$amplitudes[, c(1, i + 1)] # +1 because time is first column
   x$k <- length(i)
 
+  # Re-canonicalize PC labels so a truncated object is indistinguishable from a
+  # fresh patterns(data, k = length(i)). names0() zero-pads by total count, so a
+  # k >= 10 fit stores PC01.. while a fresh fit at k < 10 uses PC1..; without
+  # this, the retained labels diverge from a fresh fit (and previously also
+  # broke name-based centering alignment in predict, yielding all-NA fields).
+  pc_labels <- names0(length(i), "PC")
+  names(x$amplitudes) <- c(names(x$amplitudes)[1], pc_labels)
+  x$eofs <- stars::st_set_dimensions(x$eofs, "PC", values = pc_labels)
+
   if(!is.null(x$rotation)) {
     x$rotation <- x$rotation[, i, drop = FALSE]
   }
@@ -180,7 +189,14 @@ extract_amplitudes_matrix <- function(x, times = NULL) {
     x$proj_matrix <- x$proj_matrix[, i, drop = FALSE]
   }
 
-  # Eigenvalues stay the same but we update k
+  # Eigenvalues are deliberately NOT truncated: base prcomp computes the full
+  # spectrum regardless of k, so a fresh patterns(data, k = length(i)) keeps all
+  # rows too -- leaving them intact is what makes a subset byte-for-byte a fresh
+  # fit, and preserves the modes screeplot()/rule_n_cutoff() need beyond k.
+  # (Caveat: under irlba the fit only computes the original k singular values,
+  # so an irlba-origin subset keeps more eigenvalue rows than a fresh irlba fit
+  # at length(i). This is cosmetic -- nothing in couple()/predict()/tune_cca()
+  # reads rows past k -- so it is left as-is rather than special-cased.)
   x
 }
 

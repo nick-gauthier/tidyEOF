@@ -303,6 +303,12 @@ predict.coupled_patterns <- function(object, newdata, k = NULL, reconstruct = TR
     apply_pcr_prediction(new_amplitudes = new_amplitudes, pcr = object$pcr)
   }
 
+  # Label predicted columns with the response patterns' own PC names so the
+  # output matches the response object (not unpadded paste0 names). reconstruct()
+  # consumes these positionally, so this only affects the output labels.
+  names(predicted_amplitudes) <- c("time",
+                                   setdiff(names(object$response_patterns$amplitudes), "time"))
+
   if (!reconstruct) {
     return(predicted_amplitudes)
   }
@@ -489,19 +495,15 @@ get_canonical_variables <- function(object, data, type = c("predictor", "respons
   times <- get_times(data)
   amp_matrix <- extract_amplitudes_matrix(data)
 
-  # Apply training centering so canonical variables match cancor() inputs
+  # Apply training centering so canonical variables match cancor() inputs.
+  # Routed through reindex_centering so a name mismatch aborts clearly instead
+  # of silently NA-ing (same guard as the predict path).
   if (type == "predictor" && !identical(object$cca$xcenter, FALSE)) {
-    xcenter <- object$cca$xcenter
-    if (!is.null(names(xcenter)) && !is.null(colnames(amp_matrix))) {
-      xcenter <- xcenter[colnames(amp_matrix)]
-    }
+    xcenter <- reindex_centering(object$cca$xcenter, colnames(amp_matrix), "predictor")
     amp_matrix <- sweep(amp_matrix, 2, xcenter, "-")
   }
   if (type == "response" && !identical(object$cca$ycenter, FALSE)) {
-    ycenter <- object$cca$ycenter
-    if (!is.null(names(ycenter)) && !is.null(colnames(amp_matrix))) {
-      ycenter <- ycenter[colnames(amp_matrix)]
-    }
+    ycenter <- reindex_centering(object$cca$ycenter, colnames(amp_matrix), "response")
     amp_matrix <- sweep(amp_matrix, 2, ycenter, "-")
   }
 
