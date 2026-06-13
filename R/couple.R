@@ -311,6 +311,33 @@ predict.coupled_patterns <- function(object, newdata, k = NULL, reconstruct = TR
               amplitudes = predicted_amplitudes)
 }
 
+#' Re-align a training centering vector to projected amplitude columns by name
+#'
+#' Centering vectors from cancor()/fit_pcr() are named by the PC labels seen
+#' during training. When the projected amplitudes carry the same labels this is
+#' an order-safe no-op; when a label cannot be matched, name indexing returns NA
+#' and would silently corrupt every prediction, so we abort with a clear error
+#' instead. `cols = NULL` (an unnamed matrix product) falls through to positional
+#' centering, preserving prior behavior.
+#' @keywords internal
+reindex_centering <- function(center, cols, what) {
+  if (is.null(names(center)) || is.null(cols)) {
+    return(center)
+  }
+  aligned <- center[cols]
+  if (anyNA(aligned)) {
+    cli::cli_abort(
+      c(
+        "Could not align the {what} centering to the projected amplitudes by name.",
+        "x" = "Projected columns {.val {cols}} do not match the trained centering names {.val {names(center)}}.",
+        "i" = "The patterns object's PC labels likely diverged from training (e.g. inconsistent {.fn names0} padding after truncation)."
+      ),
+      class = "tidyeof_centering_mismatch"
+    )
+  }
+  aligned
+}
+
 #' Apply CCA Prediction Transform
 #'
 #' Internal function that applies the CCA transformation to predict response amplitudes
@@ -335,10 +362,7 @@ apply_cca_prediction <- function(new_amplitudes, cca_result, k) {
 
   # Apply training centering if CCA was fit with centering
   if (!identical(cca_result$xcenter, FALSE)) {
-    xcenter <- cca_result$xcenter
-    if (!is.null(names(xcenter)) && !is.null(colnames(pred_matrix))) {
-      xcenter <- xcenter[colnames(pred_matrix)]
-    }
+    xcenter <- reindex_centering(cca_result$xcenter, colnames(pred_matrix), "predictor")
     pred_matrix <- sweep(pred_matrix, 2, xcenter, "-")
   }
 
@@ -360,10 +384,7 @@ apply_cca_prediction <- function(new_amplitudes, cca_result, k) {
 
   # Add back response centering if used during training
   if (!identical(cca_result$ycenter, FALSE)) {
-    ycenter <- cca_result$ycenter
-    if (!is.null(names(ycenter)) && !is.null(colnames(response_amplitudes))) {
-      ycenter <- ycenter[colnames(response_amplitudes)]
-    }
+    ycenter <- reindex_centering(cca_result$ycenter, colnames(response_amplitudes), "response")
     response_amplitudes <- sweep(response_amplitudes, 2, ycenter, "+")
   }
 
@@ -397,20 +418,14 @@ apply_pcr_prediction <- function(new_amplitudes, pcr) {
 
   # Apply training centering if the fit was centered (mirrors apply_cca_prediction)
   if (!identical(pcr$xcenter, FALSE)) {
-    xcenter <- pcr$xcenter
-    if (!is.null(names(xcenter)) && !is.null(colnames(pred_matrix))) {
-      xcenter <- xcenter[colnames(pred_matrix)]
-    }
+    xcenter <- reindex_centering(pcr$xcenter, colnames(pred_matrix), "predictor")
     pred_matrix <- sweep(pred_matrix, 2, xcenter, "-")
   }
 
   response_amplitudes <- pred_matrix %*% pcr$coefficients
 
   if (!identical(pcr$ycenter, FALSE)) {
-    ycenter <- pcr$ycenter
-    if (!is.null(names(ycenter)) && !is.null(colnames(response_amplitudes))) {
-      ycenter <- ycenter[colnames(response_amplitudes)]
-    }
+    ycenter <- reindex_centering(pcr$ycenter, colnames(response_amplitudes), "response")
     response_amplitudes <- sweep(response_amplitudes, 2, ycenter, "+")
   }
 

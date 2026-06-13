@@ -117,10 +117,15 @@ project_patterns <- function(patterns, newdata) {
   # result has shape (n_times x n_components)
   projected <- data_matrix %*% patterns$proj_matrix
 
-  # Convert to tibble with proper names
+  # Name the projected columns to match the object's OWN stored amplitudes,
+  # which are the labels couple()/cancor() trained on. Regenerating via
+  # names0(patterns$k) re-pads differently after truncation (a k>=10 fit keeps
+  # PC01.. while names0(5) gives PC1..), so the name-based centering reindex in
+  # apply_cca_prediction() would silently NA the amplitudes -> all-NA fields.
+  pc_names <- setdiff(names(patterns$amplitudes), "time")
   result <- projected %>%
     as_tibble(.name_repair = "minimal") %>%
-    setNames(names0(patterns$k, 'PC')) %>%
+    setNames(pc_names) %>%
     mutate(time = times_complete, .before = 1)
 
   return(result)
