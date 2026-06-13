@@ -361,7 +361,12 @@ get_eofs <- function(dat, k, rotate = FALSE, irlba_threshold, weights = NULL) {
         std.dev = if_else(PC <= k, component_sdev[PC], std.dev),
         eigenvalues = if_else(PC <= k, component_variance[PC], eigenvalues),
         percent = if_else(PC <= k, rotated_percent[PC], percent),
-        cumulative = if_else(PC <= k, rotated_cumulative[PC], cumulative)
+        cumulative = if_else(PC <= k, rotated_cumulative[PC], cumulative),
+        # North et al. (1982) sampling-error bars only apply to true
+        # eigenvalues; NA them for the rotated modes so the table never carries
+        # bounds that contradict the rotated variance fractions above.
+        low = if_else(PC <= k, NA_real_, low),
+        hi = if_else(PC <= k, NA_real_, hi)
       )
   }
 

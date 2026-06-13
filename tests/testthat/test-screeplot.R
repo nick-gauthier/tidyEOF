@@ -27,3 +27,21 @@ test_that("rotated screeplot warns and skips rule_n cutoff", {
   pat <- patterns(prism, k = 4, rotate = TRUE)
   expect_warning(screeplot(pat, rule_n = TRUE), class = "tidyeof_rule_n_rotated")
 })
+
+test_that("rotated eigenvalue table NAs out North low/hi for retained modes", {
+  pat <- patterns(prism, k = 4, rotate = TRUE)
+  ev <- pat$eigenvalues
+  # North error bars are meaningless after rotation, so the retained (rotated)
+  # modes carry NA rather than the stale unrotated bounds.
+  expect_true(all(is.na(ev$low[ev$PC <= 4])))
+  expect_true(all(is.na(ev$hi[ev$PC <= 4])))
+  # Tail modes are untouched eigenvalues and keep their valid bounds.
+  expect_true(all(is.finite(ev$low[ev$PC > 4])))
+  expect_true(all(is.finite(ev$hi[ev$PC > 4])))
+})
+
+test_that("unrotated eigenvalue table keeps finite North low/hi", {
+  pat <- patterns(prism, k = 4, rotate = FALSE)
+  expect_true(all(is.finite(pat$eigenvalues$low)))
+  expect_true(all(is.finite(pat$eigenvalues$hi)))
+})
