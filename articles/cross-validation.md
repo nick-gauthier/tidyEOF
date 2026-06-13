@@ -61,7 +61,7 @@ eof_results <- tune_eof(fine, k = 1:8, kfolds = 3)
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [368ms]
+    ✔ Computing patterns for 3 folds [462ms]
 
     Evaluating 8 k values across 3 folds
 
@@ -161,7 +161,7 @@ cv_folds <- prep_cv_folds(
 
     ℹ Computing patterns for 3 folds
 
-    ✔ Computing patterns for 3 folds [385ms]
+    ✔ Computing patterns for 3 folds [493ms]
 
 ``` r
 cv_folds
@@ -200,9 +200,9 @@ cca_results <- tune_cca(
 ```
 
     Evaluating 25 parameter combinations across 3 folds
-     ■■■■■■■■■                         28% |  ETA:  5s
+     ■■■■■■■■■■■■■                     40% |  ETA:  5s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■■■        84% |  ETA:  1s
+     ■■■■■■■■■■■■■■■■■■■■■■■■■         80% |  ETA:  2s
 
 ``` r
 cca_results
@@ -271,9 +271,9 @@ cca_results_3d <- tune_cca(
 ```
 
     Evaluating 22 parameter combinations across 3 folds
-     ■■■■■■■■■■■                       32% |  ETA:  4s
+     ■■■■■■                            18% |  ETA:  6s
 
-     ■■■■■■■■■■■■■■■■■■■■■■■■■■■■      91% |  ETA:  0s
+     ■■■■■■■■■■■■■■■■■■■■              64% |  ETA:  2s
 
 ``` r
 cca_results_3d |>
